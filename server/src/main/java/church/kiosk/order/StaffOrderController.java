@@ -1,0 +1,60 @@
+package church.kiosk.order;
+
+import church.kiosk.order.OrderDtos.DailySummary;
+import church.kiosk.order.OrderDtos.OrderView;
+import church.kiosk.order.OrderDtos.Status;
+import church.kiosk.order.OrderDtos.UpdateRequest;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+/** 스태프 폰용. /api/staff/** 는 인터셉터가 PIN 토큰을 검사한다. */
+@RestController
+@RequestMapping("/api/staff/orders")
+public class StaffOrderController {
+
+	private final OrderService orderService;
+
+	public StaffOrderController(OrderService orderService) {
+		this.orderService = orderService;
+	}
+
+	/** PENDING 은 날짜 무관 전부, DONE/CANCELED 는 오늘 것만. */
+	@GetMapping
+	public List<OrderView> list(@RequestParam(defaultValue = "PENDING") Status status) {
+		return status == Status.PENDING ? orderService.pending() : orderService.todayByStatus(status);
+	}
+
+	@GetMapping("/summary")
+	public DailySummary summary() {
+		return orderService.todaySummary();
+	}
+
+	@PutMapping("/{id}")
+	public OrderView update(@PathVariable long id, @RequestBody @Valid UpdateRequest request) {
+		return orderService.update(id, request);
+	}
+
+	@PostMapping("/{id}/done")
+	public void done(@PathVariable long id) {
+		orderService.complete(id);
+	}
+
+	@PostMapping("/{id}/reopen")
+	public void reopen(@PathVariable long id) {
+		orderService.reopen(id);
+	}
+
+	@PostMapping("/{id}/cancel")
+	public void cancel(@PathVariable long id) {
+		orderService.cancel(id);
+	}
+}
