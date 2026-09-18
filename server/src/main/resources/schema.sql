@@ -1,0 +1,97 @@
+-- 교회 카페 키오스크 스키마 (SQLite)
+-- 매 기동 시 실행되므로 모든 DDL은 IF NOT EXISTS 로 작성한다.
+
+CREATE TABLE IF NOT EXISTS menu_item (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT    NOT NULL,
+    category    TEXT    NOT NULL,              -- 커피 | 논커피 | 아이스크림
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    available   INTEGER NOT NULL DEFAULT 1
+);
+
+-- 한 메뉴의 선택지. label 이 NULL 이면 선택지 없는 단일 메뉴.
+-- 예) 아메리카노 -> ICE / HOT,  아이스크림 -> 콘 / 컵
+CREATE TABLE IF NOT EXISTS menu_variant (
+    id           INTEGER PRIMARY KEY,
+    menu_item_id INTEGER NOT NULL REFERENCES menu_item(id) ON DELETE CASCADE,
+    label        TEXT,
+    price        INTEGER NOT NULL,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    available    INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_menu_variant_item ON menu_variant(menu_item_id);
+
+CREATE TABLE IF NOT EXISTS delivery_place (
+    id         INTEGER PRIMARY KEY,
+    floor      INTEGER NOT NULL,
+    name       TEXT    NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active     INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS coupon (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL,
+    phone_last4 TEXT,                          -- 동명이인 구분용. 없으면 NULL
+    balance     INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL,
+    updated_at  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_coupon_name ON coupon(name);
+
+-- 쿠폰 잔액 변동 이력. 충전(+) / 사용(-) / 주문취소 복원(+)
+CREATE TABLE IF NOT EXISTS coupon_tx (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    coupon_id     INTEGER NOT NULL REFERENCES coupon(id),
+    order_id      INTEGER,
+    delta         INTEGER NOT NULL,
+    reason        TEXT    NOT NULL,            -- CHARGE | USE | REFUND
+    balance_after INTEGER NOT NULL,
+    created_at    TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_coupon_tx_coupon ON coupon_tx(coupon_id);
+
+-- 단골 명단. 주문할 때마다 갱신되어 이름 선택 버튼의 후보가 된다.
+CREATE TABLE IF NOT EXISTS customer (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL UNIQUE,
+    order_count     INTEGER NOT NULL DEFAULT 0,
+    last_ordered_at TEXT    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_date      TEXT    NOT NULL,          -- YYYY-MM-DD
+    order_no        INTEGER NOT NULL,          -- 당일 순번
+    customer_name   TEXT    NOT NULL,
+    receive_type    TEXT    NOT NULL,          -- STORE | DELIVERY
+    place_id        INTEGER REFERENCES delivery_place(id),
+    place_name      TEXT,                      -- 주문 시점 장소명 스냅샷
+    total_amount    INTEGER NOT NULL,
+    pay_method      TEXT    NOT NULL,          -- TRANSFER | COUPON | CASH (고객이 고른 수단)
+    remainder_method TEXT,                     -- 쿠폰 잔액 부족 시 나머지 결제 수단 (CASH | TRANSFER)
+    coupon_id       INTEGER REFERENCES coupon(id),
+    coupon_amount   INTEGER NOT NULL DEFAULT 0,
+    cash_amount     INTEGER NOT NULL DEFAULT 0,
+    transfer_amount INTEGER NOT NULL DEFAULT 0,
+    status          TEXT    NOT NULL,          -- PENDING | DONE | CANCELED
+    memo            TEXT,
+    created_at      TEXT    NOT NULL,
+    completed_at    TEXT,
+    canceled_at     TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_date_no ON orders(order_date, order_no);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
+
+CREATE TABLE IF NOT EXISTS order_line (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id      INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    menu_item_id  INTEGER,
+    variant_id    INTEGER,
+    menu_name     TEXT    NOT NULL,            -- 주문 시점 스냅샷 (메뉴가 바뀌어도 영수증은 유지)
+    variant_label TEXT,
+    unit_price    INTEGER NOT NULL,
+    quantity      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_order_line_order ON order_line(order_id);
