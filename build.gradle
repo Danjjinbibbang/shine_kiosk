@@ -1,0 +1,33 @@
+// 루트 프로젝트: 프론트엔드(client) 빌드를 서버 정적 리소스로 흘려보내는 역할만 한다.
+// 실제 애플리케이션 빌드는 :server 서브프로젝트에 있다.
+
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def npm = isWindows ? 'npm.cmd' : 'npm'
+def clientDir = file('client')
+
+tasks.register('clientInstall', Exec) {
+    description = '프론트엔드 의존성 설치'
+    workingDir = clientDir
+    commandLine npm, 'install'
+
+    inputs.file(file('client/package.json'))
+    inputs.file(file('client/package-lock.json')).optional()
+    outputs.dir(file('client/node_modules'))
+}
+
+tasks.register('clientBuild', Exec) {
+    description = '프론트엔드 프로덕션 빌드 (client/dist 생성)'
+    dependsOn 'clientInstall'
+    workingDir = clientDir
+    commandLine npm, 'run', 'build'
+
+    inputs.dir(file('client/src'))
+    inputs.file(file('client/package.json'))
+    inputs.file(file('client/vite.config.ts'))
+    inputs.file(file('client/index.html'))
+    outputs.dir(file('client/dist'))
+}
+
+tasks.register('clean', Delete) {
+    delete file('client/dist')
+}

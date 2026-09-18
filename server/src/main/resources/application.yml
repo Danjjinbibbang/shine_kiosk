@@ -1,0 +1,36 @@
+server:
+  port: ${KIOSK_PORT:8080}
+  address: 0.0.0.0          # 교회 와이파이의 다른 기기(스태프 폰)에서 접속 가능해야 한다
+  shutdown: graceful
+
+spring:
+  application:
+    name: shine-kiosk
+  sql:
+    init:
+      mode: always          # schema.sql / data.sql 을 매 기동마다 실행 (모두 멱등)
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+  jackson:
+    default-property-inclusion: non_null
+  web:
+    resources:
+      cache:
+        period: 0
+
+kiosk:
+  # SQLite 파일 경로. jar 실행 위치 기준 상대경로.
+  db-path: ${KIOSK_DB:./data/kiosk.db}
+  # 스태프 화면 4자리 PIN. 운영 시 환경변수로 덮어쓸 것.
+  staff-pin: ${KIOSK_STAFF_PIN:1234}
+  # 계좌이체 안내 문구 (고객 화면에 그대로 노출)
+  bank-account: ${KIOSK_BANK:입금계좌를 설정해 주세요}
+  # 쿠폰 충전 프리셋 금액
+  coupon-preset-amount: 20000
+  # 단골 명단에 노출할 기간 (일)
+  regular-customer-days: 21
+
+logging:
+  level:
+    root: INFO
+    church.kiosk: DEBUG

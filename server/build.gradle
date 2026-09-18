@@ -1,0 +1,48 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.1.1'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'church'
+version = '0.1.0'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+	implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	implementation 'org.xerial:sqlite-jdbc:3.50.3.0'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-jdbc-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// 프론트엔드 빌드 산출물(client/dist)을 jar 안 static/ 으로 넣는다.
+// => ./gradlew bootJar 한 번이면 프론트까지 포함된 단일 jar 가 나온다.
+tasks.named('processResources') {
+	dependsOn ':clientBuild'
+	from("${rootProject.projectDir}/client/dist") {
+		into 'static'
+	}
+}
+
+tasks.named('bootJar') {
+	archiveFileName = 'kiosk-server.jar'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
