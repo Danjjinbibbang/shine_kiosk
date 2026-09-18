@@ -34,6 +34,6 @@ public class ApiExceptionHandler {
 	public ResponseEntity<Map<String, String>> handleUnexpected(Exception e) {
 		log.error("처리하지 못한 오류", e);
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-				.body(Map.of("message", "문제가 생겼습니다. 봉사자를 불러 주세요."));
+				.body(Map.of("message", "문제가 생겼습니다. 스태프를 불러 주세요."));
 	}
 }

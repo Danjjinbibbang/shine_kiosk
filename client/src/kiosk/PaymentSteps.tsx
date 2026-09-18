@@ -12,7 +12,7 @@ export function TransferStep({ total, onNext }: { total: number; onNext: () => v
   const [left, setLeft] = useState(TRANSFER_SECONDS)
 
   useEffect(() => {
-    api.paymentInfo().then((r) => setAccount(r.bankAccount)).catch(() => setAccount('봉사자에게 문의해 주세요'))
+    api.paymentInfo().then((r) => setAccount(r.bankAccount)).catch(() => setAccount('스태프에게 문의해 주세요'))
   }, [])
 
   useEffect(() => {
@@ -93,8 +93,8 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
       }
       if (r.status === 'NOT_FOUND' || !r.coupon) {
         setError(phoneLast4
-          ? '전화번호가 맞지 않습니다. 봉사자에게 확인해 주세요.'
-          : `"${n}" 이름의 쿠폰이 없습니다. 봉사자에게 확인해 주세요.`)
+          ? '전화번호가 맞지 않습니다. 스태프에게 확인해 주세요.'
+          : `"${n}" 이름의 쿠폰이 없습니다. 스태프에게 확인해 주세요.`)
         return
       }
       setName(n)
@@ -216,7 +216,7 @@ export function CashStep({ total, onNext }: { total: number; onNext: (memo: stri
   return (
     <div className="stack">
       <div className="hero" style={{ padding: '10px 0 0' }}>
-        <div className="title">현금은 봉사자에게 주세요</div>
+        <div className="title">현금은 바구니에 넣어주세요</div>
         <div className="amount">{won(total)}</div>
       </div>
       <div className="muted center">얼마를 내시나요?</div>

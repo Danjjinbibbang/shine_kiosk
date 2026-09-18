@@ -120,7 +120,7 @@ export function KioskApp() {
       setHistory([])
       setStep('done')
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : '주문이 접수되지 않았습니다. 봉사자를 불러 주세요.')
+      setError(e instanceof ApiError ? e.message : '주문이 접수되지 않았습니다. 스태프를 불러 주세요.')
     } finally {
       setSubmitting(false)
     }

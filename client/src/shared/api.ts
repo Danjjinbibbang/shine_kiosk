@@ -44,7 +44,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError('PIN 을 다시 입력해 주세요.', 401)
   }
   if (!res.ok) {
-    let message = '문제가 생겼습니다. 봉사자를 불러 주세요.'
+    let message = '문제가 생겼습니다. 스태프를 불러 주세요.'
     try {
       const body = await res.json()
       if (body?.message) message = body.message
