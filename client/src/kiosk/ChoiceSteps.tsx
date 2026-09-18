@@ -7,23 +7,33 @@ export function ReceiveStep({ onSelect }: { onSelect: (t: ReceiveType) => void }
   return (
     <div className="stack">
       <button className="btn huge" onClick={() => onSelect('STORE')}>☕ 카페에서 받기</button>
-      <button className="btn huge" onClick={() => onSelect('DELIVERY')}>🚶 갖다 주세요 (배달)</button>
+      <button className="btn huge" onClick={() => onSelect('DELIVERY')}>
+        <span>🚶 1층으로 갖다 주세요</span>
+        <small className="btn-hint">배달은 1층만 가능합니다</small>
+      </button>
     </div>
   )
 }
 
-/** 층 먼저 고르고, 그 층의 세부 장소를 고른다. 장소가 하나뿐인 층은 바로 확정. */
+/**
+ * 배달 가능한 층이 하나면 층 선택을 건너뛰고 바로 장소를 고른다.
+ * (현재는 1층만. 나중에 층이 늘면 층 → 세부 장소 2단계가 자동으로 살아난다)
+ */
 export function PlaceStep({ onSelect }: { onSelect: (p: Place) => void }) {
   const [floors, setFloors] = useState<FloorGroup[] | null>(null)
   const [floor, setFloor] = useState<FloorGroup | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.places().then(setFloors).catch((e) => setError(e.message))
+    api.places().then((f) => {
+      setFloors(f)
+      if (f.length === 1) setFloor(f[0])
+    }).catch((e) => setError(e.message))
   }, [])
 
   if (error) return <div className="error">{error}</div>
   if (!floors) return <div className="empty">장소를 불러오는 중…</div>
+  if (floors.length === 0) return <div className="empty">지금은 배달을 하지 않습니다. 카페에서 받아 주세요.</div>
 
   const pickFloor = (f: FloorGroup) => {
     if (f.places.length === 1) onSelect(f.places[0])
@@ -47,13 +57,15 @@ export function PlaceStep({ onSelect }: { onSelect: (p: Place) => void }) {
 
   return (
     <div className="stack">
-      <div className="row">
-        <button className="btn ghost" onClick={() => setFloor(null)}>‹ 다른 층</button>
-        <div className="muted">{floor.floor}층 어디로 갖다 드릴까요?</div>
-      </div>
-      <div className="grid">
+      {floors.length > 1 && (
+        <div className="row">
+          <button className="btn ghost" onClick={() => setFloor(null)}>‹ 다른 층</button>
+          <div className="muted">{floor.floor}층 어디로 갖다 드릴까요?</div>
+        </div>
+      )}
+      <div className="grid wide">
         {floor.places.map((p) => (
-          <button key={p.id} className="btn big" onClick={() => onSelect(p)}>{p.name}</button>
+          <button key={p.id} className="btn huge" onClick={() => onSelect(p)}>{p.name}</button>
         ))}
       </div>
     </div>

@@ -38,7 +38,8 @@ input { font: inherit; }
 .btn.danger { color: var(--danger); border-color: #f0c9c5; }
 .btn.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
 .btn.big { min-height: 96px; font-size: 30px; }
-.btn.huge { min-height: 140px; font-size: 38px; }
+.btn.huge { min-height: 140px; font-size: 38px; flex-direction: column; gap: 4px; }
+.btn .btn-hint { font-size: 18px; font-weight: 500; color: var(--muted); }
 .btn.selected { border-color: var(--primary); background: var(--accent); }
 
 .stack { display: flex; flex-direction: column; gap: 14px; }

@@ -50,17 +50,11 @@ INSERT INTO menu_variant (id, menu_item_id, label, price, sort_order) VALUES
 ON CONFLICT(id) DO UPDATE SET menu_item_id = excluded.menu_item_id, label = excluded.label, price = excluded.price, sort_order = excluded.sort_order;
 
 -- ── 배달 장소 ─────────────────────────────────────────
+-- 배달은 1층만. 2층 이상은 만드는 사람이 자리를 비워야 해서 인원 절감 취지와 맞지 않는다.
 INSERT INTO delivery_place (id, floor, name, sort_order) VALUES
     (101, 1, '식당',      1),
-    (102, 1, '전도사님실', 2),
-    (201, 2, '1번방', 1),
-    (202, 2, '2번방', 2),
-    (203, 2, '3번방', 3),
-    (204, 2, '4번방', 4),
-    (205, 2, '5번방', 5),
-    (206, 2, '6번방', 6),
-    (207, 2, '7번방', 7),
-    (208, 2, '8번방', 8),
-    (301, 3, '유아실', 1),
-    (401, 4, '4층',   1)
+    (102, 1, '전도사님실', 2)
 ON CONFLICT(id) DO UPDATE SET floor = excluded.floor, name = excluded.name, sort_order = excluded.sort_order;
+
+-- 예전 시드에 있던 장소(2~4층)는 지난 주문이 참조하고 있을 수 있어 지우지 않고 화면에서만 뺀다.
+UPDATE delivery_place SET active = 0 WHERE id NOT IN (101, 102);
