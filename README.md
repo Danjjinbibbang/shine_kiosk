@@ -26,8 +26,8 @@ cd client && npm install && npm run dev
 ```
 
 DB 파일은 `./data/kiosk.db` 에 자동 생성된다. 스키마/시드는 매 기동마다 실행되지만 멱등이라 데이터가 지워지지 않는다.
-메뉴 가격을 바꾸려면 `server/src/main/resources/data.sql` 을 고치고 **기존 DB 의 해당 행도 직접 고치거나 DB 파일을 지운다**
-(`INSERT OR IGNORE` 라 이미 있는 행은 덮어쓰지 않음).
+메뉴 이름/가격/카테고리와 배달 장소는 `server/src/main/resources/data.sql` 이 기준이다. 고치고 재시작하면 id 기준으로 DB 에 덮어써진다.
+메뉴를 잠시 빼고 싶으면 DB 에서 `menu_item.available` 또는 `delivery_place.active` 를 0 으로 (이 값은 시드가 건드리지 않는다).
 
 ## 설정 (환경변수)
 
