@@ -87,6 +87,8 @@ export const api = {
   registerCoupon: (name: string, phoneLast4: string | null, amount: number) =>
     post<Coupon>('/api/staff/coupons', { name, phoneLast4, amount }),
   chargeCoupon: (id: number, amount: number) => post<Coupon>(`/api/staff/coupons/${id}/charge`, { amount }),
+  adjustCoupon: (id: number, balance: number) => post<Coupon>(`/api/staff/coupons/${id}/adjust`, { balance }),
+  deleteCoupon: (id: number) => request<void>(`/api/staff/coupons/${id}`, { method: 'DELETE' }),
   couponPreset: () => request<{ amount: number }>('/api/staff/coupons/preset'),
 }
 

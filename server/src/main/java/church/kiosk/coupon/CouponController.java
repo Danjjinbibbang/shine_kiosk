@@ -30,6 +30,8 @@ public class CouponController {
 
 	public record ChargeRequest(@Min(value = 1, message = "충전 금액을 확인해 주세요.") int amount) {}
 
+	public record AdjustRequest(@Min(value = 0, message = "잔액은 0원 이상이어야 합니다.") int balance) {}
+
 	@PostMapping("/api/coupons/lookup")
 	public LookupResult lookup(@RequestBody @jakarta.validation.Valid LookupRequest request) {
 		return couponService.lookup(request.name(), request.phoneLast4());
@@ -43,6 +45,16 @@ public class CouponController {
 	@PostMapping("/api/staff/coupons/{id}/charge")
 	public Coupon charge(@PathVariable long id, @RequestBody @jakarta.validation.Valid ChargeRequest request) {
 		return couponService.charge(id, request.amount());
+	}
+
+	@PostMapping("/api/staff/coupons/{id}/adjust")
+	public Coupon adjust(@PathVariable long id, @RequestBody @jakarta.validation.Valid AdjustRequest request) {
+		return couponService.adjustBalance(id, request.balance());
+	}
+
+	@DeleteMapping("/api/staff/coupons/{id}")
+	public void delete(@PathVariable long id) {
+		couponService.delete(id);
 	}
 
 	@GetMapping("/api/staff/coupons/preset")

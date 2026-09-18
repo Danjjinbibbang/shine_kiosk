@@ -14,6 +14,8 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   const [result, setResult] = useState<LookupResult | null>(null)
   const [preset, setPreset] = useState(20000)
   const [amount, setAmount] = useState('')
+  const [adjusting, setAdjusting] = useState(false)
+  const [newBalance, setNewBalance] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -53,8 +55,25 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
     showCoupon(updated, `${updated.name}님 ${won(amt)} 충전 · 잔액 ${won(updated.balance)}`)
   })
 
+  const adjust = (c: Coupon) => wrap(async () => {
+    const balance = Number(newBalance) || 0
+    if (!window.confirm(`${c.name}님 잔액을 ${won(c.balance)} → ${won(balance)} 으로 바꿀까요?`)) return
+    const updated = await api.adjustCoupon(c.id, balance)
+    setAdjusting(false)
+    setNewBalance('')
+    showCoupon(updated, `${updated.name}님 잔액 정정 · ${won(updated.balance)}`)
+  })
+
+  const remove = (c: Coupon) => wrap(async () => {
+    if (!window.confirm(`${c.name}님 쿠폰(잔액 ${won(c.balance)})을 삭제할까요?
+되돌릴 수 없습니다.`)) return
+    await api.deleteCoupon(c.id)
+    onToast(`${c.name}님 쿠폰 삭제됨`)
+    reset()
+  })
+
   const customAmount = Number(amount.replace(/[^0-9]/g, '')) || 0
-  const reset = () => { setName(''); setPhone(''); setResult(null); setAmount(''); setError(null) }
+  const reset = () => { setName(''); setPhone(''); setResult(null); setAmount(''); setAdjusting(false); setNewBalance(''); setError(null) }
 
   return (
     <div className="stack">
@@ -87,6 +106,24 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
           <div className="muted" style={{ fontSize: 14 }}>충전</div>
           <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy}
             label={(n) => `${won(n)} 충전`} onSubmit={(n) => void charge(result.coupon!, n)} custom={customAmount} />
+
+          {adjusting ? (
+            <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+              <div className="muted" style={{ fontSize: 14 }}>잘못 충전했을 때 잔액을 직접 고칩니다. 차액은 이력에 남습니다.</div>
+              <div className="row">
+                <input className="text-input grow" inputMode="numeric" placeholder="바꿀 잔액" value={newBalance}
+                  onChange={(e) => setNewBalance(e.target.value.replace(/[^0-9]/g, ''))} autoFocus />
+                <button className="btn" disabled={busy || newBalance === ''} onClick={() => void adjust(result.coupon!)}>정정</button>
+                <button className="btn ghost" onClick={() => { setAdjusting(false); setNewBalance('') }}>취소</button>
+              </div>
+            </div>
+          ) : (
+            <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+              <button className="btn ghost" style={{ minHeight: 40, fontSize: 15 }} onClick={() => setAdjusting(true)}>잔액 정정</button>
+              <button className="btn ghost" style={{ minHeight: 40, fontSize: 15, color: 'var(--danger)' }} disabled={busy}
+                onClick={() => void remove(result.coupon!)}>쿠폰 삭제</button>
+            </div>
+          )}
         </div>
       )}
 

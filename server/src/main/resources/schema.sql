@@ -39,13 +39,13 @@ CREATE TABLE IF NOT EXISTS coupon (
 );
 CREATE INDEX IF NOT EXISTS idx_coupon_name ON coupon(name);
 
--- 쿠폰 잔액 변동 이력. 충전(+) / 사용(-) / 주문취소 복원(+)
+-- 쿠폰 잔액 변동 이력. 충전(+) / 사용(-) / 주문취소 복원(+) / 스태프 정정(±)
 CREATE TABLE IF NOT EXISTS coupon_tx (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     coupon_id     INTEGER NOT NULL REFERENCES coupon(id),
     order_id      INTEGER,
     delta         INTEGER NOT NULL,
-    reason        TEXT    NOT NULL,            -- CHARGE | USE | REFUND
+    reason        TEXT    NOT NULL,            -- CHARGE | USE | REFUND | ADJUST
     balance_after INTEGER NOT NULL,
     created_at    TEXT    NOT NULL
 );

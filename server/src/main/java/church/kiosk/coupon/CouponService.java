@@ -72,6 +72,31 @@ public class CouponService {
 		return couponRepository.findById(couponId).orElseThrow();
 	}
 
+	/** 충전 금액을 잘못 넣었을 때 잔액을 바로잡는다. 차액을 ADJUST 이력으로 남긴다. */
+	@Transactional
+	public Coupon adjustBalance(long couponId, int newBalance) {
+		if (newBalance < 0) {
+			throw new BusinessException("잔액은 0원 이상이어야 합니다.");
+		}
+		Coupon coupon = require(couponId);
+		int delta = newBalance - coupon.balance();
+		if (delta != 0) {
+			couponRepository.updateBalance(couponId, newBalance);
+			couponRepository.insertTx(couponId, null, delta, "ADJUST", newBalance);
+		}
+		return couponRepository.findById(couponId).orElseThrow();
+	}
+
+	/** 잘못 등록한 쿠폰 삭제. 주문에 쓰인 적이 있으면 장부가 끊기므로 막고, 대신 잔액 정정을 안내한다. */
+	@Transactional
+	public void delete(long couponId) {
+		require(couponId);
+		if (couponRepository.isUsedByAnyOrder(couponId)) {
+			throw new BusinessException("주문에 사용된 쿠폰은 지울 수 없습니다. 잔액을 0원으로 정정해 주세요.");
+		}
+		couponRepository.delete(couponId);
+	}
+
 	/** 주문 결제에 쿠폰 잔액을 사용한다. 호출자가 이미 잔액 범위를 계산해 넘긴다. */
 	@Transactional
 	public void useForOrder(long couponId, int amount, long orderId) {

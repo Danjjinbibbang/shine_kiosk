@@ -58,6 +58,20 @@ public class CouponRepository {
 				.update();
 	}
 
+	/** 이 쿠폰으로 결제된 주문이 하나라도 있는지 (취소된 주문 포함 — 장부는 남아야 한다). */
+	public boolean isUsedByAnyOrder(long couponId) {
+		Integer count = jdbc.sql("SELECT COUNT(*) FROM orders WHERE coupon_id = :id")
+				.param("id", couponId)
+				.query(Integer.class)
+				.single();
+		return count > 0;
+	}
+
+	public void delete(long couponId) {
+		jdbc.sql("DELETE FROM coupon_tx WHERE coupon_id = :id").param("id", couponId).update();
+		jdbc.sql("DELETE FROM coupon WHERE id = :id").param("id", couponId).update();
+	}
+
 	public void insertTx(long couponId, Long orderId, int delta, String reason, int balanceAfter) {
 		jdbc.sql("""
 						INSERT INTO coupon_tx (coupon_id, order_id, delta, reason, balance_after, created_at)
