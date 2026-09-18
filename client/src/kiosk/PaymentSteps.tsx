@@ -156,12 +156,24 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
   )
 }
 
-const CASH_OPTIONS = [5000, 10000, 50000]
+/**
+ * 총액을 보고 실제로 낼 법한 금액들. 예) 15,000원 → 20,000 / 30,000 / 50,000
+ *  - 천원 단위로 올린 값 (3,500원 → 4,000원)
+ *  - 5천원 / 만원 단위로 올린 값
+ *  - 만원 단위 올림에 만원 한 장 더 (15,000원 → 20,000원에 더해 30,000원)
+ *  - 5만원권 한 장
+ */
+export function cashOptions(total: number): number[] {
+  const up = (unit: number) => Math.ceil(total / unit) * unit
+  const candidates = [up(1000), up(5000), up(10000), up(10000) + 10000, up(50000)]
+  return [...new Set(candidates)].filter((n) => n > total).sort((a, b) => a - b).slice(0, 4)
+}
 
 /** 총액을 보여주고, 낸 돈을 고르면 거스름돈을 계산해 스태프 메모로 남긴다. */
 export function CashStep({ total, onNext }: { total: number; onNext: (memo: string) => void }) {
   const [given, setGiven] = useState<number | null>(null)
   const change = given === null ? 0 : given - total
+  const options = cashOptions(total)
 
   return (
     <div className="stack">
@@ -172,7 +184,7 @@ export function CashStep({ total, onNext }: { total: number; onNext: (memo: stri
       <div className="muted center">얼마를 내시나요?</div>
       <div className="grid">
         <button className={'btn big' + (given === total ? ' selected' : '')} onClick={() => setGiven(total)}>딱 맞게</button>
-        {CASH_OPTIONS.filter((c) => c > total).map((c) => (
+        {options.map((c) => (
           <button key={c} className={'btn big' + (given === c ? ' selected' : '')} onClick={() => setGiven(c)}>
             {won(c)}
           </button>
