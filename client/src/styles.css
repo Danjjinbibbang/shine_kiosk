@@ -111,6 +111,10 @@ input { font: inherit; }
 .hero .sub { font-size: 24px; color: var(--muted); margin-top: 12px; }
 .hero .account { font-size: 36px; font-weight: 800; margin: 18px 0; padding: 16px; background: var(--accent); border-radius: var(--radius); }
 
+.free-toggle { justify-content: flex-start; text-align: left; }
+.free-toggle .check { font-size: 36px; line-height: 1; }
+.free-toggle .free-detail { font-size: 20px; font-weight: 600; color: var(--primary); margin-top: 4px; }
+
 .name-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .name-grid .btn { min-height: 76px; font-size: 26px; }
 .text-input {

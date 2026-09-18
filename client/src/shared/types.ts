@@ -33,6 +33,8 @@ export interface Coupon {
   name: string
   phoneLast4: string | null
   balance: number
+  /** 남은 무료 1잔 개수 */
+  freeDrinks: number
 }
 
 export type LookupStatus = 'FOUND' | 'NOT_FOUND' | 'NEED_PHONE'
@@ -51,9 +53,14 @@ export interface LineRequest {
 export interface CouponPreview {
   total: number
   balance: number
+  freeDrinks: number
+  useFreeDrink: boolean
+  freeAmount: number
+  freeItemName: string | null
   couponAmount: number
   remainder: number
   balanceAfter: number
+  freeDrinksAfter: number
 }
 
 export interface CreateOrderRequest {
@@ -62,6 +69,7 @@ export interface CreateOrderRequest {
   placeId?: number | null
   payMethod: PayMethod
   couponId?: number | null
+  useFreeDrink?: boolean
   remainderMethod?: PayMethod | null
   lines: LineRequest[]
   memo?: string | null
@@ -97,6 +105,8 @@ export interface Order {
   remainderMethod: PayMethod | null
   couponId: number | null
   couponAmount: number
+  freeAmount: number
+  freeItemName: string | null
   cashAmount: number
   transferAmount: number
   status: OrderStatus
@@ -113,6 +123,7 @@ export interface DailySummary {
   cashAmount: number
   transferAmount: number
   couponAmount: number
+  freeAmount: number
 }
 
 export const PAY_LABEL: Record<PayMethod, string> = {

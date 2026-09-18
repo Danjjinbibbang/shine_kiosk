@@ -30,7 +30,8 @@ public class CouponController {
 
 	public record ChargeRequest(@Min(value = 1, message = "충전 금액을 확인해 주세요.") int amount) {}
 
-	public record AdjustRequest(@Min(value = 0, message = "잔액은 0원 이상이어야 합니다.") int balance) {}
+	public record AdjustRequest(@Min(value = 0, message = "잔액은 0원 이상이어야 합니다.") int balance,
+								 @Min(value = 0, message = "무료잔 개수는 0 이상이어야 합니다.") int freeDrinks) {}
 
 	@PostMapping("/api/coupons/lookup")
 	public LookupResult lookup(@RequestBody @jakarta.validation.Valid LookupRequest request) {
@@ -49,7 +50,7 @@ public class CouponController {
 
 	@PostMapping("/api/staff/coupons/{id}/adjust")
 	public Coupon adjust(@PathVariable long id, @RequestBody @jakarta.validation.Valid AdjustRequest request) {
-		return couponService.adjustBalance(id, request.balance());
+		return couponService.adjust(id, request.balance(), request.freeDrinks());
 	}
 
 	@DeleteMapping("/api/staff/coupons/{id}")

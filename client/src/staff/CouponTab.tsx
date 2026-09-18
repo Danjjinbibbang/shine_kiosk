@@ -16,6 +16,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   const [amount, setAmount] = useState('')
   const [adjusting, setAdjusting] = useState(false)
   const [newBalance, setNewBalance] = useState('')
+  const [newFree, setNewFree] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -56,12 +57,17 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   })
 
   const adjust = (c: Coupon) => wrap(async () => {
-    const balance = Number(newBalance) || 0
-    if (!window.confirm(`${c.name}님 잔액을 ${won(c.balance)} → ${won(balance)} 으로 바꿀까요?`)) return
-    const updated = await api.adjustCoupon(c.id, balance)
+    const balance = newBalance === '' ? c.balance : Number(newBalance)
+    const free = newFree === '' ? c.freeDrinks : Number(newFree)
+    if (!window.confirm(`${c.name}님
+잔액 ${won(c.balance)} → ${won(balance)}
+무료잔 ${c.freeDrinks}잔 → ${free}잔
+이렇게 바꿀까요?`)) return
+    const updated = await api.adjustCoupon(c.id, balance, free)
     setAdjusting(false)
     setNewBalance('')
-    showCoupon(updated, `${updated.name}님 잔액 정정 · ${won(updated.balance)}`)
+    setNewFree('')
+    showCoupon(updated, `${updated.name}님 정정 · ${won(updated.balance)} / 무료 ${updated.freeDrinks}잔`)
   })
 
   const remove = (c: Coupon) => wrap(async () => {
@@ -73,7 +79,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   })
 
   const customAmount = Number(amount.replace(/[^0-9]/g, '')) || 0
-  const reset = () => { setName(''); setPhone(''); setResult(null); setAmount(''); setAdjusting(false); setNewBalance(''); setError(null) }
+  const reset = () => { setName(''); setPhone(''); setResult(null); setAmount(''); setAdjusting(false); setNewBalance(''); setNewFree(''); setError(null) }
 
   return (
     <div className="stack">
@@ -103,18 +109,26 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
             <b style={{ fontSize: 20 }}>{result.coupon.name}{result.coupon.phoneLast4 && <span className="muted"> ({result.coupon.phoneLast4})</span>}</b>
             <b style={{ fontSize: 26, color: 'var(--primary)' }}>{won(result.coupon.balance)}</b>
           </div>
-          <div className="muted" style={{ fontSize: 14 }}>충전</div>
+          <div className="row between" style={{ fontSize: 16 }}>
+            <span className="muted">무료 1잔</span>
+            <b>{result.coupon.freeDrinks}잔 남음</b>
+          </div>
+          <div className="muted" style={{ fontSize: 14 }}>충전 ({won(preset)}마다 무료 1잔 적립)</div>
           <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy}
             label={(n) => `${won(n)} 충전`} onSubmit={(n) => void charge(result.coupon!, n)} custom={customAmount} />
 
           {adjusting ? (
             <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-              <div className="muted" style={{ fontSize: 14 }}>잘못 충전했을 때 잔액을 직접 고칩니다. 차액은 이력에 남습니다.</div>
+              <div className="muted" style={{ fontSize: 14 }}>잘못 충전했을 때 직접 고칩니다. 비워 두면 그대로, 차액은 이력에 남습니다.</div>
               <div className="row">
-                <input className="text-input grow" inputMode="numeric" placeholder="바꿀 잔액" value={newBalance}
+                <input className="text-input grow" inputMode="numeric" placeholder={`잔액 (지금 ${won(result.coupon.balance)})`} value={newBalance}
                   onChange={(e) => setNewBalance(e.target.value.replace(/[^0-9]/g, ''))} autoFocus />
-                <button className="btn" disabled={busy || newBalance === ''} onClick={() => void adjust(result.coupon!)}>정정</button>
-                <button className="btn ghost" onClick={() => { setAdjusting(false); setNewBalance('') }}>취소</button>
+                <input className="text-input" style={{ width: 130 }} inputMode="numeric" placeholder={`무료 ${result.coupon.freeDrinks}잔`} value={newFree}
+                  onChange={(e) => setNewFree(e.target.value.replace(/[^0-9]/g, ''))} />
+              </div>
+              <div className="row">
+                <button className="btn grow" disabled={busy || (newBalance === '' && newFree === '')} onClick={() => void adjust(result.coupon!)}>정정</button>
+                <button className="btn ghost" onClick={() => { setAdjusting(false); setNewBalance(''); setNewFree('') }}>취소</button>
               </div>
             </div>
           ) : (

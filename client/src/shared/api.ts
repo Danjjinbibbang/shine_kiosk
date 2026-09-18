@@ -69,8 +69,8 @@ export const api = {
   paymentInfo: () => request<{ bankAccount: string }>('/api/orders/payment-info'),
   lookupCoupon: (name: string, phoneLast4?: string) =>
     post<LookupResult>('/api/coupons/lookup', { name, phoneLast4: phoneLast4 || null }),
-  couponPreview: (couponId: number, lines: LineRequest[]) =>
-    post<CouponPreview>('/api/orders/coupon-preview', { couponId, lines }),
+  couponPreview: (couponId: number, useFreeDrink: boolean, lines: LineRequest[]) =>
+    post<CouponPreview>('/api/orders/coupon-preview', { couponId, useFreeDrink, lines }),
   createOrder: (body: CreateOrderRequest) => post<Order>('/api/orders', body),
 
   // ── 스태프 (PIN 토큰 필요) ────────────────────────────
@@ -87,7 +87,8 @@ export const api = {
   registerCoupon: (name: string, phoneLast4: string | null, amount: number) =>
     post<Coupon>('/api/staff/coupons', { name, phoneLast4, amount }),
   chargeCoupon: (id: number, amount: number) => post<Coupon>(`/api/staff/coupons/${id}/charge`, { amount }),
-  adjustCoupon: (id: number, balance: number) => post<Coupon>(`/api/staff/coupons/${id}/adjust`, { balance }),
+  adjustCoupon: (id: number, balance: number, freeDrinks: number) =>
+    post<Coupon>(`/api/staff/coupons/${id}/adjust`, { balance, freeDrinks }),
   deleteCoupon: (id: number) => request<void>(`/api/staff/coupons/${id}`, { method: 'DELETE' }),
   couponPreset: () => request<{ amount: number }>('/api/staff/coupons/preset'),
 }

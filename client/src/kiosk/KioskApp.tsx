@@ -108,6 +108,7 @@ export function KioskApp() {
       placeId: d.place?.id ?? null,
       payMethod: d.payMethod,
       couponId: d.coupon?.id ?? null,
+      useFreeDrink: d.preview?.useFreeDrink ?? false,
       remainderMethod: d.remainderMethod ?? null,
       lines,
       memo: d.memo ?? null,

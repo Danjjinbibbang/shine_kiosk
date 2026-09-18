@@ -45,7 +45,8 @@ interface CouponProps {
 }
 
 /**
- * 이름으로 쿠폰 조회 → (동명이인이면 전화 뒤 4자리) → 차감액/잔액 보여주고 확정.
+ * 이름으로 쿠폰 조회 → (동명이인이면 전화 뒤 4자리) → 잔액/무료 1잔 보여주고 확정.
+ * 무료 1잔이 남아 있으면 체크해서 이번 주문의 가장 비싼 한 잔을 무료로 뺄 수 있다.
  * 잔액이 모자라면 나머지를 현금/계좌이체 중 고른다.
  */
 export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
@@ -54,9 +55,31 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
   const [phone, setPhone] = useState('')
   const [coupon, setCoupon] = useState<Coupon | null>(null)
   const [preview, setPreview] = useState<CouponPreview | null>(null)
+  const [useFree, setUseFree] = useState(false)
   const [account, setAccount] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const loadPreview = async (c: Coupon, free: boolean) => {
+    const p = await api.couponPreview(c.id, free, lines)
+    setPreview(p)
+    setUseFree(p.useFreeDrink)
+    if (p.remainder > 0 && !account) {
+      api.paymentInfo().then((i) => setAccount(i.bankAccount)).catch(() => {})
+    }
+  }
+
+  const toggleFree = async () => {
+    if (!coupon) return
+    setBusy(true)
+    try {
+      await loadPreview(coupon, !useFree)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '계산에 실패했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const lookup = async (n: string, phoneLast4?: string) => {
     setBusy(true)
@@ -74,13 +97,9 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
           : `"${n}" 이름의 쿠폰이 없습니다. 봉사자에게 확인해 주세요.`)
         return
       }
-      const p = await api.couponPreview(r.coupon.id, lines)
       setName(n)
       setCoupon(r.coupon)
-      setPreview(p)
-      if (p.remainder > 0) {
-        api.paymentInfo().then((i) => setAccount(i.bankAccount)).catch(() => {})
-      }
+      await loadPreview(r.coupon, false)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '조회에 실패했습니다.')
     } finally {
@@ -91,14 +110,33 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
   if (coupon && preview) {
     return (
       <div className="stack">
+        {error && <div className="error">{error}</div>}
         <div className="total-box">
           <span className="label">{coupon.name}님 쿠폰 잔액</span>
           <span className="amount">{won(preview.balance)}</span>
         </div>
+
+        {preview.freeDrinks > 0 ? (
+          <button className={'btn big free-toggle' + (useFree ? ' selected' : '')} disabled={busy} onClick={() => void toggleFree()}>
+            <span className="check">{useFree ? '☑' : '☐'}</span>
+            <span className="grow" style={{ textAlign: 'left' }}>
+              무료 1잔 쓰기 <small className="muted">({preview.freeDrinks}잔 남음)</small>
+              {useFree && preview.freeItemName && (
+                <div className="free-detail">{preview.freeItemName} {won(preview.freeAmount)} 무료</div>
+              )}
+            </span>
+          </button>
+        ) : (
+          <div className="muted center">남은 무료 1잔이 없습니다</div>
+        )}
+
         <div className="card">
           <div className="row between"><span>주문 금액</span><b>{won(preview.total)}</b></div>
-          <div className="row between"><span>쿠폰에서 차감</span><b>− {won(preview.couponAmount)}</b></div>
-          <div className="row between muted"><span>차감 후 잔액</span><span>{won(preview.balanceAfter)}</span></div>
+          {preview.useFreeDrink && (
+            <div className="row between"><span>무료 1잔 ({preview.freeItemName})</span><b>− {won(preview.freeAmount)}</b></div>
+          )}
+          <div className="row between"><span>잔액에서 차감</span><b>− {won(preview.couponAmount)}</b></div>
+          <div className="row between muted"><span>차감 후 잔액</span><span>{won(preview.balanceAfter)}{preview.useFreeDrink && ` · 무료 ${preview.freeDrinksAfter}잔`}</span></div>
           {preview.remainder > 0 && (
             <div className="row between" style={{ fontSize: 26 }}>
               <span>추가로 내실 금액</span><b>{won(preview.remainder)}</b>

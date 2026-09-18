@@ -26,13 +26,14 @@ public class OrderRepository {
 	private static final String ORDER_COLUMNS = """
 			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
 			total_amount, pay_method, remainder_method, coupon_id, coupon_amount,
-			cash_amount, transfer_amount, status, memo, created_at, completed_at
+			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
 	public record OrderRow(String orderDate, int orderNo, String customerName, ReceiveType receiveType,
 						   Long placeId, String placeName, int totalAmount, PayMethod payMethod,
 						   PayMethod remainderMethod, Long couponId, int couponAmount,
+						   int freeAmount, String freeItemName,
 						   int cashAmount, int transferAmount, String memo) {}
 
 	public record LineRow(Long menuItemId, Long variantId, String menuName, String variantLabel,
@@ -56,10 +57,10 @@ public class OrderRepository {
 		jdbc.sql("""
 						INSERT INTO orders (order_date, order_no, customer_name, receive_type, place_id, place_name,
 						                    total_amount, pay_method, remainder_method, coupon_id, coupon_amount,
-						                    cash_amount, transfer_amount, status, memo, created_at)
+						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at)
 						VALUES (:date, :no, :name, :receive, :placeId, :placeName,
 						        :total, :pay, :remainder, :couponId, :couponAmount,
-						        :cash, :transfer, 'PENDING', :memo, :now)
+						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now)
 						""")
 				.param("date", row.orderDate()).param("no", row.orderNo())
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
@@ -67,6 +68,7 @@ public class OrderRepository {
 				.param("total", row.totalAmount()).param("pay", row.payMethod().name())
 				.param("remainder", row.remainderMethod() == null ? null : row.remainderMethod().name())
 				.param("couponId", row.couponId()).param("couponAmount", row.couponAmount())
+				.param("freeAmount", row.freeAmount()).param("freeItemName", row.freeItemName())
 				.param("cash", row.cashAmount()).param("transfer", row.transferAmount())
 				.param("memo", row.memo()).param("now", LocalDateTime.now().toString())
 				.update(keys);
@@ -79,7 +81,8 @@ public class OrderRepository {
 						UPDATE orders SET customer_name = :name, receive_type = :receive,
 						                  place_id = :placeId, place_name = :placeName,
 						                  total_amount = :total, remainder_method = :remainder,
-						                  coupon_amount = :couponAmount, cash_amount = :cash,
+						                  coupon_amount = :couponAmount, free_amount = :freeAmount,
+						                  free_item_name = :freeItemName, cash_amount = :cash,
 						                  transfer_amount = :transfer, memo = :memo
 						WHERE id = :id
 						""")
@@ -88,6 +91,7 @@ public class OrderRepository {
 				.param("total", row.totalAmount())
 				.param("remainder", row.remainderMethod() == null ? null : row.remainderMethod().name())
 				.param("couponAmount", row.couponAmount())
+				.param("freeAmount", row.freeAmount()).param("freeItemName", row.freeItemName())
 				.param("cash", row.cashAmount()).param("transfer", row.transferAmount())
 				.param("memo", row.memo()).param("id", orderId)
 				.update();
@@ -156,12 +160,13 @@ public class OrderRepository {
 						       COALESCE(SUM(total_amount), 0)    AS total,
 						       COALESCE(SUM(cash_amount), 0)     AS cash,
 						       COALESCE(SUM(transfer_amount), 0) AS transfer,
-						       COALESCE(SUM(coupon_amount), 0)   AS coupon
+						       COALESCE(SUM(coupon_amount), 0)   AS coupon,
+						       COALESCE(SUM(free_amount), 0)     AS free
 						FROM orders WHERE order_date = :date AND status <> 'CANCELED'
 						""")
 				.param("date", orderDate)
 				.query((rs, n) -> new DailySummary(orderDate, rs.getInt("cnt"), rs.getInt("total"),
-						rs.getInt("cash"), rs.getInt("transfer"), rs.getInt("coupon")))
+						rs.getInt("cash"), rs.getInt("transfer"), rs.getInt("coupon"), rs.getInt("free")))
 				.single();
 	}
 
@@ -202,7 +207,8 @@ public class OrderRepository {
 	private static OrderView withLines(OrderView o, List<LineView> lines) {
 		return new OrderView(o.id(), o.orderDate(), o.orderNo(), o.customerName(), o.receiveType(),
 				o.placeId(), o.placeName(), o.totalAmount(), o.payMethod(), o.remainderMethod(),
-				o.couponId(), o.couponAmount(), o.cashAmount(), o.transferAmount(), o.status(),
+				o.couponId(), o.couponAmount(), o.freeAmount(), o.freeItemName(),
+				o.cashAmount(), o.transferAmount(), o.status(),
 				o.memo(), o.createdAt(), o.completedAt(), lines);
 	}
 
@@ -218,8 +224,8 @@ public class OrderRepository {
 				placeIdOrNull, rs.getString("place_name"), rs.getInt("total_amount"),
 				PayMethod.valueOf(rs.getString("pay_method")),
 				remainder == null ? null : PayMethod.valueOf(remainder),
-				couponIdOrNull, rs.getInt("coupon_amount"), rs.getInt("cash_amount"),
-				rs.getInt("transfer_amount"), Status.valueOf(rs.getString("status")),
+				couponIdOrNull, rs.getInt("coupon_amount"), rs.getInt("free_amount"), rs.getString("free_item_name"),
+				rs.getInt("cash_amount"), rs.getInt("transfer_amount"), Status.valueOf(rs.getString("status")),
 				rs.getString("memo"), rs.getString("created_at"), rs.getString("completed_at"),
 				List.of());
 	}

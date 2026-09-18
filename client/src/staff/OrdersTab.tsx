@@ -70,9 +70,10 @@ interface CardProps {
   onEdit: () => void
 }
 
-/** "현금 1,000원" / "5,000원 = 쿠폰 3,000원 + 현금 2,000원" */
+/** "현금 1,000원" / "5,000원 = 무료 1잔(아메리카노 ICE) + 쿠폰 3,000원 + 현금 1,000원" */
 function payLine(o: Order): string {
   const parts: string[] = []
+  if (o.freeAmount) parts.push(`무료 1잔(${o.freeItemName ?? won(o.freeAmount)})`)
   if (o.couponAmount) parts.push(`쿠폰 ${won(o.couponAmount)}`)
   if (o.cashAmount) parts.push(`현금 ${won(o.cashAmount)}`)
   if (o.transferAmount) parts.push(`이체 ${won(o.transferAmount)}`)

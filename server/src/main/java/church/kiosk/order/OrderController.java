@@ -34,7 +34,7 @@ public class OrderController {
 
 	@PostMapping("/coupon-preview")
 	public CouponPreview couponPreview(@RequestBody @Valid CouponPreviewRequest request) {
-		return orderService.previewCoupon(request.couponId(), request.lines());
+		return orderService.previewCoupon(request.couponId(), request.wantsFreeDrink(), request.lines());
 	}
 
 	/** 계좌이체 화면에 띄울 계좌 안내. */

@@ -73,6 +73,7 @@ export function StaffApp() {
             <span>현금 {won(summary.cashAmount)}</span>
             <span>이체 {won(summary.transferAmount)}</span>
             <span>쿠폰 {won(summary.couponAmount)}</span>
+            {summary.freeAmount > 0 && <span>무료잔 {won(summary.freeAmount)}</span>}
           </div>
         )}
         <div className="tabs">

@@ -29,22 +29,26 @@ CREATE TABLE IF NOT EXISTS delivery_place (
     active     INTEGER NOT NULL DEFAULT 1
 );
 
+-- 선불 쿠폰. 잔액에서 주문 금액 전액이 차감되고,
+-- 20,000원 충전마다 '무료 1잔' 이 적립되어 원하는 주문에서 가장 비싼 한 잔을 무료로 뺀다.
 CREATE TABLE IF NOT EXISTS coupon (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,
     phone_last4 TEXT,                          -- 동명이인 구분용. 없으면 NULL
     balance     INTEGER NOT NULL DEFAULT 0,
+    free_drinks INTEGER NOT NULL DEFAULT 0,    -- 남은 무료 1잔 개수
     created_at  TEXT    NOT NULL,
     updated_at  TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_coupon_name ON coupon(name);
 
--- 쿠폰 잔액 변동 이력. 충전(+) / 사용(-) / 주문취소 복원(+) / 스태프 정정(±)
+-- 쿠폰 변동 이력. 충전(+) / 사용(-) / 주문취소 복원(+) / 스태프 정정(±). 무료잔 개수 변동은 free_delta.
 CREATE TABLE IF NOT EXISTS coupon_tx (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     coupon_id     INTEGER NOT NULL REFERENCES coupon(id),
     order_id      INTEGER,
     delta         INTEGER NOT NULL,
+    free_delta    INTEGER NOT NULL DEFAULT 0,
     reason        TEXT    NOT NULL,            -- CHARGE | USE | REFUND | ADJUST
     balance_after INTEGER NOT NULL,
     created_at    TEXT    NOT NULL
@@ -71,7 +75,9 @@ CREATE TABLE IF NOT EXISTS orders (
     pay_method      TEXT    NOT NULL,          -- TRANSFER | COUPON | CASH (고객이 고른 수단)
     remainder_method TEXT,                     -- 쿠폰 잔액 부족 시 나머지 결제 수단 (CASH | TRANSFER)
     coupon_id       INTEGER REFERENCES coupon(id),
-    coupon_amount   INTEGER NOT NULL DEFAULT 0,
+    coupon_amount   INTEGER NOT NULL DEFAULT 0, -- 잔액에서 차감한 금액
+    free_amount     INTEGER NOT NULL DEFAULT 0, -- 무료 1잔으로 뺀 금액 (0 이면 안 씀)
+    free_item_name  TEXT,                       -- 무료로 처리한 메뉴명 스냅샷
     cash_amount     INTEGER NOT NULL DEFAULT 0,
     transfer_amount INTEGER NOT NULL DEFAULT 0,
     status          TEXT    NOT NULL,          -- PENDING | DONE | CANCELED

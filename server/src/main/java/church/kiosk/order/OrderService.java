@@ -47,23 +47,34 @@ public class OrderService {
 		this.events = events;
 	}
 
-	/** 가격이 확정된 주문 항목 묶음. */
-	private record PricedLines(List<LineRow> lines, int total, int maxUnitPrice) {}
+	/** 가격이 확정된 주문 항목 묶음. maxUnit* 은 가장 비싼 한 잔 (무료 1잔 대상). */
+	private record PricedLines(List<LineRow> lines, int total, int maxUnitPrice, String maxUnitName) {}
+
+	/** 쿠폰 적용 결과. */
+	private record CouponUse(boolean useFree, int freeAmount, String freeItemName, int couponAmount, int remainder) {}
 
 	/**
-	 * 쿠폰 차감 규칙: 쿠폰은 "한 잔 무료" 이므로 주문한 것 중 가장 비싼 한 잔 값이 빠진다.
-	 * 잔액이 그보다 적으면 잔액을 전부 쓰고, 총액에서 쿠폰으로 못 낸 나머지는 현금/계좌이체로 받는다.
+	 * 쿠폰 차감 규칙:
+	 *  1) 무료 1잔을 쓰면 가장 비싼 한 잔 값(freeAmount)이 먼저 빠진다.
+	 *  2) 남은 금액은 잔액에서 전액 차감. 잔액이 모자라면 잔액을 다 쓰고 나머지(remainder)는 현금/계좌이체.
 	 */
-	static int couponAmountFor(int balance, int maxUnitPrice) {
-		return Math.min(balance, maxUnitPrice);
+	static CouponUse applyCoupon(Coupon coupon, PricedLines priced, boolean wantFree) {
+		boolean useFree = wantFree && coupon.freeDrinks() > 0 && priced.maxUnitPrice() > 0;
+		int freeAmount = useFree ? priced.maxUnitPrice() : 0;
+		int payable = priced.total() - freeAmount;
+		int couponAmount = Math.min(coupon.balance(), payable);
+		return new CouponUse(useFree, freeAmount, useFree ? priced.maxUnitName() : null,
+				couponAmount, payable - couponAmount);
 	}
 
-	public CouponPreview previewCoupon(long couponId, List<LineRequest> lines) {
+	public CouponPreview previewCoupon(long couponId, boolean useFreeDrink, List<LineRequest> lines) {
 		PricedLines priced = price(lines);
 		Coupon coupon = couponService.require(couponId);
-		int couponAmount = couponAmountFor(coupon.balance(), priced.maxUnitPrice());
-		return new CouponPreview(priced.total(), coupon.balance(), couponAmount,
-				priced.total() - couponAmount, coupon.balance() - couponAmount);
+		CouponUse use = applyCoupon(coupon, priced, useFreeDrink);
+		return new CouponPreview(priced.total(), coupon.balance(), coupon.freeDrinks(),
+				use.useFree(), use.freeAmount(), use.freeItemName(),
+				use.couponAmount(), use.remainder(),
+				coupon.balance() - use.couponAmount(), coupon.freeDrinks() - (use.useFree() ? 1 : 0));
 	}
 
 	@Transactional
@@ -72,7 +83,7 @@ public class OrderService {
 		Place place = resolvePlace(req.receiveType(), req.placeId());
 		String name = req.customerName().trim();
 
-		int couponAmount = 0;
+		CouponUse use = new CouponUse(false, 0, null, 0, priced.total());
 		Long couponId = null;
 		PayMethod remainderMethod = null;
 		if (req.payMethod() == PayMethod.COUPON) {
@@ -80,13 +91,16 @@ public class OrderService {
 				throw new BusinessException("쿠폰을 먼저 조회해 주세요.");
 			}
 			Coupon coupon = couponService.require(req.couponId());
+			if (req.wantsFreeDrink() && coupon.freeDrinks() < 1) {
+				throw new BusinessException("남은 무료 1잔이 없습니다.");
+			}
 			couponId = coupon.id();
-			couponAmount = couponAmountFor(coupon.balance(), priced.maxUnitPrice());
-			if (priced.total() - couponAmount > 0) {
+			use = applyCoupon(coupon, priced, req.wantsFreeDrink());
+			if (use.remainder() > 0) {
 				remainderMethod = requireRemainderMethod(req.remainderMethod());
 			}
 		}
-		int remainder = priced.total() - couponAmount;
+		int remainder = use.remainder();
 		int cash = 0;
 		int transfer = 0;
 		PayMethod remainderBy = req.payMethod() == PayMethod.COUPON ? remainderMethod : req.payMethod();
@@ -100,12 +114,12 @@ public class OrderService {
 		String today = LocalDate.now().toString();
 		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
 				place == null ? null : place.id(), place == null ? null : place.name(),
-				priced.total(), req.payMethod(), remainderMethod, couponId, couponAmount,
-				cash, transfer, blankToNull(req.memo()));
+				priced.total(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
+				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
 		long orderId = orderRepository.insert(row);
 		orderRepository.insertLines(orderId, priced.lines());
 		if (couponId != null) {
-			couponService.useForOrder(couponId, couponAmount, orderId);
+			couponService.useForOrder(couponId, use.couponAmount(), use.useFree(), orderId);
 		}
 		customerRepository.recordOrder(name);
 
@@ -115,7 +129,7 @@ public class OrderService {
 	}
 
 	/**
-	 * 스태프가 항목/이름/장소를 고친다. 쿠폰을 쓴 주문이면 먼저 차감을 되돌리고
+	 * 스태프가 항목/이름/장소를 고친다. 쿠폰을 쓴 주문이면 먼저 차감(무료 1잔 포함)을 되돌리고
 	 * 새 항목 기준으로 다시 차감해서, 잔액 이력이 항상 실제 주문과 맞아떨어지게 한다.
 	 */
 	@Transactional
@@ -124,26 +138,27 @@ public class OrderService {
 		PricedLines priced = price(req.lines());
 		Place place = resolvePlace(req.receiveType(), req.placeId());
 
-		int couponAmount = 0;
+		CouponUse use = new CouponUse(false, 0, null, 0, priced.total());
 		PayMethod remainderMethod = existing.remainderMethod();
 		if (existing.couponId() != null) {
-			couponService.refundForOrder(existing.couponId(), existing.couponAmount(), orderId);
+			boolean usedFree = existing.freeAmount() > 0;
+			couponService.refundForOrder(existing.couponId(), existing.couponAmount(), usedFree, orderId);
 			Coupon coupon = couponService.require(existing.couponId());
-			couponAmount = couponAmountFor(coupon.balance(), priced.maxUnitPrice());
-			couponService.useForOrder(existing.couponId(), couponAmount, orderId);
-			if (priced.total() - couponAmount > 0 && remainderMethod == null) {
+			use = applyCoupon(coupon, priced, usedFree); // 무료 1잔 사용 여부는 원래 선택을 유지
+			couponService.useForOrder(existing.couponId(), use.couponAmount(), use.useFree(), orderId);
+			if (use.remainder() > 0 && remainderMethod == null) {
 				remainderMethod = PayMethod.CASH; // 원래 쿠폰만으로 됐던 주문이 커지면 나머지는 현금으로 받는다
 			}
 		}
-		int remainder = priced.total() - couponAmount;
+		int remainder = use.remainder();
 		PayMethod remainderBy = existing.payMethod() == PayMethod.COUPON ? remainderMethod : existing.payMethod();
 		int cash = remainderBy == PayMethod.CASH ? remainder : 0;
 		int transfer = remainderBy == PayMethod.TRANSFER ? remainder : 0;
 
 		OrderRow row = new OrderRow(existing.orderDate(), existing.orderNo(), req.customerName().trim(),
 				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
-				priced.total(), existing.payMethod(), remainderMethod, existing.couponId(), couponAmount,
-				cash, transfer, blankToNull(req.memo()));
+				priced.total(), existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
+				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
 		orderRepository.update(orderId, row);
 		orderRepository.deleteLines(orderId);
 		orderRepository.insertLines(orderId, priced.lines());
@@ -178,7 +193,7 @@ public class OrderService {
 			return;
 		}
 		if (order.couponId() != null) {
-			couponService.refundForOrder(order.couponId(), order.couponAmount(), orderId);
+			couponService.refundForOrder(order.couponId(), order.couponAmount(), order.freeAmount() > 0, orderId);
 		}
 		orderRepository.markCanceled(orderId);
 		events.broadcastOrdersChanged();
@@ -203,6 +218,7 @@ public class OrderService {
 		List<LineRow> lines = new ArrayList<>();
 		int total = 0;
 		int max = 0;
+		String maxName = null;
 		for (LineRequest r : requests) {
 			VariantDetail v = menuRepository.findVariantDetail(r.variantId())
 					.orElseThrow(() -> new BusinessException("없는 메뉴가 담겨 있습니다. 다시 담아 주세요."));
@@ -211,9 +227,12 @@ public class OrderService {
 			}
 			lines.add(new LineRow(v.menuItemId(), v.variantId(), v.menuName(), v.label(), v.price(), r.quantity()));
 			total += v.price() * r.quantity();
-			max = Math.max(max, v.price());
+			if (v.price() > max) {
+				max = v.price();
+				maxName = v.label() == null ? v.menuName() : v.menuName() + " " + v.label();
+			}
 		}
-		return new PricedLines(lines, total, max);
+		return new PricedLines(lines, total, max, maxName);
 	}
 
 	private Place resolvePlace(ReceiveType receiveType, Long placeId) {

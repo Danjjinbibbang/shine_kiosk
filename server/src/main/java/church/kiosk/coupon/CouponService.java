@@ -1,5 +1,6 @@
 package church.kiosk.coupon;
 
+import church.kiosk.config.KioskProperties;
 import church.kiosk.support.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -7,6 +8,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 선불 쿠폰. 주문 금액 전액이 잔액에서 빠지고, 20,000원(설정값) 충전마다 무료 1잔이 적립된다.
+ * 무료 1잔은 고객이 원하는 주문에서 체크해 쓰며, 그 주문에서 가장 비싼 한 잔 값이 빠진다.
+ */
 @Service
 public class CouponService {
 
@@ -20,9 +25,17 @@ public class CouponService {
 	}
 
 	private final CouponRepository couponRepository;
+	private final KioskProperties props;
 
-	public CouponService(CouponRepository couponRepository) {
+	public CouponService(CouponRepository couponRepository, KioskProperties props) {
 		this.couponRepository = couponRepository;
+		this.props = props;
+	}
+
+	/** 충전 금액으로 적립되는 무료 1잔 개수. 20,000원마다 1잔. */
+	int freeDrinksFor(int amount) {
+		int unit = props.getCouponPresetAmount();
+		return unit > 0 ? amount / unit : 0;
 	}
 
 	public LookupResult lookup(String name, String phoneLast4) {
@@ -55,8 +68,9 @@ public class CouponService {
 		if (!sameName.isEmpty() && (phoneLast4 == null || phoneLast4.isBlank())) {
 			throw new BusinessException("같은 이름이 이미 있습니다. 전화번호 뒤 4자리를 입력해 주세요.");
 		}
-		long id = couponRepository.insert(trimmed, blankToNull(phoneLast4), amount);
-		couponRepository.insertTx(id, null, amount, "CHARGE", amount);
+		int free = freeDrinksFor(amount);
+		long id = couponRepository.insert(trimmed, blankToNull(phoneLast4), amount, free);
+		couponRepository.insertTx(id, null, amount, free, "CHARGE", amount);
 		return couponRepository.findById(id).orElseThrow();
 	}
 
@@ -66,28 +80,30 @@ public class CouponService {
 			throw new BusinessException("충전 금액을 확인해 주세요.");
 		}
 		Coupon coupon = require(couponId);
+		int free = freeDrinksFor(amount);
 		int after = coupon.balance() + amount;
-		couponRepository.updateBalance(couponId, after);
-		couponRepository.insertTx(couponId, null, amount, "CHARGE", after);
+		couponRepository.update(couponId, after, coupon.freeDrinks() + free);
+		couponRepository.insertTx(couponId, null, amount, free, "CHARGE", after);
 		return couponRepository.findById(couponId).orElseThrow();
 	}
 
-	/** 충전 금액을 잘못 넣었을 때 잔액을 바로잡는다. 차액을 ADJUST 이력으로 남긴다. */
+	/** 충전을 잘못 넣었을 때 잔액과 무료잔 개수를 바로잡는다. 차액을 ADJUST 이력으로 남긴다. */
 	@Transactional
-	public Coupon adjustBalance(long couponId, int newBalance) {
-		if (newBalance < 0) {
-			throw new BusinessException("잔액은 0원 이상이어야 합니다.");
+	public Coupon adjust(long couponId, int newBalance, int newFreeDrinks) {
+		if (newBalance < 0 || newFreeDrinks < 0) {
+			throw new BusinessException("잔액과 무료잔 개수는 0 이상이어야 합니다.");
 		}
 		Coupon coupon = require(couponId);
 		int delta = newBalance - coupon.balance();
-		if (delta != 0) {
-			couponRepository.updateBalance(couponId, newBalance);
-			couponRepository.insertTx(couponId, null, delta, "ADJUST", newBalance);
+		int freeDelta = newFreeDrinks - coupon.freeDrinks();
+		if (delta != 0 || freeDelta != 0) {
+			couponRepository.update(couponId, newBalance, newFreeDrinks);
+			couponRepository.insertTx(couponId, null, delta, freeDelta, "ADJUST", newBalance);
 		}
 		return couponRepository.findById(couponId).orElseThrow();
 	}
 
-	/** 잘못 등록한 쿠폰 삭제. 주문에 쓰인 적이 있으면 장부가 끊기므로 막고, 대신 잔액 정정을 안내한다. */
+	/** 잘못 등록한 쿠폰 삭제. 주문에 쓰인 적이 있으면 장부가 끊기므로 막고, 대신 정정을 안내한다. */
 	@Transactional
 	public void delete(long couponId) {
 		require(couponId);
@@ -97,31 +113,39 @@ public class CouponService {
 		couponRepository.delete(couponId);
 	}
 
-	/** 주문 결제에 쿠폰 잔액을 사용한다. 호출자가 이미 잔액 범위를 계산해 넘긴다. */
+	/**
+	 * 주문 결제에 쿠폰을 사용한다. amount 는 잔액에서 뺄 금액(호출자가 잔액 범위로 계산),
+	 * useFreeDrink 가 참이면 무료 1잔을 한 장 소모한다.
+	 */
 	@Transactional
-	public void useForOrder(long couponId, int amount, long orderId) {
-		if (amount <= 0) {
-			return;
-		}
+	public void useForOrder(long couponId, int amount, boolean useFreeDrink, long orderId) {
 		Coupon coupon = require(couponId);
 		if (coupon.balance() < amount) {
 			throw new BusinessException("쿠폰 잔액이 부족합니다.");
 		}
+		if (useFreeDrink && coupon.freeDrinks() < 1) {
+			throw new BusinessException("남은 무료 1잔이 없습니다.");
+		}
+		if (amount <= 0 && !useFreeDrink) {
+			return;
+		}
 		int after = coupon.balance() - amount;
-		couponRepository.updateBalance(couponId, after);
-		couponRepository.insertTx(couponId, orderId, -amount, "USE", after);
+		int freeDelta = useFreeDrink ? -1 : 0;
+		couponRepository.update(couponId, after, coupon.freeDrinks() + freeDelta);
+		couponRepository.insertTx(couponId, orderId, -amount, freeDelta, "USE", after);
 	}
 
-	/** 주문 취소/수정 시 이미 차감된 금액을 되돌린다. */
+	/** 주문 취소/수정 시 차감한 금액과 소모한 무료 1잔을 되돌린다. */
 	@Transactional
-	public void refundForOrder(long couponId, int amount, long orderId) {
-		if (amount <= 0) {
+	public void refundForOrder(long couponId, int amount, boolean restoreFreeDrink, long orderId) {
+		if (amount <= 0 && !restoreFreeDrink) {
 			return;
 		}
 		Coupon coupon = require(couponId);
 		int after = coupon.balance() + amount;
-		couponRepository.updateBalance(couponId, after);
-		couponRepository.insertTx(couponId, orderId, amount, "REFUND", after);
+		int freeDelta = restoreFreeDrink ? 1 : 0;
+		couponRepository.update(couponId, after, coupon.freeDrinks() + freeDelta);
+		couponRepository.insertTx(couponId, orderId, amount, freeDelta, "REFUND", after);
 	}
 
 	public Coupon require(long couponId) {
