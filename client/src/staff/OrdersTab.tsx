@@ -70,12 +70,15 @@ interface CardProps {
   onEdit: () => void
 }
 
+/** "현금 1,000원" / "5,000원 = 쿠폰 3,000원 + 현금 2,000원" */
 function payLine(o: Order): string {
   const parts: string[] = []
   if (o.couponAmount) parts.push(`쿠폰 ${won(o.couponAmount)}`)
   if (o.cashAmount) parts.push(`현금 ${won(o.cashAmount)}`)
   if (o.transferAmount) parts.push(`이체 ${won(o.transferAmount)}`)
-  return `${PAY_LABEL[o.payMethod]} · ${parts.join(' + ') || won(0)}`
+  if (parts.length === 0) return `${PAY_LABEL[o.payMethod]} ${won(o.totalAmount)}`
+  if (parts.length === 1) return parts[0]
+  return `${won(o.totalAmount)} = ${parts.join(' + ')}`
 }
 
 function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardProps) {
@@ -97,7 +100,7 @@ function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardP
           </div>
         ))}
       </div>
-      <div className="pay">{won(o.totalAmount)} · {payLine(o)}</div>
+      <div className="pay">{payLine(o)}</div>
       {o.memo && <div className="memo">📝 {o.memo}</div>}
       <div className="actions">
         {o.status === 'PENDING' ? (

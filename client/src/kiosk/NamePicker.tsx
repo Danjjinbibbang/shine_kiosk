@@ -13,7 +13,7 @@ interface Props {
  * 어르신은 버튼 하나 누르면 끝, 처음 오신 분은 봉사자가 옆에서 대신 쳐 드리면 된다.
  */
 export function NamePicker({ title, confirmLabel, disabled, onSelect }: Props) {
-  const [names, setNames] = useState<string[]>([])
+  const [names, setNames] = useState<string[] | null>(null) // null = 아직 불러오는 중
   const [typing, setTyping] = useState(false)
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -41,7 +41,7 @@ export function NamePicker({ title, confirmLabel, disabled, onSelect }: Props) {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submitText() }} />
           <div className="kiosk-foot">
-            {names.length > 0 && (
+            {names && names.length > 0 && (
               <button className="btn big" onClick={() => setTyping(false)}>명단에서 고르기</button>
             )}
             <button className="btn big primary" disabled={disabled || !text.trim()} onClick={submitText}>
@@ -51,9 +51,10 @@ export function NamePicker({ title, confirmLabel, disabled, onSelect }: Props) {
         </div>
       ) : (
         <div className="stack">
-          {names.length === 0 && <div className="empty">아직 명단이 없습니다. 이름을 직접 입력해 주세요.</div>}
+          {names === null && <div className="empty">명단을 불러오는 중…</div>}
+          {names && names.length === 0 && <div className="empty">아직 명단이 없습니다. 이름을 직접 입력해 주세요.</div>}
           <div className="name-grid">
-            {names.map((n) => (
+            {(names ?? []).map((n) => (
               <button key={n} className="btn" disabled={disabled} onClick={() => onSelect(n)}>{n}</button>
             ))}
           </div>

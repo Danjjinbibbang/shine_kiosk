@@ -11,6 +11,10 @@ interface Props {
   onNext: () => void
 }
 
+/**
+ * 메뉴 한 줄 = 버튼 하나. 누르면 1개 담기고, 담긴 뒤에는 옆에 − 수량 + 가 나타난다.
+ * 어르신은 같은 버튼을 여러 번 눌러도 되고, 익숙한 분은 +/- 를 쓰면 된다.
+ */
 export function MenuStep({ cart, total, onChange, onNext }: Props) {
   const [menu, setMenu] = useState<MenuItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -19,18 +23,22 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
     api.menu().then(setMenu).catch((e) => setError(e.message))
   }, [])
 
-  const add = (item: MenuItem, v: MenuVariant) => {
-    const idx = cart.findIndex((l) => l.variantId === v.id)
-    if (idx >= 0) {
-      const next = cart.slice()
-      next[idx] = { ...next[idx], qty: next[idx].qty + 1 }
-      onChange(next)
-    } else {
-      onChange([...cart, { variantId: v.id, itemName: item.name, label: v.label, price: v.price, qty: 1 }])
+  const qtyOf = (variantId: number) => cart.find((l) => l.variantId === variantId)?.qty ?? 0
+
+  const setQty = (item: MenuItem, v: MenuVariant, qty: number) => {
+    const rest = cart.filter((l) => l.variantId !== v.id)
+    if (qty <= 0) {
+      onChange(rest)
+      return
     }
+    const existing = cart.find((l) => l.variantId === v.id)
+    const line: CartLine = existing
+      ? { ...existing, qty }
+      : { variantId: v.id, itemName: item.name, label: v.label, price: v.price, qty }
+    // 처음 담는 건 뒤에 붙이고, 이미 있던 건 자리를 유지한다.
+    onChange(existing ? cart.map((l) => (l.variantId === v.id ? line : l)) : [...rest, line])
   }
 
-  const qtyOf = (variantId: number) => cart.find((l) => l.variantId === variantId)?.qty ?? 0
   const count = cart.reduce((s, l) => s + l.qty, 0)
 
   if (error) return <div className="error">{error}</div>
@@ -43,27 +51,29 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
       {categories.map((cat) => (
         <section key={cat}>
           <div className="category-title">{cat}</div>
-          <div className="grid">
+          <div className="menu-grid">
             {menu.filter((m) => m.category === cat).map((item) => (
               <div key={item.id} className="menu-card">
                 <div className="name">{item.name}</div>
-                {item.variants.length === 1 && item.variants[0].label === null ? (
-                  <button className={'btn' + (qtyOf(item.variants[0].id) ? ' selected' : '')}
-                    onClick={() => add(item, item.variants[0])}>
-                    {won(item.variants[0].price)}
-                    {qtyOf(item.variants[0].id) > 0 && <span> · {qtyOf(item.variants[0].id)}개</span>}
-                  </button>
-                ) : (
-                  <div className="variants">
-                    {item.variants.map((v) => (
-                      <button key={v.id} className={'btn' + (qtyOf(v.id) ? ' selected' : '')}
-                        onClick={() => add(item, v)}>
-                        {v.label}<br />
-                        <small>{won(v.price)}{qtyOf(v.id) > 0 && ` · ${qtyOf(v.id)}개`}</small>
+                {item.variants.map((v) => {
+                  const qty = qtyOf(v.id)
+                  return (
+                    <div key={v.id} className="variant-row">
+                      <button className={'btn variant' + (qty ? ' selected' : '')}
+                        onClick={() => setQty(item, v, qty + 1)}>
+                        <span>{v.label ?? '담기'}</span>
+                        <span className="price">{won(v.price)}</span>
                       </button>
-                    ))}
-                  </div>
-                )}
+                      {qty > 0 && (
+                        <div className="stepper">
+                          <button className="btn" aria-label="빼기" onClick={() => setQty(item, v, qty - 1)}>−</button>
+                          <span className="n">{qty}</span>
+                          <button className="btn" aria-label="더하기" onClick={() => setQty(item, v, qty + 1)}>+</button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ))}
           </div>
