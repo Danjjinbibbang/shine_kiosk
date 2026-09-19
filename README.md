@@ -30,14 +30,40 @@ DB 파일은 `./data/kiosk.db` 에 자동 생성된다. 스키마/시드는 매 
 메뉴 이름/가격/카테고리와 배달 장소는 `server/src/main/resources/data.sql` 이 기준이다. 고치고 재시작하면 id 기준으로 DB 에 덮어써진다.
 메뉴를 잠시 빼고 싶으면 DB 에서 `menu_item.available` 또는 `delivery_place.active` 를 0 으로 (이 값은 시드가 건드리지 않는다).
 
-## 설정 (환경변수)
+## 테스트
 
-| 변수 | 기본값 | 설명 |
-|---|---|---|
-| `KIOSK_PORT` | `8080` | 서버 포트 |
-| `KIOSK_DB` | `./data/kiosk.db` | SQLite 파일 경로 |
-| `KIOSK_STAFF_PIN` | `1234` | 스태프 화면 PIN 4자리 — **운영 전에 반드시 바꿀 것** |
-| `KIOSK_BANK` | (안내 문구) | 계좌이체 화면에 그대로 보이는 계좌 안내. 예: `국민 123-45-678901 (샤인교회)` |
+```sh
+# 서버 API 테스트 (JUnit + MockMvc, 임시 SQLite). 인증/메뉴/쿠폰/주문/스태프 처리 전 분기
+./gradlew :server:test
+
+# 브라우저 E2E (Playwright, 설치된 크롬 사용). jar 를 8091 에 임시 DB 로 띄우고 키오스크/스태프 화면을 실제로 조작
+./gradlew bootJar && cd client && npm run e2e
+```
+
+E2E 는 태블릿(800×1333)과 폰(412×915) 뷰포트로 돈다. 실패하면 `client/test-results/` 에 스크린샷이 남는다.
+
+## 설정 (PIN, 계좌)
+
+실제 값은 **`config/application.yml`** 에 넣는다. git 에 올라가지 않는 파일이고, 서버를 실행하는 폴더의 `config/` 안에 있으면 자동으로 읽힌다.
+
+```sh
+cp config/application.example.yml config/application.yml   # 그 다음 값을 채운다
+```
+
+```yaml
+kiosk:
+  staff-pin: "0000"                            # 스태프 화면 PIN 4자리
+  bank-account: "국민 123-45-678901 (샤인교회)"  # 계좌이체 화면 안내 문구
+```
+
+환경변수로도 줄 수 있고(파일보다 우선), 둘 다 없으면 `server/src/main/resources/application.yml` 의 기본값이 쓰인다.
+
+| 설정 | 환경변수 | 기본값 | 설명 |
+|---|---|---|---|
+| `kiosk.staff-pin` | `KIOSK_STAFF_PIN` | `2580` | 스태프 화면 PIN — **운영 전에 반드시 바꿀 것** |
+| `kiosk.bank-account` | `KIOSK_BANK` | (안내 문구) | 계좌이체 화면에 그대로 보임 |
+| `kiosk.db-path` | `KIOSK_DB` | `./data/kiosk.db` | SQLite 파일 경로 |
+| `server.port` | `KIOSK_PORT` | `8080` | 서버 포트 |
 
 ## 결제 규칙
 

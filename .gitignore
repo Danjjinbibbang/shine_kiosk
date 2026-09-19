@@ -26,3 +26,6 @@ Thumbs.db
 # Playwright
 client/test-results/
 client/playwright-report/
+
+# 실제 운영 값 (PIN, 계좌). 예시는 application.example.yml
+config/application.yml

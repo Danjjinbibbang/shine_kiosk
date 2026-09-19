@@ -32,13 +32,15 @@ cp ~/storage/downloads/start-kiosk.sh ~/.termux/boot/
 chmod +x ~/.termux/boot/start-kiosk.sh
 ```
 
-운영용 PIN 과 계좌 안내는 `~/kiosk/env.sh` 에 적는다:
+운영용 PIN 과 계좌 안내는 `~/kiosk/config/application.yml` 에 적는다 (레포의 `config/application.example.yml` 을 복사해서 채우면 된다):
 
 ```sh
-cat > ~/kiosk/env.sh <<'ENV'
-export KIOSK_STAFF_PIN=4821
-export KIOSK_BANK="국민 123-45-678901 (샤인교회)"
-ENV
+mkdir -p ~/kiosk/config
+cat > ~/kiosk/config/application.yml <<'YML'
+kiosk:
+  staff-pin: "0000"
+  bank-account: "국민 123-45-678901 (샤인교회)"
+YML
 ```
 
 ## 4. 확인
@@ -63,7 +65,7 @@ Termux:Boot 는 **설치 후 한 번은 직접 열어줘야** 부팅 시 실행 
 pkill -f kiosk-server.jar; ~/.termux/boot/start-kiosk.sh &
 ```
 
-DB(`~/kiosk/data/kiosk.db`)는 그대로 남는다. 백업은 이 파일 하나만 복사하면 된다.
+DB(`~/kiosk/data/kiosk.db`)와 설정(`~/kiosk/config/application.yml`)은 그대로 남는다. 백업은 DB 파일 하나만 복사하면 된다.
 
 ## 자주 생기는 문제
 

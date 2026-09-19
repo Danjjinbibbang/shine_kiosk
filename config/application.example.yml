@@ -1,0 +1,10 @@
+# 실제 운영 값. 이 파일을 복사해서 같은 폴더에 application.yml 로 저장하고 값을 채운다.
+#   cp config/application.example.yml config/application.yml
+# application.yml 은 .gitignore 에 있어서 git 에 올라가지 않는다.
+# 서버를 실행하는 폴더(PC 는 레포 루트, 태블릿은 ~/kiosk) 의 config/ 안에 있어야 읽힌다.
+
+kiosk:
+  # 스태프 화면 PIN 4자리
+  staff-pin: "0000"
+  # 계좌이체 화면에 그대로 보이는 안내 문구
+  bank-account: "국민 123-45-678901 (샤인교회)"

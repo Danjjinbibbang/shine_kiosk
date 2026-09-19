@@ -8,9 +8,9 @@ KIOSK_HOME="$HOME/kiosk"
 cd "$KIOSK_HOME" || exit 1
 
 export KIOSK_DB="$KIOSK_HOME/data/kiosk.db"
-# 운영 값은 ~/kiosk/env.sh 에 넣는다 (git 에 올리지 않음). 예:
-#   export KIOSK_STAFF_PIN=4821
-#   export KIOSK_BANK="국민 123-45-678901 (샤인교회)"
+# PIN/계좌 같은 운영 값은 ~/kiosk/config/application.yml 에 있다 (deploy/README.md 3번).
+# 여기서 cd 해 두었으므로 Spring 이 ./config/application.yml 을 알아서 읽는다.
+# 환경변수로 덮어쓰고 싶으면 ~/kiosk/env.sh 에 export 문을 두면 된다.
 [ -f "$KIOSK_HOME/env.sh" ] && . "$KIOSK_HOME/env.sh"
 
 # 이미 떠 있으면 다시 띄우지 않는다.
