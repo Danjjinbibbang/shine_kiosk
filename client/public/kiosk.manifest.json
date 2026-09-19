@@ -1,0 +1,23 @@
+{
+  "background_color": "#f7f3ee",
+  "theme_color": "#7a4b2a",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "ko",
+  "name": "샤인 카페 주문",
+  "short_name": "주문",
+  "start_url": "/kiosk",
+  "scope": "/kiosk",
+  "icons": [
+    {
+      "src": "/icon-kiosk-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-kiosk-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
