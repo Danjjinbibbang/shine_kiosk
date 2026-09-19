@@ -44,11 +44,11 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
     <>
       {orders.map((o) => (
         <OrderCard key={o.id} order={o} busy={busyId === o.id}
-          onDone={() => run(o.id, () => api.doneOrder(o.id), `#${o.orderNo} ${o.customerName}님 완료`)}
-          onReopen={() => run(o.id, () => api.reopenOrder(o.id), `#${o.orderNo} 다시 만들 것으로 이동`)}
+          onDone={() => run(o.id, () => api.doneOrder(o.id), `${orderLabel(o)} ${o.customerName}님 완료`)}
+          onReopen={() => run(o.id, () => api.reopenOrder(o.id), `${orderLabel(o)} 다시 만들 것으로 이동`)}
           onCancel={() => {
-            if (window.confirm(`#${o.orderNo} ${o.customerName}님 주문을 취소할까요?${o.couponAmount ? '\n쿠폰 차감액은 되돌려집니다.' : ''}`)) {
-              void run(o.id, () => api.cancelOrder(o.id), `#${o.orderNo} 취소됨`)
+            if (window.confirm(`${orderLabel(o)} ${o.customerName}님 주문을 취소할까요?${o.couponAmount ? '\n쿠폰 차감액은 되돌려집니다.' : ''}`)) {
+              void run(o.id, () => api.cancelOrder(o.id), `${orderLabel(o)} 취소됨`)
             }
           }}
           onEdit={() => setEditing(o)} />
@@ -82,13 +82,28 @@ function payLine(o: Order): string {
   return `${won(o.totalAmount)} = ${parts.join(' + ')}`
 }
 
+/** 서버의 order_date(로컬 YYYY-MM-DD)와 비교할 오늘 날짜. toISOString 은 UTC 라 새벽에 하루 어긋난다. */
+function localToday(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** 주문 번호는 날짜마다 1부터 다시 시작하므로, 오늘 것이 아니면 날짜를 앞에 붙인다. */
+function orderLabel(o: Order): string {
+  if (o.orderDate === localToday()) return `#${o.orderNo}`
+  const [, m, d] = o.orderDate.split('-')
+  return `${Number(m)}/${Number(d)} #${o.orderNo}`
+}
+
 function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardProps) {
   const delivery = o.receiveType === 'DELIVERY'
   const time = o.createdAt.slice(11, 16)
+  const stale = o.orderDate !== localToday()
   return (
-    <div className={'order-card' + (delivery ? ' delivery' : '')}>
+    <div className={'order-card' + (delivery ? ' delivery' : '') + (stale ? ' stale' : '')}>
       <div className="top">
-        <span className="no">#{o.orderNo}</span>
+        <span className="no">{orderLabel(o)}</span>
         <span className="who">{o.customerName}</span>
         <span className={'where' + (delivery ? '' : ' store')}>{delivery ? `🚶 ${o.placeName}` : '☕ 카페'}</span>
         <span className="muted" style={{ fontSize: 14 }}>{time}</span>
