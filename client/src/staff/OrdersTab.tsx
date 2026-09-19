@@ -47,7 +47,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
           onDone={() => run(o.id, () => api.doneOrder(o.id), `${orderLabel(o)} ${o.customerName}님 완료`)}
           onReopen={() => run(o.id, () => api.reopenOrder(o.id), `${orderLabel(o)} 다시 만들 것으로 이동`)}
           onCancel={() => {
-            if (window.confirm(`${orderLabel(o)} ${o.customerName}님 주문을 취소할까요?${o.couponAmount ? '\n쿠폰 차감액은 되돌려집니다.' : ''}`)) {
+            if (window.confirm(`${orderLabel(o)} ${o.customerName}님 주문을 취소할까요?${o.couponId ? '\n쿠폰 차감액(무료 1잔 포함)은 되돌려집니다.' : ''}`)) {
               void run(o.id, () => api.cancelOrder(o.id), `${orderLabel(o)} 취소됨`)
             }
           }}
