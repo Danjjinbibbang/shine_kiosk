@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class KioskProperties {
 
 	private String dbPath = "./data/kiosk.db";
-	private String staffPin = "1234";
+	private String staffPin = "2580";
 	private String bankAccount = "";
 	private int couponPresetAmount = 20000;
 	private int regularCustomerDays = 21;

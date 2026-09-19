@@ -4,10 +4,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.Map;
 
@@ -28,6 +30,13 @@ public class ApiExceptionHandler {
 				.findFirst()
 				.orElse("입력값을 확인해 주세요.");
 		return ResponseEntity.badRequest().body(Map.of("message", message));
+	}
+
+	/** 깨진 JSON, 잘못된 enum 값(?status=BOGUS) 같은 건 클라이언트 잘못이므로 400. */
+	@ExceptionHandler({ HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class })
+	public ResponseEntity<Map<String, String>> handleBadRequest(Exception e) {
+		log.debug("잘못된 요청: {}", e.getMessage());
+		return ResponseEntity.badRequest().body(Map.of("message", "요청 형식이 올바르지 않습니다."));
 	}
 
 	@ExceptionHandler(Exception.class)
