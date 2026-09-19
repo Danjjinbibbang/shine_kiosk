@@ -195,15 +195,15 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
 }
 
 /**
- * 총액을 보고 실제로 낼 법한 금액들. 예) 15,000원 → 20,000 / 30,000 / 50,000
- *  - 천원 단위로 올린 값 (3,500원 → 4,000원)
- *  - 5천원 / 만원 단위로 올린 값
- *  - 만원 단위 올림에 만원 한 장 더 (15,000원 → 20,000원에 더해 30,000원)
- *  - 5만원권 한 장
+ * 총액을 보고 실제로 낼 법한 금액들 = 각 지폐 단위로 올린 값.
+ *  예) 3,500원 → 4,000(천원권) / 5,000 / 10,000 / 50,000
+ *      15,000원 → 20,000(만원 두 장) / 50,000
+ *      10,000원 → 50,000 (만원 한 장이면 '딱 맞게')
+ * 총액과 같은 값은 '딱 맞게' 버튼이 대신한다.
  */
 export function cashOptions(total: number): number[] {
   const up = (unit: number) => Math.ceil(total / unit) * unit
-  const candidates = [up(1000), up(5000), up(10000), up(10000) + 10000, up(50000)]
+  const candidates = [up(1000), up(5000), up(10000), up(50000)]
   return [...new Set(candidates)].filter((n) => n > total).sort((a, b) => a - b).slice(0, 4)
 }
 
