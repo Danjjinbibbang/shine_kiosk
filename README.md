@@ -60,7 +60,7 @@ kiosk:
 
 | 설정 | 환경변수 | 기본값 | 설명 |
 |---|---|---|---|
-| `kiosk.staff-pin` | `KIOSK_STAFF_PIN` | `2580` | 스태프 화면 PIN — **운영 전에 반드시 바꿀 것** |
+| `kiosk.staff-pin` | `KIOSK_STAFF_PIN` | `1234` | 스태프 화면 PIN — **운영 전에 반드시 바꿀 것** |
 | `kiosk.bank-account` | `KIOSK_BANK` | (안내 문구) | 계좌이체 화면에 그대로 보임 |
 | `kiosk.db-path` | `KIOSK_DB` | `./data/kiosk.db` | SQLite 파일 경로 |
 | `server.port` | `KIOSK_PORT` | `8080` | 서버 포트 |

@@ -22,7 +22,7 @@ kiosk:
   # SQLite 파일 경로. jar 실행 위치 기준 상대경로.
   db-path: ${KIOSK_DB:./data/kiosk.db}
   # 스태프 화면 4자리 PIN. 운영 시 환경변수로 덮어쓸 것.
-  staff-pin: ${KIOSK_STAFF_PIN:2580}
+  staff-pin: ${KIOSK_STAFF_PIN:1234}
   # 계좌이체 안내 문구 (고객 화면에 그대로 노출)
   bank-account: ${KIOSK_BANK:입금계좌를 설정해 주세요}
   # 쿠폰 충전 프리셋 금액
