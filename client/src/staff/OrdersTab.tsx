@@ -246,7 +246,10 @@ function OrderCard({ order: o, busy, onSettle, findCoupons, canSms, onSms, onDon
       <div className="actions">
         {o.status === 'PENDING' ? (
           <>
-            <button className="btn ok" disabled={busy} onClick={onDone}>완료 ✓</button>
+            <button className="btn ok" disabled={busy || refund > 0 || extra.length > 0}
+              title={refund > 0 || extra.length > 0 ? '먼저 정산 버튼을 눌러 주세요' : ''} onClick={onDone}>
+              {refund > 0 || extra.length > 0 ? '정산 먼저' : '완료 ✓'}
+            </button>
             <button className="btn" disabled={busy} onClick={onEdit}>수정</button>
             <button className="btn danger" disabled={busy || cancelling} onClick={() => setCancelling(true)}>취소</button>
           </>

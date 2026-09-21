@@ -41,6 +41,25 @@ class OrderEditSettlementTests extends ApiTestSupport {
 	}
 
 	@Test
+	@DisplayName("차액이 남아 있으면 완료할 수 없고, 정산하면 완료된다")
+	void doneBlockedUntilSettled() throws Exception {
+		long id = id(createOrder(cashOrder("손님", line(ICECREAM_CUP, 1))));
+		edit(id, line(VANILLA_ICE, 1));                                        // 돌려줄 500
+		Response blocked = staffPost("/api/staff/orders/" + id + "/done", null);
+		assertThat(blocked.status()).isEqualTo(400);
+		assertThat(blocked.message()).contains("정산");
+		staffPost("/api/staff/orders/" + id + "/settle", null);
+		assertThat(staffPost("/api/staff/orders/" + id + "/done", null).status()).isEqualTo(200);
+
+		long more = id(createOrder(cashOrder("손님", line(AMERICANO_ICE, 1))));
+		edit(more, line(AMERICANO_ICE, 3));                                    // 더 받을 2,000
+		assertThat(staffPost("/api/staff/orders/" + more + "/done", null).status()).isEqualTo(400);
+		// 안 고친 주문은 그냥 완료
+		long plain = id(createOrder(cashOrder("손님", line(AMERICANO_ICE, 1))));
+		assertThat(staffPost("/api/staff/orders/" + plain + "/done", null).status()).isEqualTo(200);
+	}
+
+	@Test
 	@DisplayName("더 비싼 걸로 바꾸면 더 받을 돈, 계좌이체도 같은 방식")
 	void extraPaymentAfterEdit() throws Exception {
 		long cash = id(createOrder(cashOrder("손님", line(AMERICANO_ICE, 1))));

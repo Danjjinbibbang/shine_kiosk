@@ -238,9 +238,13 @@ public class OrderService {
 		events.broadcastOrdersChanged();
 	}
 
+	/** 수정으로 돌려줄 돈/더 받을 돈이 남아 있으면 먼저 정산해야 완료할 수 있다 (돈 계산이 틀어지지 않게). */
 	@Transactional
 	public void complete(long orderId) {
-		requirePending(orderId);
+		OrderView order = requirePending(orderId);
+		if (order.cashAmount() != order.settledCash() || order.transferAmount() != order.settledTransfer()) {
+			throw new BusinessException("돌려줄 돈이나 더 받을 돈이 남아 있습니다. 먼저 정산 버튼을 눌러 주세요.");
+		}
 		orderRepository.markDone(orderId);
 		events.broadcastOrdersChanged();
 	}

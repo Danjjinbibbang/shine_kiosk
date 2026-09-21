@@ -558,6 +558,7 @@ test.describe('수정과 정산', () => {
     await expect(card.locator('.edited')).toContainText('이전: 아메리카노 ICE(샷 추가) ×2 · 3,000원')
     await expect(card.locator('.pay')).toHaveText('현금 2,500원')
     await expect(card.locator('.settle')).toContainText('500원 돌려주기')
+    await expect(card.getByRole('button', { name: '정산 먼저' })).toBeDisabled()   // 정산 전엔 완료 불가
     // 현금 주문이라도 쿠폰에 넣기는 있다. 이 이름은 쿠폰이 없으니 안내만
     await card.getByRole('button', { name: '쿠폰에 넣기' }).click()
     await expect(card.locator('.settle-note')).toContainText('쿠폰이 없어요')
@@ -565,6 +566,7 @@ test.describe('수정과 정산', () => {
     await card.getByRole('button', { name: '현금으로 줬어요' }).click()
     await expect(card.locator('.settle')).toHaveCount(0)
     await expect(card.locator('.badge-edited')).toBeVisible()   // 수정 표시는 남는다
+    await expect(card.getByRole('button', { name: /완료/ })).toBeEnabled()
     const o = await orderOf(request, name)
     expect(o.settledCash).toBe(2500)
   })
