@@ -6,6 +6,7 @@ import church.kiosk.menu.MenuDtos.SaveOptionRequest;
 import church.kiosk.menu.MenuDtos.SaveItemRequest;
 import church.kiosk.menu.MenuDtos.SaveVariantRequest;
 import church.kiosk.support.BusinessException;
+import church.kiosk.support.Validation;
 import jakarta.validation.Valid;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -38,7 +39,7 @@ public class MenuAdminController {
 	}
 
 	private String knownCategory(String raw) {
-		String name = raw.trim();
+		String name = Validation.name(raw, "카테고리", Validation.NAME_MAX);
 		if (!categoryRepository.existsByName(name)) {
 			throw new BusinessException("없는 카테고리입니다. 설정 > 카테고리에서 먼저 만들어 주세요.");
 		}
@@ -54,15 +55,40 @@ public class MenuAdminController {
 
 	@PostMapping("/options")
 	public AdminOption createOption(@RequestBody @Valid SaveOptionRequest req) {
-		long id = optionRepository.insert(req.name().trim(), req.price(), knownCategory(req.category()), req.groupOrNull(), req.available());
+		String name = Validation.name(req.name(), "옵션 이름", Validation.NAME_MAX);
+		String category = knownCategory(req.category());
+		rejectDuplicateOption(name, category, null);
+		long id = optionRepository.insert(name, Validation.price(req.price()), category, req.groupOrNull(), req.available());
 		return optionRepository.findById(id).orElseThrow();
 	}
 
 	@PutMapping("/options/{id}")
 	public AdminOption updateOption(@PathVariable long id, @RequestBody @Valid SaveOptionRequest req) {
 		optionRepository.findById(id).orElseThrow(() -> new BusinessException("옵션을 찾을 수 없습니다."));
-		optionRepository.update(id, req.name().trim(), req.price(), knownCategory(req.category()), req.groupOrNull(), req.available());
+		String name = Validation.name(req.name(), "옵션 이름", Validation.NAME_MAX);
+		String category = knownCategory(req.category());
+		rejectDuplicateOption(name, category, id);
+		optionRepository.update(id, name, Validation.price(req.price()), category, req.groupOrNull(), req.available());
 		return optionRepository.findById(id).orElseThrow();
+	}
+
+	/** 같은 카테고리에 같은 이름의 옵션은 하나만. */
+	private void rejectDuplicateOption(String name, String category, Long exceptId) {
+		boolean dup = optionRepository.findAllForAdmin().stream()
+				.anyMatch(o -> (exceptId == null || o.id() != exceptId) && o.category().equals(category) && o.name().equalsIgnoreCase(name));
+		if (dup) {
+			throw new BusinessException("'" + category + "' 에 같은 이름의 옵션이 이미 있습니다.");
+		}
+	}
+
+	/** 같은 이름의 메뉴는 하나만 (띄어쓰기·대소문자 무시). */
+	private void rejectDuplicateItem(String name, Long exceptId) {
+		String key = name.replaceAll("\\s+", "").toLowerCase();
+		boolean dup = menuRepository.findAllForAdmin().stream()
+				.anyMatch(i -> (exceptId == null || i.id() != exceptId) && i.name().replaceAll("\\s+", "").toLowerCase().equals(key));
+		if (dup) {
+			throw new BusinessException("같은 이름의 메뉴가 이미 있습니다: " + name);
+		}
 	}
 
 	@DeleteMapping("/options/{id}")
@@ -81,7 +107,9 @@ public class MenuAdminController {
 	@PostMapping
 	@Transactional
 	public AdminItem create(@RequestBody @Valid SaveItemRequest req) {
-		long id = menuRepository.insertItem(req.name().trim(), knownCategory(req.category()), req.available());
+		String name = Validation.name(req.name(), "메뉴 이름", Validation.MENU_NAME_MAX);
+		rejectDuplicateItem(name, null);
+		long id = menuRepository.insertItem(name, knownCategory(req.category()), req.available());
 		saveVariants(id, req.variants());
 		return menuRepository.findAdminItem(id).orElseThrow();
 	}
@@ -90,7 +118,9 @@ public class MenuAdminController {
 	@Transactional
 	public AdminItem update(@PathVariable long id, @RequestBody @Valid SaveItemRequest req) {
 		require(id);
-		menuRepository.updateItem(id, req.name().trim(), knownCategory(req.category()), req.available());
+		String name = Validation.name(req.name(), "메뉴 이름", Validation.MENU_NAME_MAX);
+		rejectDuplicateItem(name, id);
+		menuRepository.updateItem(id, name, knownCategory(req.category()), req.available());
 		saveVariants(id, req.variants());
 		return menuRepository.findAdminItem(id).orElseThrow();
 	}
@@ -132,9 +162,17 @@ public class MenuAdminController {
 	 */
 	private void saveVariants(long itemId, List<SaveVariantRequest> variants) {
 		List<Long> keep = new ArrayList<>();
+		java.util.Set<String> labels = new java.util.HashSet<>();
 		int order = 1;
 		for (SaveVariantRequest v : variants) {
 			String label = (v.label() == null || v.label().isBlank()) ? null : v.label().trim();
+			if (label != null && label.length() > Validation.LABEL_MAX) {
+				throw new BusinessException("선택지 이름은 " + Validation.LABEL_MAX + "자까지입니다.");
+			}
+			if (!labels.add(label == null ? "" : label.toLowerCase())) {
+				throw new BusinessException("선택지 이름이 겹칩니다: " + (label == null ? "(빈 이름)" : label));
+			}
+			Validation.price(v.price());
 			if (v.id() != null) {
 				menuRepository.updateVariant(v.id(), label, v.price(), order, v.available());
 				keep.add(v.id());

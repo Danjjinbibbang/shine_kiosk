@@ -32,6 +32,8 @@ public class CouponController {
 
 	public record PhoneRequest(String phone) {}
 
+	public record NameRequest(String name) {}
+
 	public record ChargeRequest(@Min(value = 1, message = "충전 금액을 확인해 주세요.") int amount) {}
 
 	public record AdjustRequest(@Min(value = 0, message = "잔액은 0원 이상이어야 합니다.") int balance,
@@ -72,6 +74,11 @@ public class CouponController {
 	@PostMapping("/api/staff/coupons")
 	public Coupon register(@RequestBody @jakarta.validation.Valid RegisterRequest request) {
 		return couponService.register(request.name(), request.phone(), request.amount());
+	}
+
+	@PutMapping("/api/staff/coupons/{id}/name")
+	public Coupon rename(@PathVariable long id, @RequestBody NameRequest request) {
+		return couponService.rename(id, request.name());
 	}
 
 	@PutMapping("/api/staff/coupons/{id}/phone")

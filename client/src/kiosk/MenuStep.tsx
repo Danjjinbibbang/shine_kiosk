@@ -3,6 +3,7 @@ import { api } from '../shared/api'
 import type { MenuItem, MenuVariant } from '../shared/types'
 import { won } from '../shared/types'
 import { addPlainCup, type CartLine } from '../shared/cart'
+import { RULES } from '../shared/rules'
 
 interface Props {
   cart: CartLine[]
@@ -31,6 +32,7 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
   const setQty = (item: MenuItem, v: MenuVariant, qty: number) => {
     const current = qtyOf(v.id)
     if (qty > current) {
+      if (current >= RULES.qtyMax) return
       onChange(addPlainCup(cart, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price }))
       return
     }
@@ -78,7 +80,7 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
                         <div className="stepper">
                           <button className="btn" aria-label="빼기" onClick={() => setQty(item, v, qty - 1)}>−</button>
                           <span className="n">{qty}</span>
-                          <button className="btn" aria-label="더하기" onClick={() => setQty(item, v, qty + 1)}>+</button>
+                          <button className="btn" aria-label="더하기" disabled={qty >= RULES.qtyMax} onClick={() => setQty(item, v, qty + 1)}>+</button>
                         </div>
                       )}
                     </div>

@@ -110,6 +110,21 @@ class OrderApiTests extends ApiTestSupport {
 		}
 
 		@Test
+		@DisplayName("상한: 수량 99, 줄 50, 이름 20자, 메모 200자")
+		void limits() throws Exception {
+			assertThat(createOrder(cashOrder("박민수", line(AMERICANO_ICE, 100))).message()).contains("99잔");
+			List<Map<String, Object>> many = new java.util.ArrayList<>();
+			for (int i = 0; i < 51; i++) many.add(line(AMERICANO_ICE, 1));
+			assertThat(createOrder(Map.of("customerName", "박민수", "receiveType", "STORE", "payMethod", "CASH", "lines", many)).message()).contains("50줄");
+			assertThat(createOrder(cashOrder("이름이스무자를넘어가는아주아주긴손님이름입니다", line(AMERICANO_ICE, 1))).message()).contains("20자");
+			Map<String, Object> memo = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
+			memo.put("memo", "가".repeat(201));
+			assertThat(createOrder(memo).message()).contains("200자");
+			Response spaced = createOrder(cashOrder("  박  민수 ", line(AMERICANO_ICE, 1)));
+			assertThat(spaced.<String>read("$.customerName")).isEqualTo("박 민수");
+		}
+
+		@Test
 		@DisplayName("주문 번호는 같은 날 안에서 1,2,3… 취소돼도 번호는 안 재사용")
 		void orderNumbering() throws Exception {
 			long first = ((Number) createOrder(cashOrder("a", line(AMERICANO_ICE, 1))).read("$.id")).longValue();

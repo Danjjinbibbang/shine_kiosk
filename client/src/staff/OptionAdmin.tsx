@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
+import { RULES, isPrice } from '../shared/rules'
 import type { AdminOption } from '../shared/types'
 import { won } from '../shared/types'
 
@@ -53,18 +54,19 @@ export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) =>
       <div className="card">
         <div className="muted" style={{ fontSize: 14 }}>새 옵션</div>
         <div className="row">
-          <input className="text-input grow" placeholder="이름 (예: 샷 추가)" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="text-input" style={{ width: 110 }} inputMode="numeric" placeholder="+원" value={price}
+          <input className="text-input grow" placeholder="이름 (예: 샷 추가)" value={name} maxLength={RULES.nameMax} onChange={(e) => setName(e.target.value)} />
+          <input className="text-input" style={{ width: 110 }} inputMode="numeric" placeholder="+원" value={price} maxLength={6}
             onChange={(e) => setPrice(e.target.value.replace(/[^0-9]/g, ''))} aria-label="추가 금액" />
         </div>
-        <input className="text-input" placeholder="그룹 (예: 농도 — 같은 그룹은 한 잔에 하나만, 비워도 됨)" value={group}
+        <input className="text-input" placeholder="그룹 (예: 농도 — 같은 그룹은 한 잔에 하나만, 비워도 됨)" value={group} maxLength={RULES.nameMax}
           onChange={(e) => setGroup(e.target.value)} aria-label="그룹" style={{ fontSize: 15, minHeight: 46 }} />
         <div className="chips">
           {categories.map((c) => (
             <button key={c} className={'btn' + (category === c ? ' selected' : '')} onClick={() => setCategory(c)}>{c}</button>
           ))}
         </div>
-        <button className="btn primary" disabled={busy || !name.trim()} onClick={() => void add()}>추가</button>
+        {price !== '' && !isPrice(Number(price)) && <div className="error" style={{ fontSize: 13 }}>금액은 100원 단위, {won(RULES.priceMax)}까지입니다.</div>}
+        <button className="btn primary" disabled={busy || !name.trim() || !isPrice(Number(price) || 0)} onClick={() => void add()}>추가</button>
       </div>
 
       {options.length === 0 && <div className="empty">옵션이 없습니다.</div>}
@@ -74,14 +76,14 @@ export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) =>
             {editing?.id === o.id ? (
               <div className="stack grow" style={{ gap: 6 }}>
                 <div className="row">
-                  <input className="text-input grow" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} aria-label="옵션 이름" style={{ minHeight: 44, fontSize: 16 }} />
-                  <input className="text-input" style={{ width: 100, minHeight: 44, fontSize: 16 }} inputMode="numeric" value={editing.price}
+                  <input className="text-input grow" value={editing.name} maxLength={RULES.nameMax} onChange={(e) => setEditing({ ...editing, name: e.target.value })} aria-label="옵션 이름" style={{ minHeight: 44, fontSize: 16 }} />
+                  <input className="text-input" style={{ width: 100, minHeight: 44, fontSize: 16 }} inputMode="numeric" value={editing.price} maxLength={6}
                     onChange={(e) => setEditing({ ...editing, price: e.target.value.replace(/[^0-9]/g, '') })} aria-label="옵션 금액" placeholder="+원" />
                 </div>
                 <div className="row">
                   <input className="text-input grow" value={editing.group} placeholder="그룹 (비우면 자유 조합)"
                     onChange={(e) => setEditing({ ...editing, group: e.target.value })} aria-label="옵션 그룹" style={{ minHeight: 44, fontSize: 15 }} />
-                  <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || !editing.name.trim()} onClick={() => void saveEdit(o)}>저장</button>
+                  <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || !editing.name.trim() || !isPrice(Number(editing.price) || 0)} onClick={() => void saveEdit(o)}>저장</button>
                   <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setEditing(null)}>취소</button>
                 </div>
               </div>

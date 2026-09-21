@@ -2,6 +2,7 @@ package church.kiosk.coupon;
 
 import church.kiosk.config.KioskProperties;
 import church.kiosk.support.BusinessException;
+import church.kiosk.support.Validation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,17 +63,9 @@ public class CouponService {
 	/** 전화번호는 필수. 동명이인 구분과 잔액 문자, 취소·차액 환불을 쿠폰에 넣을 때 혼동을 막기 위해서다. */
 	@Transactional
 	public Coupon register(String name, String phoneRaw, int amount) {
-		String trimmed = name.trim();
-		if (trimmed.isEmpty()) {
-			throw new BusinessException("이름을 입력해 주세요.");
-		}
-		if (amount <= 0) {
-			throw new BusinessException("충전 금액을 확인해 주세요.");
-		}
-		String phone = validPhone(phoneRaw);
-		if (phone == null) {
-			throw new BusinessException("전화번호를 입력해 주세요.");
-		}
+		String trimmed = Validation.name(name, "이름", Validation.NAME_MAX);
+		Validation.chargeAmount(amount);
+		String phone = Validation.mobile(phoneRaw);
 		String last4 = Coupon.last4Of(phone);
 		if (couponRepository.findByName(trimmed).stream().anyMatch(c -> last4.equals(c.phoneLast4()))) {
 			throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
@@ -85,9 +78,7 @@ public class CouponService {
 
 	@Transactional
 	public Coupon charge(long couponId, int amount) {
-		if (amount <= 0) {
-			throw new BusinessException("충전 금액을 확인해 주세요.");
-		}
+		Validation.chargeAmount(amount);
 		Coupon coupon = require(couponId);
 		if (coupon.phone() == null) {
 			throw new BusinessException("전화번호가 없는 쿠폰입니다. 번호를 먼저 넣어 주세요.");
@@ -103,10 +94,7 @@ public class CouponService {
 	@Transactional
 	public Coupon updatePhone(long couponId, String phoneRaw) {
 		Coupon coupon = require(couponId);
-		String phone = validPhone(phoneRaw);
-		if (phone == null) {
-			throw new BusinessException("전화번호를 입력해 주세요.");
-		}
+		String phone = Validation.mobile(phoneRaw);
 		String last4 = Coupon.last4Of(phone);
 		boolean clash = couponRepository.findByName(coupon.name()).stream()
 				.anyMatch(c -> c.id() != couponId && last4.equals(c.phoneLast4()));
@@ -117,20 +105,27 @@ public class CouponService {
 		return couponRepository.findById(couponId).orElseThrow();
 	}
 
-	private static String validPhone(String raw) {
-		String phone = Coupon.normalizePhone(raw);
-		if (phone != null && (phone.length() < 10 || phone.length() > 11)) {
-			throw new BusinessException("전화번호는 숫자 10~11자리로 입력해 주세요.");
+	/** 이름 오타를 고친다. 바꾼 이름에 같은 뒤 4자리가 있으면 거부. */
+	@Transactional
+	public Coupon rename(long couponId, String nameRaw) {
+		Coupon coupon = require(couponId);
+		String name = Validation.name(nameRaw, "이름", Validation.NAME_MAX);
+		if (!name.equals(coupon.name()) && coupon.phoneLast4() != null) {
+			boolean clash = couponRepository.findByName(name).stream()
+					.anyMatch(c -> coupon.phoneLast4().equals(c.phoneLast4()));
+			if (clash) {
+				throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
+			}
 		}
-		return phone;
+		couponRepository.rename(couponId, name);
+		return couponRepository.findById(couponId).orElseThrow();
 	}
 
 	/** 충전을 잘못 넣었을 때 잔액과 무료잔 개수를 바로잡는다. 차액을 ADJUST 이력으로 남긴다. */
 	@Transactional
 	public Coupon adjust(long couponId, int newBalance, int newFreeDrinks) {
-		if (newBalance < 0 || newFreeDrinks < 0) {
-			throw new BusinessException("잔액과 무료잔 개수는 0 이상이어야 합니다.");
-		}
+		Validation.balance(newBalance);
+		Validation.freeDrinks(newFreeDrinks);
 		Coupon coupon = require(couponId);
 		int delta = newBalance - coupon.balance();
 		int freeDelta = newFreeDrinks - coupon.freeDrinks();

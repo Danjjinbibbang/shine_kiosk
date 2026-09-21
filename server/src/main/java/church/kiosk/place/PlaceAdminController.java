@@ -2,6 +2,7 @@ package church.kiosk.place;
 
 import church.kiosk.place.PlaceRepository.AdminPlace;
 import church.kiosk.support.BusinessException;
+import church.kiosk.support.Validation;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -38,15 +39,30 @@ public class PlaceAdminController {
 
 	@PostMapping
 	public AdminPlace create(@RequestBody @Valid SavePlaceRequest req) {
-		long id = placeRepository.insert(req.floor(), req.name().trim());
+		String name = Validation.name(req.name(), "장소 이름", Validation.NAME_MAX);
+		int floor = Validation.floor(req.floor());
+		rejectDuplicate(floor, name, null);
+		long id = placeRepository.insert(floor, name);
 		return placeRepository.findAdminById(id).orElseThrow();
 	}
 
 	@PutMapping("/{id}")
 	public AdminPlace update(@PathVariable long id, @RequestBody @Valid SavePlaceRequest req) {
 		require(id);
-		placeRepository.update(id, req.floor(), req.name().trim(), req.active());
+		String name = Validation.name(req.name(), "장소 이름", Validation.NAME_MAX);
+		int floor = Validation.floor(req.floor());
+		rejectDuplicate(floor, name, id);
+		placeRepository.update(id, floor, name, req.active());
 		return placeRepository.findAdminById(id).orElseThrow();
+	}
+
+	/** 같은 층에 같은 이름은 하나만. */
+	private void rejectDuplicate(int floor, String name, Long exceptId) {
+		boolean dup = placeRepository.findAllForAdmin().stream()
+				.anyMatch(p -> (exceptId == null || p.id() != exceptId) && p.floor() == floor && p.name().equalsIgnoreCase(name));
+		if (dup) {
+			throw new BusinessException(floor + "층에 '" + name + "' 이(가) 이미 있습니다.");
+		}
 	}
 
 	@DeleteMapping("/{id}")

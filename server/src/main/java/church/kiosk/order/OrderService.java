@@ -22,6 +22,7 @@ import church.kiosk.place.PlaceRepository;
 import church.kiosk.place.PlaceRepository.Place;
 import church.kiosk.realtime.KioskEventHandler;
 import church.kiosk.support.BusinessException;
+import church.kiosk.support.Validation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,7 +100,7 @@ public class OrderService {
 		}
 		PricedLines priced = price(req.lines());
 		Place place = resolvePlace(req.receiveType(), req.placeId());
-		String name = req.customerName().trim();
+		String name = Validation.name(req.customerName(), "이름", Validation.NAME_MAX);
 
 		if (priced.total() == 0 && req.payMethod() != PayMethod.NONE) {
 			throw new BusinessException("낼 금액이 없는 주문입니다. 결제 없이 접수해 주세요.");
@@ -140,7 +141,7 @@ public class OrderService {
 		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
 				place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
-				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()), requestId);
+				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), requestId);
 		long orderId = orderRepository.insert(row);
 		orderRepository.insertLines(orderId, priced.lines());
 		if (couponId != null) {
@@ -183,11 +184,11 @@ public class OrderService {
 		int cash = remainderBy == PayMethod.CASH ? remainder : 0;
 		int transfer = remainderBy == PayMethod.TRANSFER ? remainder : 0;
 
-		OrderRow row = new OrderRow(existing.orderDate(), existing.orderNo(), req.customerName().trim(),
+		OrderRow row = new OrderRow(existing.orderDate(), existing.orderNo(), Validation.name(req.customerName(), "이름", Validation.NAME_MAX),
 				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(),
 				existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
-				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()), null);
+				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), null);
 		orderRepository.update(orderId, row, describe(existing));
 		orderRepository.deleteLines(orderId);
 		orderRepository.insertLines(orderId, priced.lines());
@@ -304,12 +305,16 @@ public class OrderService {
 	 * 한 잔 값 = 기본가 + 옵션 합. 무료 1잔 후보(가장 비싼 한 잔)도 이 값으로 고른다.
 	 */
 	private PricedLines price(List<LineRequest> requests) {
+		if (requests.size() > Validation.LINES_MAX) {
+			throw new BusinessException("한 번에 " + Validation.LINES_MAX + "줄까지 주문할 수 있습니다.");
+		}
 		List<LineRow> lines = new ArrayList<>();
 		int total = 0;
 		int staffFree = 0;
 		int max = 0;
 		String maxName = null;
 		for (LineRequest r : requests) {
+			Validation.quantity(r.quantity());
 			int freeQty = r.staffFreeQtyOrZero();
 			if (freeQty < 0 || freeQty > r.quantity()) {
 				throw new BusinessException("사역자 잔 수는 0부터 수량까지만 가능합니다.");
@@ -384,7 +389,4 @@ public class OrderService {
 		return order;
 	}
 
-	private static String blankToNull(String s) {
-		return (s == null || s.isBlank()) ? null : s.trim();
-	}
 }

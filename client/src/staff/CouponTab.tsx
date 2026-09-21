@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
+import { RULES, formatPhoneInput, isChargeAmount, isMobile } from '../shared/rules'
 import type { Coupon, CouponTx } from '../shared/types'
 import { won } from '../shared/types'
 
@@ -20,6 +21,8 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   const [newFree, setNewFree] = useState('')
   const [phoneEditing, setPhoneEditing] = useState(false)
   const [phoneDraft, setPhoneDraft] = useState('')
+  const [nameEditing, setNameEditing] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -41,17 +44,23 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
 
   const digits = phone.replace(/[^0-9]/g, '')
   const last4 = digits.slice(-4)
-  const phoneValid = digits.length >= 10 && digits.length <= 11
+  const phoneValid = isMobile(phone)
 
   const open = async (c: Coupon) => {
     setCoupon(c)
     setAmount('')
     setAdjusting(false)
     setPhoneEditing(false)
-    setPhoneDraft(c.phone ?? '')
+    setPhoneDraft(formatPhoneInput(c.phone ?? ''))
+    setNameEditing(false)
+    setNameDraft(c.name)
     setHistory(null)
     setHistory(await api.couponHistory(c.id))
   }
+
+  const saveName = (c: Coupon) => wrap(async () => {
+    await refresh(await api.renameCoupon(c.id, nameDraft.trim()), '이름 변경됨')
+  })
 
   /** 이름으로 후보를 찾고, 번호가 있으면 뒤 4자리로 좁힌다. 하나면 바로 연다. */
   const lookup = () => wrap(async () => {
@@ -111,14 +120,15 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
       <div className="card">
         <div className="field">
           <label>이름</label>
-          <input className="text-input" value={name} onChange={(e) => { setName(e.target.value); setCandidates(null); setCoupon(null) }}
+          <input className="text-input" value={name} maxLength={RULES.nameMax} onChange={(e) => { setName(e.target.value); setCandidates(null); setCoupon(null) }}
             onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void lookup() }} placeholder="쿠폰 주인 이름" />
         </div>
         <div className="field">
           <label>전화번호 <span className="muted">(조회는 뒤 4자리만으로도 됨 · 등록엔 전체 번호 필수)</span></label>
-          <input className="text-input" inputMode="tel" placeholder="010-0000-0000" value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/[^0-9-]/g, ''))}
+          <input className="text-input" inputMode="tel" placeholder="010-0000-0000" value={phone} maxLength={13}
+            onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
             onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void lookup() }} />
+          {phone && digits.length >= 10 && !phoneValid && <div className="error" style={{ fontSize: 13 }}>휴대폰 번호 형식이 아니에요 (010-1234-5678)</div>}
         </div>
         <div className="row">
           <button className="btn primary grow" disabled={busy || !name.trim()} onClick={() => void lookup()}>조회</button>
@@ -144,7 +154,20 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
       {coupon && (
         <div className="card">
           <div className="row between">
-            <b style={{ fontSize: 20 }}>{coupon.name}</b>
+            {nameEditing ? (
+              <div className="row grow">
+                <input className="text-input grow" value={nameDraft} maxLength={RULES.nameMax} aria-label="쿠폰 이름"
+                  onChange={(e) => setNameDraft(e.target.value)} autoFocus style={{ minHeight: 44, fontSize: 18 }} />
+                <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || !nameDraft.trim() || nameDraft.trim() === coupon.name}
+                  onClick={() => void saveName(coupon)}>저장</button>
+                <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setNameEditing(false)}>취소</button>
+              </div>
+            ) : (
+              <span className="row" style={{ gap: 6 }}>
+                <b style={{ fontSize: 20 }}>{coupon.name}</b>
+                <button className="btn ghost" style={{ minHeight: 32, fontSize: 13 }} onClick={() => { setNameEditing(true); setNameDraft(coupon.name) }}>이름 변경</button>
+              </span>
+            )}
             <b style={{ fontSize: 26, color: 'var(--primary)' }}>{won(coupon.balance)}</b>
           </div>
           <div className="row between" style={{ fontSize: 16 }}>
@@ -155,17 +178,17 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
           {/* 번호가 있으면 잠겨 있고 '번호 변경' 을 눌러야 고칠 수 있다. 없으면 바로 입력. */}
           <div className="row" style={{ fontSize: 15 }}>
             <span className="muted">📱</span>
-            <input className="text-input grow" inputMode="tel" placeholder="전화번호 없음 — 입력해 주세요"
+            <input className="text-input grow" inputMode="tel" placeholder="전화번호 없음 — 입력해 주세요" maxLength={13}
               value={phoneEditing || !coupon.phone ? phoneDraft : formatPhone(coupon.phone)}
               disabled={!!coupon.phone && !phoneEditing}
-              onChange={(e) => setPhoneDraft(e.target.value.replace(/[^0-9-]/g, ''))}
+              onChange={(e) => setPhoneDraft(formatPhoneInput(e.target.value))}
               aria-label="쿠폰 전화번호" style={{ minHeight: 44, fontSize: 16 }} />
             {coupon.phone && !phoneEditing ? (
               <button className="btn" style={{ minHeight: 44, fontSize: 14 }} onClick={() => { setPhoneEditing(true); setPhoneDraft(coupon.phone ?? '') }}>번호 변경</button>
             ) : (
               <>
                 <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }}
-                  disabled={busy || phoneDraft.trim() === (coupon.phone ?? '') || phoneDraft.replace(/[^0-9]/g, '').length < 10}
+                  disabled={busy || phoneDraft.replace(/[^0-9]/g, '') === (coupon.phone ?? '') || !isMobile(phoneDraft)}
                   onClick={() => void savePhone(coupon)}>저장</button>
                 {coupon.phone && <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setPhoneEditing(false)}>취소</button>}
               </>
@@ -186,9 +209,9 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
             <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               <div className="muted" style={{ fontSize: 14 }}>잘못 충전했을 때 직접 고칩니다. 비워 두면 그대로, 차액은 이력에 남습니다.</div>
               <div className="row">
-                <input className="text-input grow" inputMode="numeric" placeholder={`잔액 (지금 ${won(coupon.balance)})`} value={newBalance}
+                <input className="text-input grow" inputMode="numeric" placeholder={`잔액 (지금 ${won(coupon.balance)})`} value={newBalance} maxLength={7}
                   onChange={(e) => setNewBalance(e.target.value.replace(/[^0-9]/g, ''))} autoFocus />
-                <input className="text-input" style={{ width: 130 }} inputMode="numeric" placeholder={`무료 ${coupon.freeDrinks}잔`} value={newFree}
+                <input className="text-input" style={{ width: 130 }} inputMode="numeric" placeholder={`무료 ${coupon.freeDrinks}잔`} value={newFree} maxLength={3}
                   onChange={(e) => setNewFree(e.target.value.replace(/[^0-9]/g, ''))} />
               </div>
               <div className="row">
@@ -228,7 +251,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
         <div className="card">
           <b style={{ fontSize: 18 }}>"{name.trim()}"{last4.length === 4 && ` (${last4})`} 쿠폰이 없습니다. 새로 등록할까요?</b>
           {!phoneValid && (
-            <div className="error" style={{ fontSize: 14 }}>위 전화번호 칸에 010 번호 전체를 넣어야 등록할 수 있어요.</div>
+            <div className="error" style={{ fontSize: 14 }}>위 전화번호 칸에 휴대폰 번호(010-1234-5678)를 넣어야 등록할 수 있어요.</div>
           )}
           <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy || !phoneValid}
             label={(n) => `${won(n)} 등록`} onSubmit={(n) => void register(n)} custom={customAmount} />
@@ -257,14 +280,16 @@ interface PickerProps {
 }
 
 function AmountPicker({ preset, amount, custom, busy, label, onAmount, onSubmit }: PickerProps) {
+  const ok = isChargeAmount(custom)
   return (
     <div className="stack">
       <button className="btn big primary" disabled={busy} onClick={() => onSubmit(preset)}>{label(preset)}</button>
       <div className="row">
-        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액" value={amount}
+        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액 (1,000원 단위)" value={amount} maxLength={7}
           onChange={(e) => onAmount(e.target.value.replace(/[^0-9]/g, ''))} />
-        <button className="btn" disabled={busy || custom <= 0} onClick={() => onSubmit(custom)}>{custom > 0 ? label(custom) : '확인'}</button>
+        <button className="btn" disabled={busy || !ok} onClick={() => onSubmit(custom)}>{custom > 0 ? label(custom) : '확인'}</button>
       </div>
+      {custom > 0 && !ok && <div className="error" style={{ fontSize: 13 }}>1,000원 단위로, 한 번에 {won(RULES.chargeMax)}까지 됩니다.</div>}
     </div>
   )
 }

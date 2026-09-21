@@ -37,7 +37,7 @@ export function NamePicker({ title, confirmLabel, disabled, onSelect }: Props) {
 
       {typing ? (
         <div className="stack">
-          <input ref={inputRef} className="text-input" placeholder="이름" value={text} maxLength={20}
+          <input ref={inputRef} className="text-input" placeholder="이름" value={text} maxLength={20 /* RULES.nameMax */}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submitText() }} />
           <div className="kiosk-foot">

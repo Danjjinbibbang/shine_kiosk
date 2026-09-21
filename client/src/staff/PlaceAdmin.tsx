@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
+import { RULES } from '../shared/rules'
 import type { AdminPlace } from '../shared/types'
 
 /** 배달 장소 관리. 층 + 이름. 지난 주문이 참조하는 장소는 삭제 대신 숨겨진다. */
@@ -47,12 +48,12 @@ export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
       <div className="card">
         <div className="muted" style={{ fontSize: 14 }}>새 장소</div>
         <div className="row">
-          <input className="text-input" style={{ width: 90 }} inputMode="numeric" value={floor}
+          <input className="text-input" style={{ width: 90 }} inputMode="numeric" value={floor} maxLength={2}
             onChange={(e) => setFloor(e.target.value.replace(/[^0-9]/g, ''))} aria-label="층" />
           <span className="muted">층</span>
-          <input className="text-input grow" placeholder="장소 이름 (예: 식당)" value={name}
+          <input className="text-input grow" placeholder="장소 이름 (예: 식당)" value={name} maxLength={RULES.nameMax}
             onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void add() }} />
-          <button className="btn primary" disabled={busy || !name.trim() || !floor} onClick={() => void add()}>추가</button>
+          <button className="btn primary" disabled={busy || !name.trim() || !floor || Number(floor) < 1 || Number(floor) > RULES.floorMax} onClick={() => void add()}>추가</button>
         </div>
       </div>
 
@@ -63,7 +64,7 @@ export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
             {editingId === p.id ? (
               <div className="row grow">
                 <span className="admin-name">{p.floor}층</span>
-                <input className="text-input grow" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus
+                <input className="text-input grow" value={draft} maxLength={RULES.nameMax} onChange={(e) => setDraft(e.target.value)} autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) void saveName(p) }} aria-label="장소 이름" style={{ minHeight: 44, fontSize: 17 }} />
                 <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || !draft.trim() || draft.trim() === p.name} onClick={() => void saveName(p)}>저장</button>
                 <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setEditingId(null)}>취소</button>

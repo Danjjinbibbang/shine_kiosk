@@ -98,6 +98,27 @@ class MenuAdminApiTests extends ApiTestSupport {
 	}
 
 	@Test
+	@DisplayName("검증: 같은 이름 메뉴 거부, 가격 100원 단위·10만원 이하, 선택지 이름 10자·중복 금지, 이름 30자")
+	void rules() throws Exception {
+		List<Map<String, Object>> one = List.of(variant(null, null, 1000, true));
+		assertThat(staffPost("/api/staff/menu", item("아메리카노", "커피", one)).message()).contains("같은 이름의 메뉴");
+		assertThat(staffPost("/api/staff/menu", item("아메리 카노", "커피", one)).message()).as("띄어쓰기 무시").contains("같은 이름의 메뉴");
+		assertThat(staffPost("/api/staff/menu", item("x", "커피", List.of(variant(null, null, 1050, true)))).message()).contains("100원 단위");
+		assertThat(staffPost("/api/staff/menu", item("x", "커피", List.of(variant(null, null, 100100, true)))).message()).contains("100,000원까지");
+		assertThat(staffPost("/api/staff/menu", item("x", "커피", List.of(variant(null, "아주아주긴선택지이름입니다", 1000, true)))).message()).contains("10자");
+		assertThat(staffPost("/api/staff/menu", item("x", "커피", List.of(variant(null, "ICE", 1000, true), variant(null, "ice", 1000, true)))).message()).contains("겹칩니다");
+		assertThat(staffPost("/api/staff/menu", item("가".repeat(31), "커피", one)).message()).contains("30자");
+		// 자기 자신은 중복이 아니다
+		assertThat(staffPut("/api/staff/menu/10", item("아메리카노", "커피", List.of(variant(AMERICANO_ICE, "ICE", 1000, true)))).status()).isEqualTo(200);
+
+		// 옵션: 같은 카테고리 같은 이름 거부, 장소: 같은 층 같은 이름 거부, 층 1~99
+		assertThat(staffPost("/api/staff/menu/options", Map.of("name", "샷 추가", "price", 500, "category", "커피", "available", true)).message()).contains("같은 이름의 옵션");
+		assertThat(staffPost("/api/staff/menu/options", Map.of("name", "샷 추가", "price", 500, "category", "논커피", "available", true)).status()).as("다른 카테고리면 OK").isEqualTo(200);
+		assertThat(staffPost("/api/staff/places", Map.of("floor", 1, "name", "식당", "active", true)).message()).contains("이미 있습니다");
+		assertThat(staffPost("/api/staff/places", Map.of("floor", 100, "name", "옥상", "active", true)).message()).contains("1~99");
+	}
+
+	@Test
 	@DisplayName("삭제: 고객 메뉴에서 사라지고, 담긴 채 주문하면 거부, 지난 주문은 그대로")
 	void delete() throws Exception {
 		long orderId = ((Number) createOrder(cashOrder("a", line(ICECREAM_CUP, 1))).read("$.id")).longValue();

@@ -143,7 +143,8 @@ test.describe('쿠폰 관리', () => {
     await page.getByRole('button', { name: '조회' }).click()
     await expect(page.getByText('새로 등록할까요?')).toBeVisible()
     await expect(page.getByRole('button', { name: '20,000원 등록' })).toBeDisabled()   // 번호 없으면 등록 불가
-    await page.getByPlaceholder('010-0000-0000').fill('010-7777-8888')
+    await page.getByPlaceholder('010-0000-0000').fill('01077778888')
+    await expect(page.getByPlaceholder('010-0000-0000')).toHaveValue('010-7777-8888')   // 자동 하이픈
     await page.getByRole('button', { name: '20,000원 등록' }).click()
     await expect(page.locator('.toast')).toContainText('등록')
     await expect(page.getByText('1잔 남음')).toBeVisible()
@@ -151,8 +152,18 @@ test.describe('쿠폰 관리', () => {
     await expect(couponCard(page).locator('.history-row')).toHaveCount(1)
     await expect(couponCard(page).locator('.history-row').first()).toContainText('충전')
 
+    // 이름 변경
+    await page.getByRole('button', { name: '이름 변경' }).click()
+    await page.getByLabel('쿠폰 이름').fill(name + 'A')
+    await page.getByRole('button', { name: '저장' }).click()
+    await expect(couponCard(page)).toContainText(name + 'A')
+
+    // 1,000원 단위가 아니면 충전 버튼이 잠긴다
+    await page.getByPlaceholder(/다른 금액/).fill('5500')
+    await expect(page.getByRole('button', { name: /충전$/ }).last()).toBeDisabled()
+    await expect(couponCard(page)).toContainText('1,000원 단위')
     // 다른 금액 충전 5,000 → 25,000, 무료잔 그대로, 이력 2줄
-    await page.getByPlaceholder('다른 금액').fill('5000')
+    await page.getByPlaceholder(/다른 금액/).fill('5000')
     await page.getByRole('button', { name: '5,000원 충전' }).click()
     await expect(couponCard(page)).toContainText('25,000원')
     await expect(page.getByText('1잔 남음')).toBeVisible()
@@ -168,7 +179,7 @@ test.describe('쿠폰 관리', () => {
     await expect(couponCard(page)).toContainText('20,000원')
     await expect(page.getByText('3잔 남음')).toBeVisible()
     await expect(couponCard(page).locator('.history-row').first()).toContainText('정정')
-    const c = (await lookupCoupon(request, name)).coupon
+    const c = (await lookupCoupon(request, name + 'A')).coupon
     expect(c.balance).toBe(20000)
     expect(c.freeDrinks).toBe(3)
 
@@ -176,7 +187,7 @@ test.describe('쿠폰 관리', () => {
     page.once('dialog', (d) => d.accept())
     await page.getByRole('button', { name: '쿠폰 삭제' }).click()
     await expect(page.locator('.toast')).toContainText('삭제됨')
-    expect((await lookupCoupon(request, name)).status).toBe('NOT_FOUND')
+    expect((await lookupCoupon(request, name + 'A')).status).toBe('NOT_FOUND')
   })
 
   test('동명이인: 이름만 넣으면 목록에서 고르고, 뒤 4자리를 넣으면 바로 열린다. 쓰인 쿠폰은 삭제 불가', async ({ page, request }) => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
+import { RULES } from '../shared/rules'
 import type { Category } from '../shared/types'
 
 /** 메뉴 카테고리(커피/논커피/아이스크림/디저트…). 키오스크에 보이는 순서도 여기서. */
@@ -55,7 +56,7 @@ export function CategoryAdmin({ onToast }: { onToast: (msg: string) => void }) {
       <div className="muted" style={{ fontSize: 14 }}>키오스크 메뉴 화면은 이 순서대로 묶여서 나옵니다. 메뉴·옵션을 만들 때 여기 있는 카테고리만 고를 수 있어요.</div>
       <div className="card">
         <div className="row">
-          <input className="text-input grow" placeholder="새 카테고리 (예: 디저트)" value={name} onChange={(e) => setName(e.target.value)}
+          <input className="text-input grow" placeholder="새 카테고리 (예: 디저트)" value={name} maxLength={RULES.nameMax} onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void add() }} />
           <button className="btn primary" disabled={busy || !name.trim()} onClick={() => void add()}>추가</button>
         </div>
@@ -66,7 +67,7 @@ export function CategoryAdmin({ onToast }: { onToast: (msg: string) => void }) {
           <div className="row between">
             {editingId === c.id ? (
               <div className="row grow">
-                <input className="text-input grow" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus
+                <input className="text-input grow" value={draft} maxLength={RULES.nameMax} onChange={(e) => setDraft(e.target.value)} autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) void saveName(c) }} aria-label="카테고리 이름" style={{ minHeight: 44, fontSize: 17 }} />
                 <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || !draft.trim() || draft.trim() === c.name} onClick={() => void saveName(c)}>저장</button>
                 <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setEditingId(null)}>취소</button>

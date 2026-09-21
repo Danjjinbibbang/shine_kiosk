@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
+import { RULES, isPrice } from '../shared/rules'
 import type { AdminItem, AdminVariant, SaveItemRequest } from '../shared/types'
 import { won } from '../shared/types'
 
@@ -130,7 +131,8 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
     }
   }
 
-  const valid = name.trim() && category.trim() && variants.length > 0 && variants.every((v) => v.price >= 0)
+  const valid = name.trim() && category.trim() && variants.length > 0 && variants.every((v) => isPrice(v.price))
+  const badPrice = variants.some((v) => !isPrice(v.price))
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -143,7 +145,7 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
 
         <div className="field">
           <label>이름</label>
-          <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 유자차" autoFocus={!item} />
+          <input className="text-input" value={name} maxLength={RULES.menuNameMax} onChange={(e) => setName(e.target.value)} placeholder="예: 유자차" autoFocus={!item} />
         </div>
 
         <div className="field">
@@ -160,9 +162,9 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
           <div className="stack">
             {variants.map((v, i) => (
               <div key={i} className="row variant-edit">
-                <input className="text-input" placeholder="예: ICE" value={v.label ?? ''}
+                <input className="text-input" placeholder="예: ICE" value={v.label ?? ''} maxLength={RULES.labelMax}
                   onChange={(e) => setVariant(i, { label: e.target.value })} />
-                <input className="text-input price" inputMode="numeric" placeholder="가격" value={v.price || ''}
+                <input className="text-input price" inputMode="numeric" placeholder="가격" value={v.price || ''} maxLength={6}
                   onChange={(e) => setVariant(i, { price: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })} />
                 <button className={'btn toggle small' + (v.available ? ' on' : '')} onClick={() => setVariant(i, { available: !v.available })}>
                   {v.available ? '판매' : '품절'}
@@ -172,6 +174,7 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
               </div>
             ))}
           </div>
+          {badPrice && <div className="error" style={{ fontSize: 13 }}>가격은 100원 단위, {won(RULES.priceMax)}까지입니다.</div>}
           <div className="chips" style={{ marginTop: 6 }}>
             <button className="btn" onClick={() => setVariants((vs) => [...vs, { ...EMPTY_VARIANT, price: vs[vs.length - 1]?.price ?? 0 }])}>＋ 선택지 추가</button>
             <button className="btn" onClick={useIceHot}>ICE / HOT 으로</button>

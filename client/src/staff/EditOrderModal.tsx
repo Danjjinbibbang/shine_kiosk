@@ -4,6 +4,7 @@ import {
   addPlainCup, blockedByGroup, cartStaffFree, cartTotal, lineKeyOf, lineName, lineUnitPrice, setLineQty,
   toLineRequests, toggleOptionOnOneCup, toggleStaffFreeOnOneCup, type CartLine,
 } from '../shared/cart'
+import { RULES } from '../shared/rules'
 import type { FloorGroup, MenuItem, MenuOption, Order, ReceiveType } from '../shared/types'
 import { won } from '../shared/types'
 
@@ -97,7 +98,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
 
         <div className="field">
           <label>이름</label>
-          <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="text-input" value={name} maxLength={RULES.nameMax} onChange={(e) => setName(e.target.value)} />
         </div>
 
         <div className="field">
@@ -141,7 +142,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
                     <div className="qty">
                       <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setLines(setLineQty(lines, index, l.qty - 1))}>−</button>
                       <span className="n" style={{ fontSize: 20 }}>{l.qty}</span>
-                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setLines(setLineQty(lines, index, l.qty + 1))}>+</button>
+                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} disabled={l.qty >= RULES.qtyMax} onClick={() => setLines(setLineQty(lines, index, l.qty + 1))}>+</button>
                     </div>
                     <div className="sum" style={{ fontSize: 16, minWidth: 80 }}>{l.staffFree ? '0원' : won(lineUnitPrice(l) * l.qty)}</div>
                   </div>
@@ -180,7 +181,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
 
         <div className="field">
           <label>메모</label>
-          <input className="text-input" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="예: 얼음 적게" />
+          <input className="text-input" value={memo} maxLength={RULES.memoMax} onChange={(e) => setMemo(e.target.value)} placeholder="예: 얼음 적게" />
         </div>
 
         <div className="total-box" style={{ padding: 14 }}>

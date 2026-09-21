@@ -95,6 +95,7 @@ export const api = {
   registerCoupon: (name: string, phone: string | null, amount: number) =>
     post<Coupon>('/api/staff/coupons', { name, phone, amount }),
   updateCouponPhone: (id: number, phone: string) => put<Coupon>(`/api/staff/coupons/${id}/phone`, { phone }),
+  renameCoupon: (id: number, name: string) => put<Coupon>(`/api/staff/coupons/${id}/name`, { name }),
   chargeCoupon: (id: number, amount: number) => post<Coupon>(`/api/staff/coupons/${id}/charge`, { amount }),
   adjustCoupon: (id: number, balance: number, freeDrinks: number) =>
     post<Coupon>(`/api/staff/coupons/${id}/adjust`, { balance, freeDrinks }),

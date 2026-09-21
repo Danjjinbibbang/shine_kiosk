@@ -37,8 +37,8 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(r.<Integer>read("$.balance")).isEqualTo(70000);
 		assertThat(r.<Integer>read("$.freeDrinks")).isEqualTo(3);
 
-		r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 19999));
-		assertThat(r.<Integer>read("$.freeDrinks")).isEqualTo(3);
+		r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 19000));
+		assertThat(r.<Integer>read("$.freeDrinks")).as("19,000 은 무료잔 없음").isEqualTo(3);
 	}
 
 	@Test
@@ -50,7 +50,15 @@ class CouponApiTests extends ApiTestSupport {
 		Response noPhone = staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000));
 		assertThat(noPhone.status()).isEqualTo(400);
 		assertThat(noPhone.message()).contains("전화번호");
-		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "123")).message()).contains("10~11자리");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "123")).message()).contains("휴대폰 번호 형식");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "02-123-4567")).message()).contains("휴대폰 번호 형식");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "010-1234-56789")).message()).contains("휴대폰 번호 형식");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20500, "phone", "01011112222")).message()).contains("1,000원 단위");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 2000000, "phone", "01011112222")).message()).contains("1,000,000원까지");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이십일자가넘어가는아주긴이름을가진사람입니다요", "amount", 20000, "phone", "01011112222")).message()).contains("20자까지");
+		// 이름은 앞뒤 공백·겹친 공백을 정리해서 저장
+		Response spaced = staffPost("/api/staff/coupons", Map.of("name", "  김  철수 ", "amount", 20000, "phone", "01011112222"));
+		assertThat(spaced.<String>read("$.name")).isEqualTo("김 철수");
 		assertThat(staffPost("/api/staff/coupons/999/charge", Map.of("amount", 1000)).status()).isEqualTo(400);
 		long id = registerCoupon("이영희", 20000);
 		assertThat(staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 0)).status()).isEqualTo(400);
@@ -110,7 +118,7 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(set.<String>read("$.phone")).isEqualTo("01022223333");
 		assertThat(set.<String>read("$.phoneLast4")).isEqualTo("3333");
 
-		assertThat(staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "123")).message()).contains("10~11자리");
+		assertThat(staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "123")).message()).contains("휴대폰 번호 형식");
 
 		// 고객 화면 조회에는 phoneLast4 만
 		Response pub = lookup("이영희");
@@ -127,6 +135,28 @@ class CouponApiTests extends ApiTestSupport {
 		long other = ((Number) staffPost("/api/staff/coupons", Map.of("name", "이영희", "phone", "01044445555", "amount", 1000)).read("$.id")).longValue();
 		assertThat(staffPut("/api/staff/coupons/" + other + "/phone", Map.of("phone", "01000003333")).message()).contains("같은 뒤 4자리");
 		assertThat(staffGet("/api/staff/coupons/999").status()).isEqualTo(400);
+	}
+
+	@Test
+	@DisplayName("이름 변경: 오타 수정, 바꾼 이름에 같은 뒤 4자리가 있으면 거부")
+	void rename() throws Exception {
+		long id = registerCoupon("이영히", 20000, "01000001111");
+		registerCoupon("이영희", 5000, "01000001111"); // 같은 뒤 4자리를 가진 이영희
+		Response r = staffPut("/api/staff/coupons/" + id + "/name", Map.of("name", "이영희"));
+		assertThat(r.message()).contains("같은 뒤 4자리");
+		Response ok = staffPut("/api/staff/coupons/" + id + "/name", Map.of("name", "이영희2"));
+		assertThat(ok.status()).as(ok.body()).isEqualTo(200);
+		assertThat(ok.<String>read("$.name")).isEqualTo("이영희2");
+		assertThat(lookup("이영히").<String>read("$.status")).isEqualTo("NOT_FOUND");
+		assertThat(staffPut("/api/staff/coupons/" + id + "/name", Map.of("name", " ")).status()).isEqualTo(400);
+	}
+
+	@Test
+	@DisplayName("정정 상한: 잔액 1,000,000 / 무료잔 100")
+	void adjustLimits() throws Exception {
+		long id = registerCoupon("이영희", 20000);
+		assertThat(staffPost("/api/staff/coupons/" + id + "/adjust", Map.of("balance", 1000001, "freeDrinks", 0)).message()).contains("1,000,000원까지");
+		assertThat(staffPost("/api/staff/coupons/" + id + "/adjust", Map.of("balance", 0, "freeDrinks", 101)).message()).contains("100잔까지");
 	}
 
 	@Test

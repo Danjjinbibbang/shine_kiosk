@@ -4,6 +4,7 @@ import {
   blockedByGroup, cartStaffFree, lineKeyOf, lineName, lineUnitPrice, setLineQty,
   toggleOptionOnOneCup, toggleStaffFreeOnOneCup, type CartLine,
 } from '../shared/cart'
+import { RULES } from '../shared/rules'
 import type { MenuOption } from '../shared/types'
 import { won } from '../shared/types'
 
@@ -54,7 +55,7 @@ export function CartStep({ cart, total, onChange, onAddMore, onNext }: Props) {
               <div className="qty">
                 <button className="btn" onClick={() => setQty(index, l.qty - 1)}>−</button>
                 <span className="n">{l.qty}</span>
-                <button className="btn" onClick={() => setQty(index, l.qty + 1)}>+</button>
+                <button className="btn" disabled={l.qty >= RULES.qtyMax} onClick={() => setQty(index, l.qty + 1)}>+</button>
               </div>
               <div className="sum">{l.staffFree ? '0원' : won(lineUnitPrice(l) * l.qty)}</div>
             </div>

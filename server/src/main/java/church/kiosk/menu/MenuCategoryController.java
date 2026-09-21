@@ -2,6 +2,7 @@ package church.kiosk.menu;
 
 import church.kiosk.menu.MenuCategoryRepository.Category;
 import church.kiosk.support.BusinessException;
+import church.kiosk.support.Validation;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +38,7 @@ public class MenuCategoryController {
 
 	@PostMapping
 	public Category create(@RequestBody @Valid SaveRequest req) {
-		String name = req.name().trim();
+		String name = Validation.name(req.name(), "카테고리 이름", Validation.NAME_MAX);
 		if (repository.existsByName(name)) {
 			throw new BusinessException("이미 있는 카테고리입니다.");
 		}
@@ -48,7 +49,7 @@ public class MenuCategoryController {
 	@Transactional
 	public Category rename(@PathVariable long id, @RequestBody @Valid SaveRequest req) {
 		Category c = require(id);
-		String name = req.name().trim();
+		String name = Validation.name(req.name(), "카테고리 이름", Validation.NAME_MAX);
 		if (!name.equals(c.name()) && repository.existsByName(name)) {
 			throw new BusinessException("이미 있는 카테고리입니다.");
 		}

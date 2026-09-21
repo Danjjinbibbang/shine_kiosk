@@ -50,6 +50,12 @@ public class CouponRepository {
 		return keys.getKey().longValue();
 	}
 
+	public void rename(long couponId, String name) {
+		jdbc.sql("UPDATE coupon SET name = :name, updated_at = :now WHERE id = :id")
+				.param("name", name).param("now", LocalDateTime.now().toString()).param("id", couponId)
+				.update();
+	}
+
 	public void updatePhone(long couponId, String phone) {
 		jdbc.sql("UPDATE coupon SET phone = :phone, updated_at = :now WHERE id = :id")
 				.param("phone", phone)
