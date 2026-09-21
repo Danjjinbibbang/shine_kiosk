@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS delivery_place (
 CREATE TABLE IF NOT EXISTS coupon (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,
-    phone_last4 TEXT,                          -- 동명이인 구분용. 없으면 NULL
+    phone       TEXT,                          -- 전체 번호 (숫자만). 잔액 문자 발송용. 없으면 NULL
+    phone_last4 TEXT,                          -- phone 의 뒤 4자리. 동명이인 구분용
     balance     INTEGER NOT NULL DEFAULT 0,
     free_drinks INTEGER NOT NULL DEFAULT 0,    -- 남은 무료 1잔 개수
     created_at  TEXT    NOT NULL,

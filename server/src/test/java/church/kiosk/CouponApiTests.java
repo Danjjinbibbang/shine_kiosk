@@ -69,7 +69,7 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(dup.status()).isEqualTo(400);
 		assertThat(dup.message()).contains("전화번호");
 
-		Response ok = staffPost("/api/staff/coupons", Map.of("name", "김철수", "phoneLast4", "1234", "amount", 5000));
+		Response ok = staffPost("/api/staff/coupons", Map.of("name", "김철수", "phone", "010-1111-1234", "amount", 5000));
 		assertThat(ok.status()).isEqualTo(200);
 		assertThat(ok.<String>read("$.phoneLast4")).isEqualTo("1234");
 	}
@@ -83,7 +83,7 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(lookup("김철수").<String>read("$.status")).isEqualTo("FOUND");
 		assertThat(lookup(" 김철수 ").<String>read("$.status")).as("앞뒤 공백 무시").isEqualTo("FOUND");
 
-		staffPost("/api/staff/coupons", Map.of("name", "김철수", "phoneLast4", "1234", "amount", 5000));
+		staffPost("/api/staff/coupons", Map.of("name", "김철수", "phone", "010-1111-1234", "amount", 5000));
 		Response need = lookup("김철수");
 		assertThat(need.<String>read("$.status")).isEqualTo("NEED_PHONE");
 		assertThat(need.<Integer>read("$.candidateCount")).isEqualTo(2);
@@ -96,6 +96,39 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(miss.<String>read("$.status")).isEqualTo("NOT_FOUND");
 
 		assertThat(postJson("/api/coupons/lookup", Map.of("name", "")).status()).isEqualTo(400);
+	}
+
+	@Test
+	@DisplayName("전화번호: 등록 때 저장, 나중에 추가/변경, 형식 검사, 고객 조회엔 전체 번호가 안 나간다")
+	void phone() throws Exception {
+		long id = registerCoupon("이영희", 20000);
+		assertThat(staffGet("/api/staff/coupons/" + id).body()).doesNotContain("\"phone\"");
+
+		Response set = staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "010-2222-3333"));
+		assertThat(set.status()).as(set.body()).isEqualTo(200);
+		assertThat(set.<String>read("$.phone")).isEqualTo("01022223333");
+		assertThat(set.<String>read("$.phoneLast4")).isEqualTo("3333");
+
+		assertThat(staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "123")).message()).contains("10~11자리");
+
+		// 고객 화면 조회에는 phoneLast4 만
+		Response pub = lookup("이영희");
+		assertThat(pub.<String>read("$.coupon.phoneLast4")).isEqualTo("3333");
+		assertThat(pub.body()).doesNotContain("01022223333");
+		// 스태프 조회에는 전체 번호
+		Response staff = staffPost("/api/staff/coupons/lookup", Map.of("name", "이영희"));
+		assertThat(staff.<String>read("$.coupon.phone")).isEqualTo("01022223333");
+
+		// 번호 비우기: 동명이인 없으면 가능
+		Response cleared = staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", ""));
+		assertThat(cleared.body()).doesNotContain("\"phone\"");
+
+		// 동명이인이 생기면 비울 수 없고, 뒤 4자리가 겹쳐도 안 된다
+		staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "01022223333"));
+		long other = ((Number) staffPost("/api/staff/coupons", Map.of("name", "이영희", "phone", "01044445555", "amount", 1000)).read("$.id")).longValue();
+		assertThat(staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "")).message()).contains("동명이인");
+		assertThat(staffPut("/api/staff/coupons/" + other + "/phone", Map.of("phone", "01000003333")).message()).contains("같은 뒤 4자리");
+		assertThat(staffGet("/api/staff/coupons/999").status()).isEqualTo(400);
 	}
 
 	// ── 정정 / 삭제 ─────────────────────────────────────────

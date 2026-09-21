@@ -14,9 +14,10 @@ export async function staffToken(request: APIRequestContext) {
   return (await r.json()).token as string
 }
 
-export async function registerCoupon(request: APIRequestContext, name: string, amount: number, phoneLast4?: string) {
+/** phone 은 전체 번호. 뒤 4자리가 동명이인 구분에 쓰인다. */
+export async function registerCoupon(request: APIRequestContext, name: string, amount: number, phone?: string) {
   const token = await staffToken(request)
-  const r = await request.post('/api/staff/coupons', { headers: { 'X-Staff-Token': token }, data: { name, amount, phoneLast4: phoneLast4 ?? null } })
+  const r = await request.post('/api/staff/coupons', { headers: { 'X-Staff-Token': token }, data: { name, amount, phone: phone ?? null } })
   expect(r.ok(), await r.text()).toBeTruthy()
   return await r.json()
 }

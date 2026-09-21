@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
-import type { Order, OrderStatus } from '../shared/types'
+import { couponBalanceMessage, openSms } from '../shared/sms'
+import type { Coupon, Order, OrderStatus } from '../shared/types'
 import { PAY_LABEL, won } from '../shared/types'
 import { EditOrderModal } from './EditOrderModal'
 
@@ -13,14 +14,33 @@ interface Props {
 
 export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
   const [orders, setOrders] = useState<Order[] | null>(null)
+  const [coupons, setCoupons] = useState<Record<number, Coupon>>({})
   const [editing, setEditing] = useState<Order | null>(null)
   const [busyId, setBusyId] = useState<number | null>(null)
 
   useEffect(() => {
     let alive = true
-    api.orders(status).then((o) => { if (alive) setOrders(o) }).catch(() => {})
+    api.orders(status).then(async (list) => {
+      if (!alive) return
+      setOrders(list)
+      // 쿠폰 주문은 잔액 문자를 위해 쿠폰(번호·잔액)을 미리 받아 둔다. 완료 탭은 시점상 값이 바뀌었을 수 있어 매번 새로 받는다.
+      const ids = [...new Set(list.filter((o) => o.couponId !== null).map((o) => o.couponId!))]
+      const found: Record<number, Coupon> = {}
+      await Promise.all(ids.map(async (id) => {
+        try { found[id] = await api.getCoupon(id) } catch { /* 삭제된 쿠폰 등 */ }
+      }))
+      if (alive) setCoupons(found)
+    }).catch(() => {})
     return () => { alive = false }
   }, [status, tick])
+
+  /** 문자 앱을 열 수 있으면 열고 true. 번호 없으면 false. */
+  const sendBalanceSms = (o: Order): boolean => {
+    const coupon = o.couponId !== null ? coupons[o.couponId] : undefined
+    if (!coupon?.phone) return false
+    openSms(coupon.phone, couponBalanceMessage(o, coupon))
+    return true
+  }
 
   const run = async (id: number, action: () => Promise<void>, doneMsg: string) => {
     setBusyId(id)
@@ -44,7 +64,14 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
     <>
       {orders.map((o) => (
         <OrderCard key={o.id} order={o} busy={busyId === o.id}
-          onDone={() => run(o.id, () => api.doneOrder(o.id), `${orderLabel(o)} ${o.customerName}님 완료`)}
+          canSms={o.couponId !== null && !!coupons[o.couponId]?.phone}
+          onSms={() => { if (!sendBalanceSms(o)) onToast('쿠폰에 전화번호가 없어 문자를 못 보냅니다') }}
+          onDone={() => {
+            // 문자 앱은 탭 직후(사용자 동작 안)에 열어야 하므로 서버 호출보다 먼저
+            const sent = o.couponId !== null ? sendBalanceSms(o) : false
+            void run(o.id, () => api.doneOrder(o.id),
+              `${orderLabel(o)} ${o.customerName}님 완료` + (o.couponId !== null && !sent ? ' (번호 없어 문자 생략)' : ''))
+          }}
           onReopen={() => run(o.id, () => api.reopenOrder(o.id), `${orderLabel(o)} 다시 만들 것으로 이동`)}
           onCancel={() => {
             if (window.confirm(`${orderLabel(o)} ${o.customerName}님 주문을 취소할까요?${o.couponId ? '\n쿠폰 차감액(무료 1잔 포함)은 되돌려집니다.' : ''}`)) {
@@ -64,6 +91,8 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
 interface CardProps {
   order: Order
   busy: boolean
+  canSms: boolean
+  onSms: () => void
   onDone: () => void
   onReopen: () => void
   onCancel: () => void
@@ -97,7 +126,7 @@ function orderLabel(o: Order): string {
   return `${Number(m)}/${Number(d)} #${o.orderNo}`
 }
 
-function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardProps) {
+function OrderCard({ order: o, busy, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
   const delivery = o.receiveType === 'DELIVERY'
   const time = o.createdAt.slice(11, 16)
   const stale = o.orderDate !== localToday()
@@ -131,6 +160,9 @@ function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardP
         ) : (
           <>
             <button className="btn" disabled={busy} onClick={onReopen}>↩ 되돌리기</button>
+            {o.couponId !== null && (
+              <button className="btn" disabled={busy || !canSms} onClick={onSms} title={canSms ? '' : '쿠폰에 전화번호가 없음'}>📩 잔액 문자</button>
+            )}
             <button className="btn danger" disabled={busy} onClick={onCancel}>취소</button>
           </>
         )}

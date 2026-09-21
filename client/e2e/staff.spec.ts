@@ -173,17 +173,17 @@ test.describe('쿠폰 관리', () => {
   test('동명이인: 조회하면 전화번호를 요구하고, 번호로 구분한다. 쓰인 쿠폰은 삭제 불가', async ({ page, request }) => {
     const name = uniq('동명')
     await registerCoupon(request, name, 20000)
-    await registerCoupon(request, name, 500, '4321')
+    await registerCoupon(request, name, 500, '01000004321')
     await staffLogin(page)
     await page.getByRole('button', { name: '쿠폰' }).click()
 
     await page.getByPlaceholder('쿠폰 주인 이름').fill(name)
     await page.getByRole('button', { name: '조회' }).click()
     await expect(page.getByText('같은 이름이 2명')).toBeVisible()
-    await page.locator('input[maxlength="4"]').fill('4321')
+    await page.getByPlaceholder('010-0000-0000').fill('4321')
     await page.getByRole('button', { name: '조회' }).click()
     await expect(page.locator('.card').nth(1)).toContainText('500원')
-    await expect(page.locator('.card').nth(1)).toContainText('(4321)')
+    await expect(page.locator('.card').nth(1)).toContainText('010-0000-4321')
 
     // 주문에 쓰인 쿠폰은 삭제가 막힌다
     const used = (await lookupCoupon(request, name, '4321')).coupon
@@ -193,18 +193,58 @@ test.describe('쿠폰 관리', () => {
     await expect(page.locator('.error')).toContainText('주문에 사용된 쿠폰')
   })
 
-  test('없는 이름 등록 화면에서 번호 넣기 → 번호와 함께 등록', async ({ page, request }) => {
+  test('전화번호와 함께 등록 → 번호 변경 → 지우기', async ({ page, request }) => {
     const name = uniq('신규')
     await staffLogin(page)
     await page.getByRole('button', { name: '쿠폰' }).click()
     await page.getByPlaceholder('쿠폰 주인 이름').fill(name)
     await page.getByRole('button', { name: '조회' }).click()
     await expect(page.getByText('새로 등록할까요?')).toBeVisible()
-    await page.getByRole('button', { name: '번호 넣기' }).click()
-    await page.locator('input[maxlength="4"]').fill('1111')
+    await page.getByPlaceholder('010-0000-0000').fill('010-1234-1111')
     await page.getByRole('button', { name: '20,000원 등록' }).click()
-    await expect(page.locator('.card').nth(1)).toContainText('(1111)')
+    await expect(page.locator('.card').nth(1)).toContainText('010-1234-1111')
     expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('1111')
+
+    page.once('dialog', (d) => d.accept('01099998888'))
+    await page.getByRole('button', { name: '번호 변경' }).click()
+    await expect(page.locator('.card').nth(1)).toContainText('010-9999-8888')
+
+    page.once('dialog', (d) => d.accept(''))
+    await page.getByRole('button', { name: '번호 변경' }).click()
+    await expect(page.locator('.card').nth(1)).toContainText('전화번호 없음')
+    await expect(page.getByRole('button', { name: '번호 넣기' })).toBeVisible()
+  })
+
+  test('완료 누르면 잔액 문자 앱이 열리고, 번호 없으면 안내만', async ({ page, request }) => {
+    const withPhone = uniq('문자')
+    const coupon = await registerCoupon(request, withPhone, 20000, '010-5555-6666')
+    await createOrder(request, { customerName: withPhone, payMethod: 'COUPON', couponId: coupon.id, useFreeDrink: true, lines: [{ variantId: 3002, quantity: 1 }, { variantId: 1001, quantity: 1 }] })
+    const noPhone = uniq('무번호')
+    const coupon2 = await registerCoupon(request, noPhone, 20000)
+    await createOrder(request, { customerName: noPhone, payMethod: 'COUPON', couponId: coupon2.id, lines: [{ variantId: 1001, quantity: 1 }] })
+    await page.addInitScript(() => { (window as unknown as { __smsCapture?: boolean }).__smsCapture = true })
+    await staffLogin(page)
+
+    await orderCard(page, withPhone).getByRole('button', { name: /완료/ }).click()
+    const link = await page.evaluate(() => (window as unknown as { __lastSms?: string }).__lastSms)
+    expect(link).toBeTruthy()
+    expect(link!.startsWith('sms:01055556666')).toBe(true)
+    const body = decodeURIComponent(link!.split('body=')[1])
+    expect(body).toContain(`[샤인카페] ${withPhone}님`)
+    expect(body).toContain('무료 1잔 아이스크림 컵')
+    expect(body).toContain('쿠폰 1,000원')
+    expect(body).toContain('남은 잔액 19,000원 · 무료 1잔 0잔')
+    await expect(orderCard(page, withPhone)).toHaveCount(0)
+
+    await page.evaluate(() => { (window as unknown as { __lastSms?: string }).__lastSms = undefined })
+    await orderCard(page, noPhone).getByRole('button', { name: /완료/ }).click()
+    await expect(page.locator('.toast')).toContainText('번호 없어 문자 생략')
+    expect(await page.evaluate(() => (window as unknown as { __lastSms?: string }).__lastSms)).toBeUndefined()
+
+    // 완료 탭에서 다시 보내기 버튼: 번호 있는 건 활성, 없는 건 비활성
+    await page.getByRole('button', { name: '완료', exact: true }).click()
+    await expect(orderCard(page, withPhone).getByRole('button', { name: /잔액 문자/ })).toBeEnabled()
+    await expect(orderCard(page, noPhone).getByRole('button', { name: /잔액 문자/ })).toBeDisabled()
   })
 })
 

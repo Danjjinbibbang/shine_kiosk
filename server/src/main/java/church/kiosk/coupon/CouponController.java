@@ -24,23 +24,46 @@ public class CouponController {
 
 	public record LookupRequest(@NotBlank(message = "이름을 입력해 주세요.") String name, String phoneLast4) {}
 
+	/** phone 은 전체 번호(선택). 잔액 문자용이자 동명이인 구분용. */
 	public record RegisterRequest(@NotBlank(message = "이름을 입력해 주세요.") String name,
-								  String phoneLast4,
+								  String phone,
 								  @Min(value = 1, message = "충전 금액을 확인해 주세요.") int amount) {}
+
+	public record PhoneRequest(String phone) {}
 
 	public record ChargeRequest(@Min(value = 1, message = "충전 금액을 확인해 주세요.") int amount) {}
 
 	public record AdjustRequest(@Min(value = 0, message = "잔액은 0원 이상이어야 합니다.") int balance,
 								 @Min(value = 0, message = "무료잔 개수는 0 이상이어야 합니다.") int freeDrinks) {}
 
+	/** 고객 화면용 조회 결과. 전체 번호는 내려주지 않는다. */
+	public record PublicLookup(CouponService.LookupStatus status, Coupon.PublicView coupon, int candidateCount) {}
+
 	@PostMapping("/api/coupons/lookup")
-	public LookupResult lookup(@RequestBody @jakarta.validation.Valid LookupRequest request) {
+	public PublicLookup lookup(@RequestBody @jakarta.validation.Valid LookupRequest request) {
+		LookupResult r = couponService.lookup(request.name(), request.phoneLast4());
+		return new PublicLookup(r.status(), r.coupon() == null ? null : r.coupon().toPublic(), r.candidateCount());
+	}
+
+	/** 스태프 화면용 조회. 전체 번호 포함. */
+	@PostMapping("/api/staff/coupons/lookup")
+	public LookupResult staffLookup(@RequestBody @jakarta.validation.Valid LookupRequest request) {
 		return couponService.lookup(request.name(), request.phoneLast4());
+	}
+
+	@GetMapping("/api/staff/coupons/{id}")
+	public Coupon get(@PathVariable long id) {
+		return couponService.require(id);
 	}
 
 	@PostMapping("/api/staff/coupons")
 	public Coupon register(@RequestBody @jakarta.validation.Valid RegisterRequest request) {
-		return couponService.register(request.name(), request.phoneLast4(), request.amount());
+		return couponService.register(request.name(), request.phone(), request.amount());
+	}
+
+	@PutMapping("/api/staff/coupons/{id}/phone")
+	public Coupon updatePhone(@PathVariable long id, @RequestBody PhoneRequest request) {
+		return couponService.updatePhone(id, request.phone());
 	}
 
 	@PostMapping("/api/staff/coupons/{id}/charge")

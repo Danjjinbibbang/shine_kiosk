@@ -6,7 +6,7 @@ import { won } from '../shared/types'
 /**
  * 쿠폰 조회/등록/충전. 이름을 넣어 조회하면
  *  - 있으면: 잔액 보여주고 충전
- *  - 없으면: 신규 등록 (동명이인이면 전화 뒤 4자리 필수)
+ *  - 없으면: 신규 등록 (전화번호는 잔액 문자용, 동명이인이면 필수)
  */
 export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   const [name, setName] = useState('')
@@ -36,9 +36,20 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
     }
   }
 
+  // 조회는 뒤 4자리로 구분한다 (전체 번호를 넣어도 뒤 4자리만 씀)
+  const last4 = phone.replace(/[^0-9]/g, '').slice(-4)
   const lookup = () => wrap(async () => {
-    setResult(await api.lookupCoupon(name.trim(), phone || undefined))
+    setResult(await api.staffLookupCoupon(name.trim(), last4.length === 4 ? last4 : undefined))
   })
+
+  const changePhone = (c: Coupon) => {
+    const next = window.prompt(`${c.name}님 전화번호 (잔액 문자 발송용)`, c.phone ?? '')
+    if (next === null) return
+    void wrap(async () => {
+      const updated = await api.updateCouponPhone(c.id, next.trim())
+      showCoupon(updated, updated.phone ? '전화번호 저장됨' : '전화번호 지움')
+    })
+  }
 
   const showCoupon = (c: Coupon, msg: string) => {
     setResult({ status: 'FOUND', coupon: c, candidateCount: 1 })
@@ -47,7 +58,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   }
 
   const register = (amt: number) => wrap(async () => {
-    const c = await api.registerCoupon(name.trim(), phone || null, amt)
+    const c = await api.registerCoupon(name.trim(), phone.trim() || null, amt)
     showCoupon(c, `${c.name}님 쿠폰 등록 · 잔액 ${won(c.balance)}`)
   })
 
@@ -89,13 +100,13 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
           <input className="text-input" value={name} onChange={(e) => { setName(e.target.value); setResult(null) }}
             onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void lookup() }} placeholder="쿠폰 주인 이름" />
         </div>
-        {(result?.status === 'NEED_PHONE' || phone) && (
-          <div className="field">
-            <label>전화번호 뒤 4자리 {result?.status === 'NEED_PHONE' && `(같은 이름 ${result.candidateCount}명)`}</label>
-            <input className="text-input" inputMode="numeric" maxLength={4} value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))} />
-          </div>
-        )}
+        <div className="field">
+          <label>
+            전화번호 <span className="muted">(잔액 문자 발송용{result?.status === 'NEED_PHONE' ? ` · 같은 이름 ${result.candidateCount}명, 뒤 4자리로 구분` : ', 없어도 등록 가능'})</span>
+          </label>
+          <input className="text-input" inputMode="tel" placeholder="010-0000-0000" value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/[^0-9-]/g, ''))} />
+        </div>
         <div className="row">
           <button className="btn primary grow" disabled={busy || !name.trim()} onClick={() => void lookup()}>조회</button>
           <button className="btn ghost" onClick={reset}>지우기</button>
@@ -106,8 +117,14 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
       {result?.status === 'FOUND' && result.coupon && (
         <div className="card">
           <div className="row between">
-            <b style={{ fontSize: 20 }}>{result.coupon.name}{result.coupon.phoneLast4 && <span className="muted"> ({result.coupon.phoneLast4})</span>}</b>
+            <b style={{ fontSize: 20 }}>{result.coupon.name}</b>
             <b style={{ fontSize: 26, color: 'var(--primary)' }}>{won(result.coupon.balance)}</b>
+          </div>
+          <div className="row between" style={{ fontSize: 15 }}>
+            <span className="muted">📱 {result.coupon.phone ? formatPhone(result.coupon.phone) : '전화번호 없음 (잔액 문자 불가)'}</span>
+            <button className="btn ghost" style={{ minHeight: 32, fontSize: 14 }} onClick={() => changePhone(result.coupon!)}>
+              {result.coupon.phone ? '번호 변경' : '번호 넣기'}
+            </button>
           </div>
           <div className="row between" style={{ fontSize: 16 }}>
             <span className="muted">무료 1잔</span>
@@ -146,8 +163,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
           <b style={{ fontSize: 18 }}>"{name.trim()}" 쿠폰이 없습니다. 새로 등록할까요?</b>
           {!phone && (
             <div className="muted" style={{ fontSize: 14 }}>
-              같은 이름이 나중에 또 생길 수 있으면 전화번호 뒤 4자리를 함께 넣어 두세요.
-              <button className="btn ghost" style={{ minHeight: 32, fontSize: 14 }} onClick={() => setPhone(' ')}>번호 넣기</button>
+              전화번호를 넣어 두면 주문 완료 때 잔액을 문자로 보낼 수 있습니다.
             </div>
           )}
           <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy}
@@ -156,10 +172,16 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
       )}
 
       {result?.status === 'NEED_PHONE' && (
-        <div className="muted center">같은 이름이 {result.candidateCount}명 있습니다. 전화번호 뒤 4자리를 넣고 다시 조회해 주세요.</div>
+        <div className="muted center">같은 이름이 {result.candidateCount}명 있습니다. 전화번호(뒤 4자리면 됨)를 넣고 다시 조회해 주세요.</div>
       )}
     </div>
   )
+}
+
+function formatPhone(digits: string): string {
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+  return digits
 }
 
 interface PickerProps {

@@ -87,8 +87,12 @@ export const api = {
   doneOrder: (id: number) => post<void>(`/api/staff/orders/${id}/done`),
   reopenOrder: (id: number) => post<void>(`/api/staff/orders/${id}/reopen`),
   cancelOrder: (id: number) => post<void>(`/api/staff/orders/${id}/cancel`),
-  registerCoupon: (name: string, phoneLast4: string | null, amount: number) =>
-    post<Coupon>('/api/staff/coupons', { name, phoneLast4, amount }),
+  staffLookupCoupon: (name: string, phoneLast4?: string) =>
+    post<LookupResult>('/api/staff/coupons/lookup', { name, phoneLast4: phoneLast4 || null }),
+  getCoupon: (id: number) => request<Coupon>(`/api/staff/coupons/${id}`),
+  registerCoupon: (name: string, phone: string | null, amount: number) =>
+    post<Coupon>('/api/staff/coupons', { name, phone, amount }),
+  updateCouponPhone: (id: number, phone: string) => put<Coupon>(`/api/staff/coupons/${id}/phone`, { phone }),
   chargeCoupon: (id: number, amount: number) => post<Coupon>(`/api/staff/coupons/${id}/charge`, { amount }),
   adjustCoupon: (id: number, balance: number, freeDrinks: number) =>
     post<Coupon>(`/api/staff/coupons/${id}/adjust`, { balance, freeDrinks }),

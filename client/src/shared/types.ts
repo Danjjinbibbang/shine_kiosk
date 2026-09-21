@@ -85,6 +85,8 @@ export interface AdminPlace {
 export interface Coupon {
   id: number
   name: string
+  /** 전체 번호 (숫자만). 스태프 API 에서만 내려온다 */
+  phone?: string | null
   phoneLast4: string | null
   balance: number
   /** 남은 무료 1잔 개수 */

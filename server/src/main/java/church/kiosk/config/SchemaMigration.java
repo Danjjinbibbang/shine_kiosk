@@ -25,6 +25,7 @@ public class SchemaMigration {
 
 	private static final List<Column> COLUMNS = List.of(
 			new Column("coupon", "free_drinks", "INTEGER NOT NULL DEFAULT 0"),
+			new Column("coupon", "phone", "TEXT"),
 			new Column("coupon_tx", "free_delta", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_amount", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_item_name", "TEXT"),

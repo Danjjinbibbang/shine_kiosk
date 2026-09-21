@@ -55,8 +55,9 @@ public class CouponService {
 		return matched.map(LookupResult::found).orElseGet(LookupResult::notFound);
 	}
 
+	/** phone 은 전체 번호(선택). 같은 이름이 이미 있으면 구분을 위해 번호가 꼭 있어야 한다. */
 	@Transactional
-	public Coupon register(String name, String phoneLast4, int amount) {
+	public Coupon register(String name, String phoneRaw, int amount) {
 		String trimmed = name.trim();
 		if (trimmed.isEmpty()) {
 			throw new BusinessException("이름을 입력해 주세요.");
@@ -64,12 +65,19 @@ public class CouponService {
 		if (amount <= 0) {
 			throw new BusinessException("충전 금액을 확인해 주세요.");
 		}
+		String phone = validPhone(phoneRaw);
 		List<Coupon> sameName = couponRepository.findByName(trimmed);
-		if (!sameName.isEmpty() && (phoneLast4 == null || phoneLast4.isBlank())) {
-			throw new BusinessException("같은 이름이 이미 있습니다. 전화번호 뒤 4자리를 입력해 주세요.");
+		if (!sameName.isEmpty()) {
+			if (phone == null) {
+				throw new BusinessException("같은 이름이 이미 있습니다. 전화번호를 입력해 주세요.");
+			}
+			String last4 = Coupon.last4Of(phone);
+			if (sameName.stream().anyMatch(c -> last4.equals(c.phoneLast4()))) {
+				throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
+			}
 		}
 		int free = freeDrinksFor(amount);
-		long id = couponRepository.insert(trimmed, blankToNull(phoneLast4), amount, free);
+		long id = couponRepository.insert(trimmed, phone, amount, free);
 		couponRepository.insertTx(id, null, amount, free, "CHARGE", amount);
 		return couponRepository.findById(id).orElseThrow();
 	}
@@ -85,6 +93,34 @@ public class CouponService {
 		couponRepository.update(couponId, after, coupon.freeDrinks() + free);
 		couponRepository.insertTx(couponId, null, amount, free, "CHARGE", after);
 		return couponRepository.findById(couponId).orElseThrow();
+	}
+
+	/** 잔액 문자를 보낼 전화번호를 넣거나 바꾼다. 동명이인이 있으면 뒤 4자리가 겹치면 안 된다. */
+	@Transactional
+	public Coupon updatePhone(long couponId, String phoneRaw) {
+		Coupon coupon = require(couponId);
+		String phone = validPhone(phoneRaw);
+		if (phone != null) {
+			String last4 = Coupon.last4Of(phone);
+			boolean clash = couponRepository.findByName(coupon.name()).stream()
+					.anyMatch(c -> c.id() != couponId && last4.equals(c.phoneLast4()));
+			if (clash) {
+				throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
+			}
+		}
+		else if (couponRepository.findByName(coupon.name()).size() > 1) {
+			throw new BusinessException("동명이인이 있어 번호를 비울 수 없습니다.");
+		}
+		couponRepository.updatePhone(couponId, phone);
+		return couponRepository.findById(couponId).orElseThrow();
+	}
+
+	private static String validPhone(String raw) {
+		String phone = Coupon.normalizePhone(raw);
+		if (phone != null && (phone.length() < 10 || phone.length() > 11)) {
+			throw new BusinessException("전화번호는 숫자 10~11자리로 입력해 주세요.");
+		}
+		return phone;
 	}
 
 	/** 충전을 잘못 넣었을 때 잔액과 무료잔 개수를 바로잡는다. 차액을 ADJUST 이력으로 남긴다. */
@@ -153,7 +189,4 @@ public class CouponService {
 				.orElseThrow(() -> new BusinessException("쿠폰을 찾을 수 없습니다."));
 	}
 
-	private static String blankToNull(String s) {
-		return (s == null || s.isBlank()) ? null : s.trim();
-	}
 }
