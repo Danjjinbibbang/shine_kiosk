@@ -22,7 +22,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="kiosk" style={{ maxWidth: 480, justifyContent: 'center' }}>
       <div className="hero" style={{ padding: 0 }}>
-        <div className="title">주방 화면</div>
+        <div className="title">스태프 화면</div>
         <div className="sub">PIN 4자리를 눌러 주세요</div>
       </div>
       <div className="pin-dots">

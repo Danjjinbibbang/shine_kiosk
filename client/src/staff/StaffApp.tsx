@@ -65,7 +65,7 @@ export function StaffApp() {
       {!online && <div className="offline">서버와 연결이 끊겼습니다. 와이파이를 확인해 주세요.</div>}
       <header className="staff-head">
         <div className="row between">
-          <b style={{ fontSize: 20 }}>샤인 카페 · 주방</b>
+          <b style={{ fontSize: 20 }}>열린 카페 · 스태프</b>
           <button className="btn ghost" onClick={logout}>나가기</button>
         </div>
         {summary && (

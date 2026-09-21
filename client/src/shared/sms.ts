@@ -17,7 +17,7 @@ export function couponBalanceMessage(order: Order, coupon: Coupon): string {
   if (order.freeAmount) used.push(`무료 1잔 ${order.freeItemName ?? ''}`.trim())
   if (order.couponAmount) used.push(`쿠폰 ${won(order.couponAmount)}`)
   const lines = [
-    `[샤인카페] ${coupon.name}님 ${Number(m)}/${Number(d)} 주문`,
+    `[열린카페] ${coupon.name}님 ${Number(m)}/${Number(d)} 주문`,
     used.length ? `사용: ${used.join(' + ')}` : '',
     `남은 잔액 ${won(coupon.balance)} · 무료 1잔 ${coupon.freeDrinks}잔`,
   ]

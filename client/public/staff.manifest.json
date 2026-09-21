@@ -4,8 +4,8 @@
   "display": "standalone",
   "orientation": "any",
   "lang": "ko",
-  "name": "샤인 카페 주방",
-  "short_name": "주방",
+  "name": "열린 카페 스태프",
+  "short_name": "스태프",
   "start_url": "/staff",
   "scope": "/staff",
   "icons": [

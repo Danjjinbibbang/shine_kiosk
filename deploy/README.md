@@ -39,7 +39,7 @@ mkdir -p ~/kiosk/config
 cat > ~/kiosk/config/application.yml <<'YML'
 kiosk:
   staff-pin: "0000"
-  bank-account: "국민 123-45-678901 (샤인교회)"
+  bank-account: "국민 123-45-678901 (열린교회)"
 YML
 ```
 

@@ -54,7 +54,7 @@ cp config/application.example.yml config/application.yml   # 그 다음 값을 �
 ```yaml
 kiosk:
   staff-pin: "0000"                            # 스태프 화면 PIN 4자리
-  bank-account: "국민 123-45-678901 (샤인교회)"  # 계좌이체 화면 안내 문구
+  bank-account: "국민 123-45-678901 (열린교회)"  # 계좌이체 화면 안내 문구
 ```
 
 환경변수로도 줄 수 있고(파일보다 우선), 둘 다 없으면 `server/src/main/resources/application.yml` 의 기본값이 쓰인다.

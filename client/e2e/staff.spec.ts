@@ -246,7 +246,7 @@ test.describe('쿠폰 관리', () => {
     expect(link).toBeTruthy()
     expect(link!.startsWith('sms:01055556666')).toBe(true)
     const body = decodeURIComponent(link!.split('body=')[1])
-    expect(body).toContain(`[샤인카페] ${withPhone}님`)
+    expect(body).toContain(`[열린카페] ${withPhone}님`)
     expect(body).toContain('무료 1잔 아이스크림 컵')
     expect(body).toContain('쿠폰 1,000원')
     expect(body).toContain('남은 잔액 19,000원 · 무료 1잔 0잔')

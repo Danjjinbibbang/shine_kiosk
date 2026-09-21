@@ -4,7 +4,7 @@
   "display": "standalone",
   "orientation": "any",
   "lang": "ko",
-  "name": "샤인 카페 주문",
+  "name": "열린 카페 주문",
   "short_name": "주문",
   "start_url": "/kiosk",
   "scope": "/kiosk",
