@@ -35,8 +35,6 @@ public final class OrderDtos {
 			@NotNull(message = "받는 방법을 선택해 주세요.") ReceiveType receiveType,
 			Long placeId,
 			@NotNull(message = "결제 수단을 선택해 주세요.") PayMethod payMethod,
-			/** 사역자 무료 잔이 하나라도 있으면 필수. 명단에 있는 사역자 id. */
-			Long staffMemberId,
 			Long couponId,
 			/** 이번 주문에서 무료 1잔을 쓸지. 가장 비싼 한 잔 값이 빠진다. 없으면 안 씀. */
 			Boolean useFreeDrink,
@@ -62,7 +60,6 @@ public final class OrderDtos {
 								int couponAmount, int remainder, int balanceAfter, int freeDrinksAfter) {}
 
 	/** 스태프의 주문 수정. 결제 수단은 바꾸지 않고 항목/이름/장소만 고친다. */
-	/** 사역자 무료 여부는 원래 주문의 사역자를 유지하고, 줄별 잔 수만 lines 로 다시 받는다. */
 	public record UpdateRequest(
 			@NotBlank(message = "이름을 입력해 주세요.") String customerName,
 			@NotNull(message = "받는 방법을 선택해 주세요.") ReceiveType receiveType,
@@ -79,7 +76,7 @@ public final class OrderDtos {
 
 	public record OrderView(long id, String orderDate, int orderNo, String customerName,
 							ReceiveType receiveType, Long placeId, String placeName,
-							int totalAmount, String staffMemberName, int staffFreeAmount,
+							int totalAmount, int staffFreeAmount,
 							PayMethod payMethod, PayMethod remainderMethod,
 							Long couponId, int couponAmount, int freeAmount, String freeItemName,
 							int cashAmount, int transferAmount,

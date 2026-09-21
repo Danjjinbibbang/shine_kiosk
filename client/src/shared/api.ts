@@ -1,6 +1,6 @@
 import type {
   AdminItem, AdminOption, AdminPlace, Coupon, DayReport, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
-  LookupResult, MenuItem, MenuOption, Order, StaffMember, OrderStatus, SaveItemRequest, UpdateOrderRequest,
+  LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest,
 } from './types'
 
 const STAFF_TOKEN_KEY = 'shine-kiosk.staffToken'
@@ -69,7 +69,6 @@ export const api = {
   menuOptions: () => request<MenuOption[]>('/api/menu/options'),
   places: () => request<FloorGroup[]>('/api/places'),
   regulars: () => request<string[]>('/api/customers/regulars'),
-  staffMembers: () => request<StaffMember[]>('/api/staff-members'),
   paymentInfo: () => request<{ bankAccount: string }>('/api/orders/payment-info'),
   lookupCoupon: (name: string, phoneLast4?: string) =>
     post<LookupResult>('/api/coupons/lookup', { name, phoneLast4: phoneLast4 || null }),
@@ -112,10 +111,6 @@ export const api = {
   deleteOption: (id: number) => del<void>(`/api/staff/menu/options/${id}`),
   reportDays: () => request<DayReport[]>('/api/staff/reports/days'),
   reportOrders: (date: string) => request<Order[]>(`/api/staff/reports/orders?date=${date}`),
-  adminMembers: () => request<StaffMember[]>('/api/staff/members'),
-  createMember: (name: string) => post<StaffMember>('/api/staff/members', { name, active: true }),
-  updateMember: (id: number, body: { name: string; active: boolean }) => put<StaffMember>(`/api/staff/members/${id}`, body),
-  deleteMember: (id: number) => del<void>(`/api/staff/members/${id}`),
   adminPlaces: () => request<AdminPlace[]>('/api/staff/places'),
   createPlace: (body: { floor: number; name: string; active: boolean }) => post<AdminPlace>('/api/staff/places', body),
   updatePlace: (id: number, body: { floor: number; name: string; active: boolean }) => put<AdminPlace>(`/api/staff/places/${id}`, body),

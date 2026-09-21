@@ -26,13 +26,13 @@ public class OrderRepository {
 
 	private static final String ORDER_COLUMNS = """
 			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
-			total_amount, staff_member_name, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
+			total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
 			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
 	public record OrderRow(String orderDate, int orderNo, String customerName, ReceiveType receiveType,
-						   Long placeId, String placeName, int totalAmount, String staffMemberName, int staffFreeAmount,
+						   Long placeId, String placeName, int totalAmount, int staffFreeAmount,
 						   PayMethod payMethod,
 						   PayMethod remainderMethod, Long couponId, int couponAmount,
 						   int freeAmount, String freeItemName,
@@ -59,18 +59,18 @@ public class OrderRepository {
 		KeyHolder keys = new GeneratedKeyHolder();
 		jdbc.sql("""
 						INSERT INTO orders (order_date, order_no, customer_name, receive_type, place_id, place_name,
-						                    total_amount, staff_member_name, staff_free_amount,
+						                    total_amount, staff_free_amount,
 						                    pay_method, remainder_method, coupon_id, coupon_amount,
 						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at)
 						VALUES (:date, :no, :name, :receive, :placeId, :placeName,
-						        :total, :staffName, :staffFree, :pay, :remainder, :couponId, :couponAmount,
+						        :total, :staffFree, :pay, :remainder, :couponId, :couponAmount,
 						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now)
 						""")
 				.param("date", row.orderDate()).param("no", row.orderNo())
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
 				.param("placeId", row.placeId()).param("placeName", row.placeName())
 				.param("total", row.totalAmount()).param("pay", row.payMethod().name())
-				.param("staffName", row.staffMemberName()).param("staffFree", row.staffFreeAmount())
+				.param("staffFree", row.staffFreeAmount())
 				.param("remainder", row.remainderMethod() == null ? null : row.remainderMethod().name())
 				.param("couponId", row.couponId()).param("couponAmount", row.couponAmount())
 				.param("freeAmount", row.freeAmount()).param("freeItemName", row.freeItemName())
@@ -244,7 +244,7 @@ public class OrderRepository {
 
 	private static OrderView withLines(OrderView o, List<LineView> lines) {
 		return new OrderView(o.id(), o.orderDate(), o.orderNo(), o.customerName(), o.receiveType(),
-				o.placeId(), o.placeName(), o.totalAmount(), o.staffMemberName(), o.staffFreeAmount(),
+				o.placeId(), o.placeName(), o.totalAmount(), o.staffFreeAmount(),
 				o.payMethod(), o.remainderMethod(),
 				o.couponId(), o.couponAmount(), o.freeAmount(), o.freeItemName(),
 				o.cashAmount(), o.transferAmount(), o.status(),
@@ -261,7 +261,7 @@ public class OrderRepository {
 				rs.getLong("id"), rs.getString("order_date"), rs.getInt("order_no"),
 				rs.getString("customer_name"), ReceiveType.valueOf(rs.getString("receive_type")),
 				placeIdOrNull, rs.getString("place_name"), rs.getInt("total_amount"),
-				rs.getString("staff_member_name"), rs.getInt("staff_free_amount"),
+				rs.getInt("staff_free_amount"),
 				PayMethod.valueOf(rs.getString("pay_method")),
 				remainder == null ? null : PayMethod.valueOf(remainder),
 				couponIdOrNull, rs.getInt("coupon_amount"), rs.getInt("free_amount"), rs.getString("free_item_name"),

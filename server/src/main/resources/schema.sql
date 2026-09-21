@@ -66,14 +66,6 @@ CREATE TABLE IF NOT EXISTS coupon_tx (
 );
 CREATE INDEX IF NOT EXISTS idx_coupon_tx_coupon ON coupon_tx(coupon_id);
 
--- 사역자 명단. 사역자 잔은 무료. 설정 화면에서 관리.
-CREATE TABLE IF NOT EXISTS staff_member (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT    NOT NULL,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    active     INTEGER NOT NULL DEFAULT 1
-);
-
 -- 단골 명단. 주문할 때마다 갱신되어 이름 선택 버튼의 후보가 된다.
 CREATE TABLE IF NOT EXISTS customer (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,8 +83,7 @@ CREATE TABLE IF NOT EXISTS orders (
     place_id        INTEGER REFERENCES delivery_place(id),
     place_name      TEXT,                      -- 주문 시점 장소명 스냅샷
     total_amount    INTEGER NOT NULL,          -- 사역자 무료를 뺀, 실제로 받을 금액
-    staff_member_name TEXT,                    -- 사역자 무료를 적용한 사역자 이름 (스냅샷)
-    staff_free_amount INTEGER NOT NULL DEFAULT 0, -- 사역자 무료로 뺀 금액
+    staff_free_amount INTEGER NOT NULL DEFAULT 0, -- 사역자 무료로 뺀 금액 (장바구니에서 잔마다 '사역자' 체크)
     pay_method      TEXT    NOT NULL,          -- TRANSFER | COUPON | CASH | NONE(전부 무료라 결제 없음)
     remainder_method TEXT,                     -- 쿠폰 잔액 부족 시 나머지 결제 수단 (CASH | TRANSFER)
     coupon_id       INTEGER REFERENCES coupon(id),

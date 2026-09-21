@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api } from '../shared/api'
-import { MemberAdmin } from './MemberAdmin'
 import { MenuAdmin } from './MenuAdmin'
 import { OptionAdmin } from './OptionAdmin'
 import { PlaceAdmin } from './PlaceAdmin'
 
-type Section = 'menu' | 'options' | 'places' | 'members'
+type Section = 'menu' | 'options' | 'places'
 
-/** 스태프 = 관리자. 메뉴·옵션·배달 장소·사역자 명단을 여기서 고친다. */
+/** 스태프 = 관리자. 메뉴·옵션·배달 장소를 여기서 고친다. */
 export function SettingsTab({ onToast }: { onToast: (msg: string) => void }) {
   const [section, setSection] = useState<Section>('menu')
   const [categories, setCategories] = useState<string[]>([])
@@ -23,12 +22,10 @@ export function SettingsTab({ onToast }: { onToast: (msg: string) => void }) {
         <button className={'btn' + (section === 'menu' ? ' selected' : '')} onClick={() => setSection('menu')}>메뉴</button>
         <button className={'btn' + (section === 'options' ? ' selected' : '')} onClick={() => setSection('options')}>옵션</button>
         <button className={'btn' + (section === 'places' ? ' selected' : '')} onClick={() => setSection('places')}>배달 장소</button>
-        <button className={'btn' + (section === 'members' ? ' selected' : '')} onClick={() => setSection('members')}>사역자</button>
       </div>
       {section === 'menu' && <MenuAdmin onToast={onToast} />}
       {section === 'options' && <OptionAdmin onToast={onToast} categories={categories} />}
       {section === 'places' && <PlaceAdmin onToast={onToast} />}
-      {section === 'members' && <MemberAdmin onToast={onToast} />}
     </div>
   )
 }

@@ -33,13 +33,6 @@ export async function createOrder(request: APIRequestContext, body: Record<strin
   return await r.json()
 }
 
-export async function addStaffMember(request: APIRequestContext, name: string) {
-  const token = await staffToken(request)
-  const r = await request.post('/api/staff/members', { headers: { 'X-Staff-Token': token }, data: { name, active: true } })
-  expect(r.ok(), await r.text()).toBeTruthy()
-  return await r.json()
-}
-
 export async function pendingOrders(request: APIRequestContext) {
   const token = await staffToken(request)
   const r = await request.get('/api/staff/orders?status=PENDING', { headers: { 'X-Staff-Token': token } })

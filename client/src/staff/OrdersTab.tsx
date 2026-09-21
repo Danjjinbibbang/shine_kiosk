@@ -134,7 +134,7 @@ function OrderCard({ order: o, busy, canSms, onSms, onDone, onReopen, onCancel, 
     <div className={'order-card' + (delivery ? ' delivery' : '') + (stale ? ' stale' : '')}>
       <div className="top">
         <span className="no">{orderLabel(o)}</span>
-        <span className="who">{o.customerName}{o.staffMemberName && <span className="badge-staff">사역자</span>}</span>
+        <span className="who">{o.customerName}{o.staffFreeAmount > 0 && <span className="badge-staff">사역자</span>}</span>
         <span className={'where' + (delivery ? '' : ' store')}>{delivery ? `🚶 ${o.placeName}` : '☕ 카페'}</span>
         <span className="muted" style={{ fontSize: 14 }}>{time}</span>
       </div>

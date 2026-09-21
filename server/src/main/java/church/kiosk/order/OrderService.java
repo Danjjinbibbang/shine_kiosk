@@ -3,8 +3,6 @@ package church.kiosk.order;
 import church.kiosk.coupon.Coupon;
 import church.kiosk.coupon.CouponService;
 import church.kiosk.customer.CustomerRepository;
-import church.kiosk.member.StaffMemberRepository;
-import church.kiosk.member.StaffMemberRepository.StaffMember;
 import church.kiosk.menu.MenuDtos.AdminOption;
 import church.kiosk.menu.MenuDtos.VariantDetail;
 import church.kiosk.menu.MenuOptionRepository;
@@ -40,20 +38,17 @@ public class OrderService {
 	private final PlaceRepository placeRepository;
 	private final CouponService couponService;
 	private final CustomerRepository customerRepository;
-	private final StaffMemberRepository staffMemberRepository;
 	private final KioskEventHandler events;
 
 	public OrderService(OrderRepository orderRepository, MenuRepository menuRepository,
 						MenuOptionRepository optionRepository, PlaceRepository placeRepository,
-						CouponService couponService, CustomerRepository customerRepository,
-						StaffMemberRepository staffMemberRepository, KioskEventHandler events) {
+						CouponService couponService, CustomerRepository customerRepository, KioskEventHandler events) {
 		this.orderRepository = orderRepository;
 		this.menuRepository = menuRepository;
 		this.optionRepository = optionRepository;
 		this.placeRepository = placeRepository;
 		this.couponService = couponService;
 		this.customerRepository = customerRepository;
-		this.staffMemberRepository = staffMemberRepository;
 		this.events = events;
 	}
 
@@ -96,7 +91,6 @@ public class OrderService {
 		PricedLines priced = price(req.lines());
 		Place place = resolvePlace(req.receiveType(), req.placeId());
 		String name = req.customerName().trim();
-		String staffName = resolveStaffMember(priced, req.staffMemberId());
 
 		if (priced.total() == 0 && req.payMethod() != PayMethod.NONE) {
 			throw new BusinessException("낼 금액이 없는 주문입니다. 결제 없이 접수해 주세요.");
@@ -136,7 +130,7 @@ public class OrderService {
 		String today = LocalDate.now().toString();
 		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
 				place == null ? null : place.id(), place == null ? null : place.name(),
-				priced.total(), staffName, priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
+				priced.total(), priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
 				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
 		long orderId = orderRepository.insert(row);
 		orderRepository.insertLines(orderId, priced.lines());
@@ -159,9 +153,6 @@ public class OrderService {
 		OrderView existing = requirePending(orderId);
 		PricedLines priced = price(req.lines());
 		Place place = resolvePlace(req.receiveType(), req.placeId());
-		if (priced.staffFreeAmount() > 0 && existing.staffMemberName() == null) {
-			throw new BusinessException("사역자 주문이 아니어서 사역자 무료를 넣을 수 없습니다.");
-		}
 
 		CouponUse use = new CouponUse(false, 0, null, 0, priced.total());
 		PayMethod remainderMethod = existing.remainderMethod();
@@ -185,7 +176,7 @@ public class OrderService {
 
 		OrderRow row = new OrderRow(existing.orderDate(), existing.orderNo(), req.customerName().trim(),
 				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
-				priced.total(), existing.staffMemberName(), priced.staffFreeAmount(),
+				priced.total(), priced.staffFreeAmount(),
 				existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
 				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
 		orderRepository.update(orderId, row);
@@ -290,19 +281,7 @@ public class OrderService {
 		return new PricedLines(lines, total, staffFree, max, maxName);
 	}
 
-	/** 사역자 무료 잔이 있으면 명단의 사역자여야 한다. 없으면 null. */
-	private String resolveStaffMember(PricedLines priced, Long staffMemberId) {
-		if (priced.staffFreeAmount() == 0 && priced.lines().stream().allMatch(l -> l.staffFreeQty() == 0)) {
-			return null;
-		}
-		if (staffMemberId == null) {
-			throw new BusinessException("사역자를 선택해 주세요.");
-		}
-		StaffMember member = staffMemberRepository.findById(staffMemberId)
-				.filter(StaffMember::active)
-				.orElseThrow(() -> new BusinessException("사역자 명단에 없는 이름입니다."));
-		return member.name();
-	}
+
 
 	private Place resolvePlace(ReceiveType receiveType, Long placeId) {
 		if (receiveType != ReceiveType.DELIVERY) {

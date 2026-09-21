@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api } from '../shared/api'
-import type { MenuOption, StaffMember } from '../shared/types'
+import type { MenuOption } from '../shared/types'
 import { won } from '../shared/types'
-import { lineKey, lineUnitPrice, type CartLine } from './KioskApp'
+import { lineKeyOf, lineUnitPrice, type CartLine } from './KioskApp'
 
 interface Props {
   cart: CartLine[]
   total: number
-  staffMember?: StaffMember
   onChange: (cart: CartLine[]) => void
-  onStaffMember: (m: StaffMember | undefined) => void
   onAddMore: () => void
   onNext: () => void
 }
@@ -18,128 +16,115 @@ export function lineName(l: { itemName: string; label: string | null }) {
   return l.label ? `${l.itemName} (${l.label})` : l.itemName
 }
 
-const keyOf = (l: CartLine) => lineKey(l.variantId, l.options.map((o) => o.id))
-
 /**
- * 수량 조절과 옵션(샷 추가/연하게). 옵션을 바꾸면 다른 줄이 되고,
- * 이미 같은 조합의 줄이 있으면 거기에 합쳐진다.
+ * 수량 조절과 잔 단위 커스텀(샷 추가 / 연하게 / 사역자).
+ * 칩을 누르면 그 줄에서 **한 잔**만 떨어져 나와 바뀐다 (2잔 중 1잔만 샷 추가 같은 경우).
+ * 같은 조합(메뉴+옵션+사역자)의 줄이 이미 있으면 거기에 합쳐진다.
  */
-export function CartStep({ cart, total, staffMember, onChange, onStaffMember, onAddMore, onNext }: Props) {
+export function CartStep({ cart, total, onChange, onAddMore, onNext }: Props) {
   const [options, setOptions] = useState<MenuOption[]>([])
-  const [members, setMembers] = useState<StaffMember[]>([])
-  const [pickingStaff, setPickingStaff] = useState(false)
 
   useEffect(() => {
     api.menuOptions().then(setOptions).catch(() => setOptions([]))
-    api.staffMembers().then(setMembers).catch(() => setMembers([]))
   }, [])
 
-  const staffFreeTotal = cart.reduce((s, l) => s + lineUnitPrice(l) * l.staffFreeQty, 0)
+  const staffFreeTotal = cart.reduce((s, l) => s + (l.staffFree ? lineUnitPrice(l) * l.qty : 0), 0)
 
   const setQty = (index: number, qty: number) => {
-    onChange(qty <= 0 ? cart.filter((_, i) => i !== index)
-      : cart.map((l, i) => (i === index ? { ...l, qty, staffFreeQty: Math.min(l.staffFreeQty, qty) } : l)))
+    onChange(qty <= 0 ? cart.filter((_, i) => i !== index) : cart.map((l, i) => (i === index ? { ...l, qty } : l)))
   }
 
-  const setStaffFree = (index: number, n: number) => {
-    onChange(cart.map((l, i) => (i === index ? { ...l, staffFreeQty: Math.max(0, Math.min(l.qty, n)) } : l)))
-  }
-
-  const toggleOption = (index: number, opt: MenuOption) => {
+  /** index 줄에서 한 잔을 떼어 transform 을 적용하고, 같은 조합 줄에 합치거나 새 줄로 넣는다. */
+  const changeOneCup = (index: number, transform: (cup: CartLine) => CartLine) => {
     const line = cart[index]
-    const has = line.options.some((o) => o.id === opt.id)
-    const nextOptions = has ? line.options.filter((o) => o.id !== opt.id) : [...line.options, opt]
-    const changed: CartLine = { ...line, options: nextOptions }
-    const mergeIdx = cart.findIndex((l, i) => i !== index && keyOf(l) === keyOf(changed))
-    if (mergeIdx >= 0) {
-      onChange(cart
-        .map((l, i) => (i === mergeIdx ? { ...l, qty: l.qty + line.qty, staffFreeQty: l.staffFreeQty + line.staffFreeQty } : l))
-        .filter((_, i) => i !== index))
-    } else {
-      onChange(cart.map((l, i) => (i === index ? changed : l)))
+    const changed = transform({ ...line, qty: 1 })
+    const rest = line.qty > 1 ? { ...line, qty: line.qty - 1 } : null
+    const next: CartLine[] = []
+    let merged = false
+    cart.forEach((l, i) => {
+      if (i === index) {
+        if (rest) next.push(rest)
+        return
+      }
+      if (!merged && lineKeyOf(l) === lineKeyOf(changed)) {
+        next.push({ ...l, qty: l.qty + 1 })
+        merged = true
+      } else {
+        next.push(l)
+      }
+    })
+    if (!merged) {
+      // 원래 줄 바로 뒤에 넣어서 눈에서 안 사라지게
+      const at = rest ? next.indexOf(rest) + 1 : Math.min(index, next.length)
+      next.splice(at, 0, changed)
     }
+    onChange(next)
   }
 
-  if (pickingStaff) {
-    return (
-      <div className="stack">
-        <div className="muted center">사역자 이름을 골라 주세요</div>
-        {members.length === 0 && <div className="empty">등록된 사역자가 없습니다. 스태프 화면 &gt; 설정에서 등록해 주세요.</div>}
-        <div className="name-grid">
-          {members.map((m) => (
-            <button key={m.id} className="btn" onClick={() => { onStaffMember(m); setPickingStaff(false) }}>{m.name}</button>
-          ))}
-        </div>
-        <button className="btn big" onClick={() => setPickingStaff(false)}>‹ 돌아가기</button>
-      </div>
-    )
-  }
+  const toggleOption = (index: number, opt: MenuOption) =>
+    changeOneCup(index, (cup) => ({
+      ...cup,
+      options: cup.options.some((o) => o.id === opt.id) ? cup.options.filter((o) => o.id !== opt.id) : [...cup.options, opt],
+    }))
+
+  const toggleStaffFree = (index: number) =>
+    changeOneCup(index, (cup) => ({ ...cup, staffFree: !cup.staffFree }))
 
   return (
     <div className="stack">
       {cart.length === 0 && <div className="empty">담긴 메뉴가 없습니다.</div>}
 
-      {members.length > 0 && cart.length > 0 && (
-        staffMember ? (
-          <div className="staff-bar">
-            <span className="grow"><b>{staffMember.name}</b> 사역자 주문 · 무료 {won(staffFreeTotal)}</span>
-            <button className="btn ghost" onClick={() => onStaffMember(undefined)}>해제</button>
-          </div>
-        ) : (
-          <button className="btn" onClick={() => setPickingStaff(true)}>🙋 사역자 주문이에요</button>
-        )
-      )}
-
       {cart.map((l, index) => {
         const applicable = options.filter((o) => o.category === l.category)
         return (
-          <div key={keyOf(l)} className="cart-line-wrap">
+          <div key={lineKeyOf(l)} className={'cart-line-wrap' + (l.staffFree ? ' staff-free' : '')}>
             <div className="cart-line">
               <div className="name">
                 {lineName(l)}
-                {l.options.length > 0 && <div className="line-options">{l.options.map((o) => o.name).join(' · ')}</div>}
+                {(l.options.length > 0 || l.staffFree) && (
+                  <div className="line-options">
+                    {[...l.options.map((o) => o.name), ...(l.staffFree ? ['사역자 무료'] : [])].join(' · ')}
+                  </div>
+                )}
               </div>
               <div className="qty">
                 <button className="btn" onClick={() => setQty(index, l.qty - 1)}>−</button>
                 <span className="n">{l.qty}</span>
                 <button className="btn" onClick={() => setQty(index, l.qty + 1)}>+</button>
               </div>
-              <div className="sum">{won(lineUnitPrice(l) * (l.qty - l.staffFreeQty))}</div>
+              <div className="sum">{l.staffFree ? '0원' : won(lineUnitPrice(l) * l.qty)}</div>
             </div>
-            {staffMember && (
-              <div className="staff-line">
-                <span className="muted">사역자 잔</span>
-                <button className="btn" onClick={() => setStaffFree(index, l.staffFreeQty - 1)} aria-label="사역자 잔 빼기">−</button>
-                <b>{l.staffFreeQty} / {l.qty}</b>
-                <button className="btn" onClick={() => setStaffFree(index, l.staffFreeQty + 1)} aria-label="사역자 잔 더하기">+</button>
-                {l.staffFreeQty === l.qty && <span className="muted">전부 무료</span>}
-              </div>
-            )}
-            {applicable.length > 0 && (
-              <div className="option-chips">
-                {applicable.map((o) => {
-                  const on = l.options.some((x) => x.id === o.id)
-                  return (
-                    <button key={o.id} className={'btn chip' + (on ? ' selected' : '')} onClick={() => toggleOption(index, o)}>
-                      {on ? '☑' : '☐'} {o.name}{o.price > 0 && <small> +{won(o.price)}</small>}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+            <div className="option-chips">
+              {applicable.map((o) => {
+                const on = l.options.some((x) => x.id === o.id)
+                return (
+                  <button key={o.id} className={'btn chip' + (on ? ' selected' : '')} onClick={() => toggleOption(index, o)}>
+                    {on ? '☑' : '☐'} {o.name}{o.price > 0 && <small> +{won(o.price)}</small>}
+                  </button>
+                )
+              })}
+              <button className={'btn chip staff' + (l.staffFree ? ' selected' : '')} onClick={() => toggleStaffFree(index)}>
+                {l.staffFree ? '☑' : '☐'} 사역자
+              </button>
+              {l.qty > 1 && <span className="muted chip-hint">한 잔씩 바뀝니다</span>}
+            </div>
           </div>
         )
       })}
 
+      {staffFreeTotal > 0 && (
+        <div className="staff-bar"><span className="grow">사역자 무료 <b>{won(staffFreeTotal)}</b></span></div>
+      )}
+
       <div className="total-box">
-        <span className="label">{staffMember ? '내실 금액' : '총 금액'}</span>
+        <span className="label">{staffFreeTotal > 0 ? '내실 금액' : '총 금액'}</span>
         <span className="amount">{won(total)}</span>
       </div>
 
       <div className="kiosk-foot">
         <button className="btn big" onClick={onAddMore}>더 담기</button>
         <button className="btn big primary" disabled={cart.length === 0} onClick={onNext}>
-          {staffMember && total === 0 ? '무료로 주문하기 ›' : '주문하기 ›'}
+          {cart.length > 0 && total === 0 ? '무료로 주문하기 ›' : '주문하기 ›'}
         </button>
       </div>
     </div>

@@ -31,13 +31,6 @@ export interface AdminOption extends MenuOption {
   available: boolean
 }
 
-/** 사역자 명단. 사역자 잔은 무료. */
-export interface StaffMember {
-  id: number
-  name: string
-  active: boolean
-}
-
 export interface Place {
   id: number
   floor: number
@@ -127,8 +120,6 @@ export interface CreateOrderRequest {
   receiveType: ReceiveType
   placeId?: number | null
   payMethod: PayMethod
-  /** 사역자 무료 잔이 있으면 필수 */
-  staffMemberId?: number | null
   couponId?: number | null
   useFreeDrink?: boolean
   remainderMethod?: PayMethod | null
@@ -173,7 +164,6 @@ export interface Order {
   placeName: string | null
   /** 사역자 무료를 뺀 실제로 받을 금액 */
   totalAmount: number
-  staffMemberName: string | null
   staffFreeAmount: number
   payMethod: PayMethod
   remainderMethod: PayMethod | null

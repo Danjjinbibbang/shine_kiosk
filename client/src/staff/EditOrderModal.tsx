@@ -15,7 +15,8 @@ interface Line {
 }
 
 const unitPrice = (l: Line) => l.price + l.options.reduce((s, o) => s + o.price, 0)
-const keyOf = (variantId: number, optionIds: number[]) => variantId + ':' + [...optionIds].sort((a, b) => a - b).join(',')
+const keyOf = (variantId: number, optionIds: number[], staffFree = false) =>
+  variantId + ':' + [...optionIds].sort((a, b) => a - b).join(',') + (staffFree ? ':staff' : '')
 
 interface Props {
   order: Order
@@ -61,15 +62,15 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
 
   const total = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * (l.qty - l.staffFreeQty), 0), [lines])
   const staffFree = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * l.staffFreeQty, 0), [lines])
-  const isStaffOrder = order.staffMemberName !== null
 
-  const setStaffFree = (index: number, n: number) =>
-    setLines((ls) => ls.map((l, i) => i === index ? { ...l, staffFreeQty: Math.max(0, Math.min(l.qty, n)) } : l))
-  const keyOfLine = (l: Line) => keyOf(l.variantId, l.options.map((o) => o.id))
+  /** 사역자 칩: 줄 전체를 무료/유료로. 잔을 나누고 싶으면 수량을 줄이고 같은 메뉴를 다시 추가한다. */
+  const toggleStaffFree = (index: number) =>
+    setLines((ls) => ls.map((l, i) => i === index ? { ...l, staffFreeQty: l.staffFreeQty > 0 ? 0 : l.qty } : l))
+  const keyOfLine = (l: Line) => keyOf(l.variantId, l.options.map((o) => o.id), l.staffFreeQty > 0)
 
   const setQty = (index: number, qty: number) =>
     setLines((ls) => qty <= 0 ? ls.filter((_, i) => i !== index)
-      : ls.map((l, i) => i === index ? { ...l, qty, staffFreeQty: Math.min(l.staffFreeQty, qty) } : l))
+      : ls.map((l, i) => i === index ? { ...l, qty, staffFreeQty: l.staffFreeQty > 0 ? qty : 0 } : l))
 
   const addVariant = (item: MenuItem, variantId: number, label: string | null, price: number) => {
     setLines((ls) => {
@@ -86,7 +87,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
       const changed: Line = { ...line, options: has ? line.options.filter((o) => o.id !== opt.id) : [...line.options, opt] }
       const mergeIdx = ls.findIndex((l, i) => i !== index && keyOfLine(l) === keyOfLine(changed))
       if (mergeIdx >= 0) {
-        return ls.map((l, i) => i === mergeIdx ? { ...l, qty: l.qty + line.qty, staffFreeQty: l.staffFreeQty + line.staffFreeQty } : l).filter((_, i) => i !== index)
+        return ls.map((l, i) => i === mergeIdx ? { ...l, qty: l.qty + line.qty, staffFreeQty: l.staffFreeQty > 0 ? l.qty + line.qty : 0 } : l).filter((_, i) => i !== index)
       }
       return ls.map((l, i) => i === index ? changed : l)
     })
@@ -164,26 +165,19 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
                       <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(index, l.qty + 1)}>+</button>
                     </div>
                   </div>
-                  {isStaffOrder && (
-                    <div className="row" style={{ padding: '0 8px', fontSize: 15 }}>
-                      <span className="muted">사역자 잔</span>
-                      <button className="btn" style={{ minHeight: 36, minWidth: 36, padding: 0 }} onClick={() => setStaffFree(index, l.staffFreeQty - 1)}>−</button>
-                      <b>{l.staffFreeQty} / {l.qty}</b>
-                      <button className="btn" style={{ minHeight: 36, minWidth: 36, padding: 0 }} onClick={() => setStaffFree(index, l.staffFreeQty + 1)}>+</button>
-                    </div>
-                  )}
-                  {applicable.length > 0 && (
-                    <div className="chips" style={{ padding: '0 8px' }}>
-                      {applicable.map((o) => {
-                        const on = l.options.some((x) => x.id === o.id)
-                        return (
-                          <button key={o.id} className={'btn' + (on ? ' selected' : '')} onClick={() => toggleOption(index, o)}>
-                            {on ? '☑' : '☐'} {o.name}{o.price > 0 && ` +${won(o.price)}`}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <div className="chips" style={{ padding: '0 8px' }}>
+                    {applicable.map((o) => {
+                      const on = l.options.some((x) => x.id === o.id)
+                      return (
+                        <button key={o.id} className={'btn' + (on ? ' selected' : '')} onClick={() => toggleOption(index, o)}>
+                          {on ? '☑' : '☐'} {o.name}{o.price > 0 && ` +${won(o.price)}`}
+                        </button>
+                      )
+                    })}
+                    <button className={'btn' + (l.staffFreeQty > 0 ? ' selected' : '')} onClick={() => toggleStaffFree(index)}>
+                      {l.staffFreeQty > 0 ? '☑' : '☐'} 사역자
+                    </button>
+                  </div>
                 </div>
               )
             })}

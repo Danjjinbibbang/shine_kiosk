@@ -400,45 +400,23 @@ test.describe('옵션', () => {
 })
 
 test.describe('사역자', () => {
-  test('설정 > 사역자 등록/제외/삭제, 카드에 사역자 표시와 잔 수 수정', async ({ page, request }) => {
-    const member = uniq('사역')
+  test('카드에 사역자 배지와 잔 수, 수정 모달의 사역자 칩', async ({ page, request }) => {
+    const name = uniq('사역')
+    await createOrder(request, { customerName: name, payMethod: 'NONE', lines: [{ variantId: 1001, quantity: 3, staffFreeQty: 3 }] })
     await staffLogin(page)
-    await page.getByRole('button', { name: '설정' }).click()
-    await page.getByRole('button', { name: '사역자', exact: true }).click()
-    await page.getByPlaceholder('사역자 이름').fill(member)
-    await page.getByRole('button', { name: '등록' }).click()
-    const card = page.locator('.admin-item').filter({ hasText: member })
-    await expect(card).toBeVisible()
-    const members = async () => ((await (await request.get('/api/staff-members')).json()) as Array<{ id: number; name: string }>)
-    const m = (await members()).find((x) => x.name === member)!
-    expect(m).toBeTruthy()
-
-    // 이 사역자로 주문 (3잔 중 3잔 무료) → 카드 표시
-    await createOrder(request, { customerName: member, payMethod: 'NONE', staffMemberId: m.id, lines: [{ variantId: 1001, quantity: 3, staffFreeQty: 3 }] })
-    await page.getByRole('button', { name: '만들 것' }).click()
-    const oc = orderCard(page, member)
+    const oc = orderCard(page, name)
     await expect(oc.locator('.badge-staff')).toHaveText('사역자')
     await expect(oc.locator('.lines')).toContainText('(사역자 3)')
     await expect(oc.locator('.pay')).toHaveText('사역자 무료 3,000원')
 
-    // 수정: 사역자 잔 2 로 → 현금 1,000
+    // 수정: 사역자 칩 해제 → 3잔 현금
     await oc.getByRole('button', { name: '수정' }).click()
     const modal = page.locator('.modal')
-    await modal.getByRole('button', { name: '−' }).nth(1).click() // 첫 번째 − 는 수량, 두 번째는 사역자 잔
-    await expect(modal.locator('.total-box .amount')).toHaveText('1,000원')
+    await modal.getByRole('button', { name: /사역자/ }).click()
+    await expect(modal.locator('.total-box .amount')).toHaveText('3,000원')
     await modal.getByRole('button', { name: '저장' }).click()
-    await expect(oc.locator('.lines')).toContainText('(사역자 2)')
-    await expect(oc.locator('.pay')).toHaveText('3,000원 = 사역자 무료 2,000원 + 현금 1,000원')
-
-    // 제외 → 키오스크 명단에서 빠짐 → 삭제
-    await page.getByRole('button', { name: '설정' }).click()
-    await page.getByRole('button', { name: '사역자', exact: true }).click()
-    await card.getByRole('button', { name: '사역중' }).click()
-    await expect(card.getByRole('button', { name: '제외' })).toBeVisible()
-    expect((await members()).some((x) => x.name === member)).toBe(false)
-    page.once('dialog', (d) => d.accept())
-    await card.getByRole('button', { name: '삭제' }).click()
-    await expect(card).toHaveCount(0)
+    await expect(oc.locator('.badge-staff')).toHaveCount(0)
+    await expect(oc.locator('.pay')).toHaveText('현금 3,000원')
   })
 })
 

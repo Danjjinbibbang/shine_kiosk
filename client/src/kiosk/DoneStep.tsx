@@ -33,7 +33,7 @@ export function DoneStep({ order, onReset }: { order: Order; onReset: () => void
       <div className="title">주문이 접수되었습니다 ✓</div>
       <div className="amount">{order.customerName}님</div>
       <div className="sub" style={{ fontSize: 30, color: 'var(--ink)' }}>
-        {order.payMethod === 'NONE' ? '사역자 무료' : `${won(order.totalAmount)} · ${PAY_LABEL[order.payMethod]}`}
+        {order.payMethod === 'NONE' ? '사역자 무료 · 결제 없음' : `${won(order.totalAmount)} · ${PAY_LABEL[order.payMethod]}`}
         {order.payMethod !== 'NONE' && order.staffFreeAmount > 0 && <small className="muted"> (사역자 무료 {won(order.staffFreeAmount)} 제외)</small>}
       </div>
       <div className="sub">{where}</div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../shared/api'
-import type { Coupon, CouponPreview, CreateOrderRequest, MenuOption, Order, PayMethod, Place, ReceiveType, StaffMember } from '../shared/types'
+import type { Coupon, CouponPreview, CreateOrderRequest, MenuOption, Order, PayMethod, Place, ReceiveType } from '../shared/types'
 import { MenuStep } from './MenuStep'
 import { CartStep } from './CartStep'
 import { PaymentStep, PlaceStep, ReceiveStep } from './ChoiceSteps'
@@ -20,8 +20,8 @@ export interface CartLine {
   qty: number
   /** 붙인 옵션. 같은 메뉴라도 옵션이 다르면 다른 줄 */
   options: MenuOption[]
-  /** 이 중 사역자 무료 잔 수 (사역자 주문일 때만) */
-  staffFreeQty: number
+  /** 사역자 무료 잔. 한 줄은 전부 무료거나 전부 유료 (다르면 다른 줄) */
+  staffFree: boolean
 }
 
 /** 옵션 가격까지 더한 한 잔 값 */
@@ -29,9 +29,13 @@ export function lineUnitPrice(l: CartLine): number {
   return l.price + l.options.reduce((s, o) => s + o.price, 0)
 }
 
-/** 같은 줄인지 판단하는 키: 메뉴 + 옵션 조합 */
-export function lineKey(variantId: number, optionIds: number[]): string {
-  return variantId + ':' + [...optionIds].sort((a, b) => a - b).join(',')
+/** 같은 줄인지 판단하는 키: 메뉴 + 옵션 조합 + 사역자 여부 */
+export function lineKey(variantId: number, optionIds: number[], staffFree = false): string {
+  return variantId + ':' + [...optionIds].sort((a, b) => a - b).join(',') + (staffFree ? ':staff' : '')
+}
+
+export function lineKeyOf(l: CartLine): string {
+  return lineKey(l.variantId, l.options.map((o) => o.id), l.staffFree)
 }
 
 export interface Draft {
@@ -44,8 +48,6 @@ export interface Draft {
   remainderMethod?: 'CASH' | 'TRANSFER'
   memo?: string
   customerName?: string
-  /** 사역자 무료를 적용한 사역자. 주문자 이름이 된다 */
-  staffMember?: StaffMember
 }
 
 const EMPTY: Draft = { cart: [] }
@@ -73,9 +75,9 @@ export function KioskApp() {
   const [submitting, setSubmitting] = useState(false)
 
   // 사역자 무료 잔을 뺀, 실제로 낼 금액
-  const total = useMemo(() => draft.cart.reduce((s, l) => s + lineUnitPrice(l) * (l.qty - l.staffFreeQty), 0), [draft.cart])
+  const total = useMemo(() => draft.cart.reduce((s, l) => s + (l.staffFree ? 0 : lineUnitPrice(l) * l.qty), 0), [draft.cart])
   const lines = useMemo(() => draft.cart.map((l) => ({
-    variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id), staffFreeQty: l.staffFreeQty,
+    variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id), staffFreeQty: l.staffFree ? l.qty : 0,
   })), [draft.cart])
 
   const reset = useCallback(() => {
@@ -128,7 +130,6 @@ export function KioskApp() {
       receiveType: d.receiveType,
       placeId: d.place?.id ?? null,
       payMethod: d.payMethod,
-      staffMemberId: d.staffMember?.id ?? null,
       couponId: d.coupon?.id ?? null,
       useFreeDrink: d.preview?.useFreeDrink ?? false,
       remainderMethod: d.remainderMethod ?? null,
@@ -154,14 +155,20 @@ export function KioskApp() {
     go(method === 'TRANSFER' ? 'transfer' : method === 'COUPON' ? 'coupon' : 'cash')
   }
 
-  // 결제가 끝난 뒤: 사역자 주문이면 이름을 이미 아니까 바로 접수
-  const afterPaid = (extra: Partial<Draft> = {}) => {
-    if (draft.staffMember) {
-      void submit(draft.staffMember.name, extra)
+  // 받는 방법까지 정해진 뒤: 낼 돈이 없으면(전부 사역자 무료) 결제 없이 이름만 받는다
+  const afterReceive = (extra: Partial<Draft>) => {
+    if (total === 0) {
+      update({ ...extra, payMethod: 'NONE', coupon: undefined, preview: undefined, remainderMethod: undefined, memo: undefined })
+      go('name')
     } else {
       update(extra)
-      go('name')
+      go('payment')
     }
+  }
+
+  const afterPaid = (extra: Partial<Draft> = {}) => {
+    update(extra)
+    go('name')
   }
 
   const showBack = step !== 'menu' && step !== 'done' && history.length > 0
@@ -187,30 +194,23 @@ export function KioskApp() {
             onNext={() => go('cart')} />
         )}
         {step === 'cart' && (
-          <CartStep cart={draft.cart} total={total} staffMember={draft.staffMember}
+          <CartStep cart={draft.cart} total={total}
             onChange={(cart) => update({ cart })}
-            onStaffMember={(m) => update({
-              staffMember: m,
-              // 사역자를 고르면 일단 전부 사역자 잔으로, 해제하면 0 으로
-              cart: draft.cart.map((l) => ({ ...l, staffFreeQty: m ? l.qty : 0 })),
-            })}
             onAddMore={back}
             onNext={() => go('receive')} />
         )}
         {step === 'receive' && (
           <ReceiveStep onSelect={(t) => {
-            update({ receiveType: t, place: t === 'STORE' ? undefined : draft.place })
-            if (t === 'DELIVERY') go('place')
-            else if (total === 0 && draft.staffMember) void submit(draft.staffMember.name, { receiveType: t, payMethod: 'NONE' })
-            else go('payment')
+            if (t === 'DELIVERY') {
+              update({ receiveType: t })
+              go('place')
+            } else {
+              afterReceive({ receiveType: t, place: undefined })
+            }
           }} />
         )}
         {step === 'place' && (
-          <PlaceStep onSelect={(p) => {
-            update({ place: p })
-            if (total === 0 && draft.staffMember) void submit(draft.staffMember.name, { place: p, payMethod: 'NONE' })
-            else go('payment')
-          }} />
+          <PlaceStep onSelect={(p) => afterReceive({ place: p })} />
         )}
         {step === 'payment' && (
           <PaymentStep total={total} onSelect={afterPayment} />
