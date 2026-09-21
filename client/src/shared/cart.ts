@@ -104,5 +104,5 @@ export function addPlainCup(cart: CartLine[], cup: Omit<CartLine, 'qty' | 'optio
 
 /** 이 줄에 이미 같은 그룹의 다른 옵션이 있어서 못 고르는지 */
 export function blockedByGroup(opt: MenuOption, selected: MenuOption[]): boolean {
-  return opt.group !== null && selected.some((o) => o.id !== opt.id && o.group === opt.group)
+  return opt.group != null && selected.some((o) => o.id !== opt.id && o.group === opt.group)
 }

@@ -41,9 +41,9 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
       const optionOf = new Map(opts.map((o) => [o.id, o]))
       const converted: CartLine[] = []
       for (const l of order.lines) {
-        if (l.variantId === null) continue
+        if (l.variantId == null) continue
         const v = variantOf.get(l.variantId)
-        const options = l.options.map((o) => (o.optionId !== null && optionOf.get(o.optionId))
+        const options = l.options.map((o) => (o.optionId != null && optionOf.get(o.optionId))
           || { id: o.optionId ?? -1, name: o.name, price: o.price, category: '', group: null })
         const base = {
           variantId: l.variantId,
@@ -187,7 +187,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
           <span className="label" style={{ fontSize: 18 }}>받을 금액{staffFree > 0 && <small className="muted"> (사역자 무료 {won(staffFree)} 제외)</small>}</span>
           <span className="amount" style={{ fontSize: 28 }}>{won(total)}</span>
         </div>
-        {order.couponId !== null && (
+        {order.couponId != null && (
           <div className="muted" style={{ fontSize: 14 }}>쿠폰 주문입니다. 저장하면 새 합계 기준으로 쿠폰 차감을 다시 계산합니다.</div>
         )}
         {(order.settledCash > 0 || order.settledTransfer > 0) && (

@@ -442,6 +442,7 @@ test.describe('사역자', () => {
     await expect(oc.locator('.badge-staff')).toHaveCount(0)
     await expect(oc.locator('.pay')).toHaveText('현금 3,000원')
     await expect(oc.locator('.settle')).toContainText('현금 3,000원 더 받기')   // 결제 없음이던 주문 → 받을 돈
+    await expect(oc.getByRole('button', { name: '받았어요' })).toBeVisible()
   })
 })
 
@@ -507,9 +508,10 @@ test.describe('수정과 정산', () => {
     await expect(card.locator('.badge-edited')).toContainText('수정됨')
     await expect(card.locator('.edited')).toContainText('이전: 아메리카노 ICE(샷 추가) ×2 · 3,000원')
     await expect(card.locator('.pay')).toHaveText('현금 2,500원')
-    await expect(card.locator('.settle')).toContainText('현금 500원 돌려주기')
+    await expect(card.locator('.settle')).toContainText('500원 돌려주기')
+    await expect(card.getByRole('button', { name: '쿠폰에 넣기' })).toHaveCount(0)   // 현금 주문
 
-    await card.getByRole('button', { name: '정산했어요' }).click()
+    await card.getByRole('button', { name: '현금으로 줬어요' }).click()
     await expect(card.locator('.settle')).toHaveCount(0)
     await expect(card.locator('.badge-edited')).toBeVisible()   // 수정 표시는 남는다
     const o = await orderOf(request, name)
@@ -526,11 +528,29 @@ test.describe('수정과 정산', () => {
     await modal.locator('.chips').last().getByRole('button', { name: /^아이스크림 컵/ }).click()
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(card.locator('.settle')).toContainText('현금 3,000원 더 받기')
+    await expect(card.getByRole('button', { name: '받았어요' })).toBeVisible()
 
     let message = ''
     page.once('dialog', (d) => { message = d.message(); d.dismiss() })
     await card.getByRole('button', { name: '취소' }).click()
-    expect(message).toContain('받은 현금 1,000원을 돌려주세요')
+    expect(message).toContain('받은 1,000원을 현금으로 돌려주세요')
     await expect(card).toBeVisible()
+  })
+
+  test('쿠폰 주문의 돌려줄 돈은 쿠폰 잔액에 넣을 수 있다', async ({ page, request }) => {
+    const name = uniq('쿠폰정산')
+    const coupon = await registerCoupon(request, name, 1500)
+    await createOrder(request, { customerName: name, payMethod: 'COUPON', couponId: coupon.id, remainderMethod: 'CASH', lines: [{ variantId: 3002, quantity: 1 }] }) // 쿠폰 1,500 + 현금 1,500
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await card.getByRole('button', { name: '수정' }).click()
+    const modal = page.locator('.modal')
+    await modal.locator('.chips').last().getByRole('button', { name: /^아메리카노 ICE/ }).click()
+    await modal.locator('.cart-line-wrap').first().getByRole('button', { name: '−' }).click()   // 컵 빼고 아메리카노만
+    await modal.getByRole('button', { name: '저장' }).click()
+    await expect(card.locator('.settle')).toContainText('1,500원 돌려주기')
+    await card.getByRole('button', { name: '쿠폰에 넣기' }).click()
+    await expect(card.locator('.settle')).toHaveCount(0)
+    expect((await lookupCoupon(request, name)).coupon.balance).toBe(2000)   // 500 남았던 것 + 1,500
   })
 })

@@ -24,7 +24,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
       if (!alive) return
       setOrders(list)
       // 쿠폰 주문은 잔액 문자를 위해 쿠폰(번호·잔액)을 미리 받아 둔다. 완료 탭은 시점상 값이 바뀌었을 수 있어 매번 새로 받는다.
-      const ids = [...new Set(list.filter((o) => o.couponId !== null).map((o) => o.couponId!))]
+      const ids = [...new Set(list.filter((o) => o.couponId != null).map((o) => o.couponId!))]
       const found: Record<number, Coupon> = {}
       await Promise.all(ids.map(async (id) => {
         try { found[id] = await api.getCoupon(id) } catch { /* 삭제된 쿠폰 등 */ }
@@ -36,7 +36,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
 
   /** 문자 앱을 열 수 있으면 열고 true. 번호 없으면 false. */
   const sendBalanceSms = (o: Order): boolean => {
-    const coupon = o.couponId !== null ? coupons[o.couponId] : undefined
+    const coupon = o.couponId != null ? coupons[o.couponId] : undefined
     if (!coupon?.phone) return false
     openSms(coupon.phone, couponBalanceMessage(o, coupon))
     return true
@@ -64,20 +64,20 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
     <>
       {orders.map((o) => (
         <OrderCard key={o.id} order={o} busy={busyId === o.id}
-          onSettle={() => run(o.id, () => api.settleOrder(o.id), '정산 표시했습니다')}
-          canSms={o.couponId !== null && !!coupons[o.couponId]?.phone}
+          onSettle={(toCoupon) => run(o.id, () => api.settleOrder(o.id, toCoupon), toCoupon ? '쿠폰 잔액에 넣었습니다' : '정산 표시했습니다')}
+          canSms={o.couponId != null && !!coupons[o.couponId]?.phone}
           onSms={() => { if (!sendBalanceSms(o)) onToast('쿠폰에 전화번호가 없어 문자를 못 보냅니다') }}
           onDone={() => {
             // 문자 앱은 탭 직후(사용자 동작 안)에 열어야 하므로 서버 호출보다 먼저
-            const sent = o.couponId !== null ? sendBalanceSms(o) : false
+            const sent = o.couponId != null ? sendBalanceSms(o) : false
             void run(o.id, () => api.doneOrder(o.id),
-              `${orderLabel(o)} ${o.customerName}님 완료` + (o.couponId !== null && !sent ? ' (번호 없어 문자 생략)' : ''))
+              `${orderLabel(o)} ${o.customerName}님 완료` + (o.couponId != null && !sent ? ' (번호 없어 문자 생략)' : ''))
           }}
           onReopen={() => run(o.id, () => api.reopenOrder(o.id), `${orderLabel(o)} 다시 만들 것으로 이동`)}
           onCancel={() => {
-            const refund = [o.settledCash > 0 ? `현금 ${won(o.settledCash)}` : '', o.settledTransfer > 0 ? `계좌로 ${won(o.settledTransfer)}` : ''].filter(Boolean).join(', ')
+            const paid = o.settledCash + o.settledTransfer
             if (window.confirm(`${orderLabel(o)} ${o.customerName}님 주문을 취소할까요?`
-              + (refund ? `\n받은 ${refund}을 돌려주세요.` : '')
+              + (paid > 0 ? `\n받은 ${won(paid)}을 현금으로 돌려주세요.` : '')
               + (o.couponId ? '\n쿠폰 차감액(무료 1잔 포함)은 자동으로 되돌려집니다.' : ''))) {
               void run(o.id, () => api.cancelOrder(o.id), `${orderLabel(o)} 취소됨`)
             }
@@ -95,7 +95,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
 interface CardProps {
   order: Order
   busy: boolean
-  onSettle: () => void
+  onSettle: (toCoupon: boolean) => void
   canSms: boolean
   onSms: () => void
   onDone: () => void
@@ -131,23 +131,24 @@ function orderLabel(o: Order): string {
   return `${Number(m)}/${Number(d)} #${o.orderNo}`
 }
 
-/** 수정 뒤 실제 받은 돈과 현재 금액의 차이. "현금 500원 돌려주기" / "현금 500원 더 받기" */
-function settlementNotes(o: Order): string[] {
-  const notes: string[] = []
+/**
+ * 수정 뒤 실제 받은 돈과 현재 금액의 차이.
+ * 돌려줄 돈은 원래 수단이 뭐였든 현금(또는 쿠폰 잔액)으로 → 합쳐서 하나. 더 받을 돈은 수단별로.
+ */
+function settlement(o: Order): { refund: number; extra: string[] } {
   const cash = o.cashAmount - o.settledCash
   const transfer = o.transferAmount - o.settledTransfer
-  if (cash < 0) notes.push(`현금 ${won(-cash)} 돌려주기`)
-  if (cash > 0) notes.push(`현금 ${won(cash)} 더 받기`)
-  if (transfer < 0) notes.push(`계좌로 ${won(-transfer)} 돌려주기`)
-  if (transfer > 0) notes.push(`계좌이체 ${won(transfer)} 더 받기`)
-  return notes
+  const extra: string[] = []
+  if (cash > 0) extra.push(`현금 ${won(cash)} 더 받기`)
+  if (transfer > 0) extra.push(`계좌이체 ${won(transfer)} 더 받기`)
+  return { refund: (cash < 0 ? -cash : 0) + (transfer < 0 ? -transfer : 0), extra }
 }
 
 function OrderCard({ order: o, busy, onSettle, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
   const delivery = o.receiveType === 'DELIVERY'
   const time = o.createdAt.slice(11, 16)
   const stale = o.orderDate !== localToday()
-  const settlement = o.status === 'CANCELED' ? [] : settlementNotes(o)
+  const { refund, extra } = o.status === 'CANCELED' ? { refund: 0, extra: [] } : settlement(o)
   return (
     <div className={'order-card' + (delivery ? ' delivery' : '') + (stale ? ' stale' : '')}>
       <div className="top">
@@ -174,10 +175,17 @@ function OrderCard({ order: o, busy, onSettle, canSms, onSms, onDone, onReopen, 
           {o.editNote && <span className="muted"> 이전: {o.editNote}</span>}
         </div>
       )}
-      {settlement.length > 0 && (
+      {refund > 0 && (
         <div className="settle">
-          <span className="grow">💸 {settlement.join(' · ')}</span>
-          <button className="btn" disabled={busy} onClick={onSettle}>정산했어요</button>
+          <span className="grow">💸 {won(refund)} 돌려주기</span>
+          <button className="btn" disabled={busy} onClick={() => onSettle(false)}>현금으로 줬어요</button>
+          {o.couponId != null && <button className="btn" disabled={busy} onClick={() => onSettle(true)}>쿠폰에 넣기</button>}
+        </div>
+      )}
+      {refund === 0 && extra.length > 0 && (
+        <div className="settle">
+          <span className="grow">💰 {extra.join(' · ')}</span>
+          <button className="btn" disabled={busy} onClick={() => onSettle(false)}>받았어요</button>
         </div>
       )}
       <div className="actions">
@@ -190,7 +198,7 @@ function OrderCard({ order: o, busy, onSettle, canSms, onSms, onDone, onReopen, 
         ) : (
           <>
             <button className="btn" disabled={busy} onClick={onReopen}>↩ 되돌리기</button>
-            {o.couponId !== null && (
+            {o.couponId != null && (
               <button className="btn" disabled={busy || !canSms} onClick={onSms} title={canSms ? '' : '쿠폰에 전화번호가 없음'}>📩 잔액 문자</button>
             )}
             <button className="btn danger" disabled={busy} onClick={onCancel}>취소</button>

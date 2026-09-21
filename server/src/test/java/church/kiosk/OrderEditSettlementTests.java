@@ -113,6 +113,34 @@ class OrderEditSettlementTests extends ApiTestSupport {
 	}
 
 	@Test
+	@DisplayName("돌려줄 돈을 쿠폰에 넣기: 쿠폰 주문이고 돌려줄 돈이 있을 때만")
+	void refundToCoupon() throws Exception {
+		// 잔액 1,500 + 현금 1,500 → 1,000원짜리로: 쿠폰이 1,000 내고 현금 1,500 돌려줄 것
+		long coupon = registerCoupon("김철수", 1500);
+		Map<String, Object> body = new HashMap<>(cashOrder("김철수", line(ICECREAM_CUP, 1)));
+		body.put("payMethod", "COUPON");
+		body.put("couponId", coupon);
+		body.put("remainderMethod", "CASH");
+		long id = id(createOrder(body));
+		edit(id, line(AMERICANO_ICE, 1));
+		assertThat(balanceOf("김철수")).isEqualTo(500);
+
+		Response r = staffPost("/api/staff/orders/" + id + "/settle", Map.of("toCoupon", true));
+		assertThat(r.status()).as(r.body()).isEqualTo(200);
+		assertThat(balanceOf("김철수")).as("돌려줄 1,500 이 잔액으로").isEqualTo(2000);
+		Response after = staffGet("/api/staff/orders");
+		assertThat(after.<List<Integer>>read("$[?(@.id==" + id + ")].settledCash")).containsExactly(0);
+		// 두 번 누르면 돌려줄 게 없다
+		assertThat(staffPost("/api/staff/orders/" + id + "/settle", Map.of("toCoupon", true)).message()).contains("돌려줄 금액이 없");
+
+		// 현금 주문은 쿠폰에 못 넣는다 (누구 쿠폰인지 모름)
+		long cash = id(createOrder(cashOrder("손님", line(ICECREAM_CUP, 1))));
+		edit(cash, line(AMERICANO_ICE, 1));
+		assertThat(staffPost("/api/staff/orders/" + cash + "/settle", Map.of("toCoupon", true)).message()).contains("쿠폰으로 결제한 주문이 아니");
+		assertThat(staffPost("/api/staff/orders/" + cash + "/settle", Map.of("toCoupon", false)).status()).isEqualTo(200);
+	}
+
+	@Test
 	@DisplayName("전부 사역자(결제 없음)였던 주문에 유료 잔이 생기면 현금으로 더 받을 돈")
 	void noneToCash() throws Exception {
 		Map<String, Object> body = new HashMap<>(cashOrder("손님", Map.of("variantId", AMERICANO_ICE, "quantity", 1, "staffFreeQty", 1)));

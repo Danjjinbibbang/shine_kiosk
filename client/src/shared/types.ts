@@ -1,4 +1,6 @@
 // 서버 DTO 와 1:1 로 맞춘 타입. 서버 쪽 OrderDtos / MenuDtos 를 바꾸면 여기도 같이 고친다.
+// 주의: 서버는 null 인 필드를 JSON 에서 아예 뺀다 (non_null). 그래서 `x | null` 필드는 실제로 undefined 로 올 수 있으니
+// 비교는 항상 `== null` / `!= null` 로 한다.
 
 export type ReceiveType = 'STORE' | 'DELIVERY'
 /** NONE = 사역자 무료로 낼 금액이 0 이라 결제 없음 */

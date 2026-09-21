@@ -48,10 +48,12 @@ public class StaffOrderController {
 		orderService.complete(id);
 	}
 
-	/** 수정으로 생긴 차액(돌려줄 돈/더 받을 돈)을 처리했다는 표시. */
+	public record SettleRequest(Boolean toCoupon) {}
+
+	/** 수정으로 생긴 차액(돌려줄 돈/더 받을 돈)을 처리했다는 표시. toCoupon 이면 돌려줄 돈을 쿠폰 잔액에 넣는다. */
 	@PostMapping("/{id}/settle")
-	public void settle(@PathVariable long id) {
-		orderService.settle(id);
+	public void settle(@PathVariable long id, @RequestBody(required = false) SettleRequest request) {
+		orderService.settle(id, request != null && Boolean.TRUE.equals(request.toCoupon()));
 	}
 
 	@PostMapping("/{id}/reopen")

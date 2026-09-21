@@ -202,10 +202,28 @@ public class OrderService {
 		return lines + " · " + String.format("%,d", o.totalAmount()) + "원";
 	}
 
-	/** 스태프가 차액을 돌려주거나 더 받은 뒤 누른다. */
+	/** 수정으로 돌려줄 돈 (실제 받은 돈 − 지금 금액, 양수만). 돌려주는 건 수단과 상관없이 현금이나 쿠폰으로. */
+	static int refundDue(OrderView o) {
+		return Math.max(0, o.settledCash() - o.cashAmount()) + Math.max(0, o.settledTransfer() - o.transferAmount());
+	}
+
+	/**
+	 * 스태프가 차액을 처리한 뒤 누른다. toCoupon 이면 돌려줄 돈을 현금 대신 그 주문의 쿠폰 잔액에 넣는다
+	 * (쿠폰 주문일 때만 가능 — 누구 쿠폰인지 아니까).
+	 */
 	@Transactional
-	public void settle(long orderId) {
-		require(orderId);
+	public void settle(long orderId, boolean toCoupon) {
+		OrderView order = require(orderId);
+		if (toCoupon) {
+			int refund = refundDue(order);
+			if (order.couponId() == null) {
+				throw new BusinessException("쿠폰으로 결제한 주문이 아니라 쿠폰에 넣을 수 없습니다.");
+			}
+			if (refund <= 0) {
+				throw new BusinessException("돌려줄 금액이 없습니다.");
+			}
+			couponService.refundForOrder(order.couponId(), refund, false, orderId);
+		}
 		orderRepository.settle(orderId);
 		events.broadcastOrdersChanged();
 	}
