@@ -28,10 +28,6 @@ export interface MenuOption {
   group: string | null
 }
 
-/** 이 줄에 이미 같은 그룹의 다른 옵션이 있어서 못 고르는지 */
-export function blockedByGroup(opt: MenuOption, selected: MenuOption[]): boolean {
-  return opt.group !== null && selected.some((o) => o.id !== opt.id && o.group === opt.group)
-}
 
 export interface AdminOption extends MenuOption {
   sortOrder: number
@@ -184,6 +180,12 @@ export interface Order {
   memo: string | null
   createdAt: string
   completedAt: string | null
+  /** 스태프가 고친 시각/이전 내용. 안 고쳤으면 null */
+  editedAt: string | null
+  editNote: string | null
+  /** 실제로 받은 현금/이체. cashAmount - settledCash 가 양수면 더 받을 돈, 음수면 돌려줄 돈 */
+  settledCash: number
+  settledTransfer: number
   lines: OrderLine[]
 }
 

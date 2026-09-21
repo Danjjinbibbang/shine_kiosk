@@ -27,7 +27,8 @@ public class OrderRepository {
 	private static final String ORDER_COLUMNS = """
 			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
 			total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
-			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at
+			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at,
+			edited_at, edit_note, settled_cash, settled_transfer
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
@@ -61,10 +62,11 @@ public class OrderRepository {
 						INSERT INTO orders (order_date, order_no, customer_name, receive_type, place_id, place_name,
 						                    total_amount, staff_free_amount,
 						                    pay_method, remainder_method, coupon_id, coupon_amount,
-						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at)
+						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at,
+						                    settled_cash, settled_transfer)
 						VALUES (:date, :no, :name, :receive, :placeId, :placeName,
 						        :total, :staffFree, :pay, :remainder, :couponId, :couponAmount,
-						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now)
+						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now, :cash, :transfer)
 						""")
 				.param("date", row.orderDate()).param("no", row.orderNo())
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
@@ -80,17 +82,19 @@ public class OrderRepository {
 		return keys.getKey().longValue();
 	}
 
-	/** 수정 시 결제 수단 자체는 유지하고 금액/항목 관련 컬럼만 바꾼다. */
-	public void update(long orderId, OrderRow row) {
+	/** 수정 시 결제 수단 자체는 유지하고 금액/항목 관련 컬럼만 바꾼다. settled_* 는 그대로 두어 차액이 드러나게. */
+	public void update(long orderId, OrderRow row, String editNote) {
 		jdbc.sql("""
 						UPDATE orders SET customer_name = :name, receive_type = :receive,
 						                  place_id = :placeId, place_name = :placeName,
 						                  total_amount = :total, staff_free_amount = :staffFree, remainder_method = :remainder,
 						                  coupon_amount = :couponAmount, free_amount = :freeAmount,
 						                  free_item_name = :freeItemName, cash_amount = :cash,
-						                  transfer_amount = :transfer, memo = :memo
+						                  transfer_amount = :transfer, memo = :memo,
+						                  edited_at = :now, edit_note = :editNote
 						WHERE id = :id
 						""")
+				.param("now", LocalDateTime.now().toString()).param("editNote", editNote)
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
 				.param("placeId", row.placeId()).param("placeName", row.placeName())
 				.param("total", row.totalAmount()).param("staffFree", row.staffFreeAmount())
@@ -129,6 +133,12 @@ public class OrderRepository {
 		jdbc.sql("DELETE FROM order_line_option WHERE order_line_id IN (SELECT id FROM order_line WHERE order_id = :id)")
 				.param("id", orderId).update();
 		jdbc.sql("DELETE FROM order_line WHERE order_id = :id").param("id", orderId).update();
+	}
+
+	/** 돌려주거나 더 받은 뒤: 실제 받은 금액을 현재 금액으로 맞춘다. */
+	public void settle(long orderId) {
+		jdbc.sql("UPDATE orders SET settled_cash = cash_amount, settled_transfer = transfer_amount WHERE id = :id")
+				.param("id", orderId).update();
 	}
 
 	public void markDone(long orderId) {
@@ -248,7 +258,7 @@ public class OrderRepository {
 				o.payMethod(), o.remainderMethod(),
 				o.couponId(), o.couponAmount(), o.freeAmount(), o.freeItemName(),
 				o.cashAmount(), o.transferAmount(), o.status(),
-				o.memo(), o.createdAt(), o.completedAt(), lines);
+				o.memo(), o.createdAt(), o.completedAt(), o.editedAt(), o.editNote(), o.settledCash(), o.settledTransfer(), lines);
 	}
 
 	private static OrderView mapOrder(ResultSet rs, int rowNum) throws SQLException {
@@ -267,6 +277,7 @@ public class OrderRepository {
 				couponIdOrNull, rs.getInt("coupon_amount"), rs.getInt("free_amount"), rs.getString("free_item_name"),
 				rs.getInt("cash_amount"), rs.getInt("transfer_amount"), Status.valueOf(rs.getString("status")),
 				rs.getString("memo"), rs.getString("created_at"), rs.getString("completed_at"),
+				rs.getString("edited_at"), rs.getString("edit_note"), rs.getInt("settled_cash"), rs.getInt("settled_transfer"),
 				List.of());
 	}
 }

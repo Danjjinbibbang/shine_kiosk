@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../shared/api'
-import type { Coupon, CouponPreview, CreateOrderRequest, MenuOption, Order, PayMethod, Place, ReceiveType } from '../shared/types'
+import { cartTotal, toLineRequests, type CartLine } from '../shared/cart'
+import type { Coupon, CouponPreview, CreateOrderRequest, Order, PayMethod, Place, ReceiveType } from '../shared/types'
 import { MenuStep } from './MenuStep'
 import { CartStep } from './CartStep'
 import { PaymentStep, PlaceStep, ReceiveStep } from './ChoiceSteps'
@@ -10,33 +11,8 @@ import { DoneStep } from './DoneStep'
 
 export type Step = 'menu' | 'cart' | 'receive' | 'place' | 'payment' | 'transfer' | 'coupon' | 'cash' | 'name' | 'done'
 
-export interface CartLine {
-  variantId: number
-  itemName: string
-  category: string
-  label: string | null
-  /** 기본가 (옵션 제외) */
-  price: number
-  qty: number
-  /** 붙인 옵션. 같은 메뉴라도 옵션이 다르면 다른 줄 */
-  options: MenuOption[]
-  /** 사역자 무료 잔. 한 줄은 전부 무료거나 전부 유료 (다르면 다른 줄) */
-  staffFree: boolean
-}
-
-/** 옵션 가격까지 더한 한 잔 값 */
-export function lineUnitPrice(l: CartLine): number {
-  return l.price + l.options.reduce((s, o) => s + o.price, 0)
-}
-
-/** 같은 줄인지 판단하는 키: 메뉴 + 옵션 조합 + 사역자 여부 */
-export function lineKey(variantId: number, optionIds: number[], staffFree = false): string {
-  return variantId + ':' + [...optionIds].sort((a, b) => a - b).join(',') + (staffFree ? ':staff' : '')
-}
-
-export function lineKeyOf(l: CartLine): string {
-  return lineKey(l.variantId, l.options.map((o) => o.id), l.staffFree)
-}
+export type { CartLine } from '../shared/cart'
+export { lineKey, lineKeyOf, lineUnitPrice } from '../shared/cart'
 
 export interface Draft {
   cart: CartLine[]
@@ -75,10 +51,8 @@ export function KioskApp() {
   const [submitting, setSubmitting] = useState(false)
 
   // 사역자 무료 잔을 뺀, 실제로 낼 금액
-  const total = useMemo(() => draft.cart.reduce((s, l) => s + (l.staffFree ? 0 : lineUnitPrice(l) * l.qty), 0), [draft.cart])
-  const lines = useMemo(() => draft.cart.map((l) => ({
-    variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id), staffFreeQty: l.staffFree ? l.qty : 0,
-  })), [draft.cart])
+  const total = useMemo(() => cartTotal(draft.cart), [draft.cart])
+  const lines = useMemo(() => toLineRequests(draft.cart), [draft.cart])
 
   const reset = useCallback(() => {
     setStep('menu')

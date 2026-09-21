@@ -85,6 +85,7 @@ export const api = {
   updateOrder: (id: number, body: UpdateOrderRequest) => put<Order>(`/api/staff/orders/${id}`, body),
   doneOrder: (id: number) => post<void>(`/api/staff/orders/${id}/done`),
   reopenOrder: (id: number) => post<void>(`/api/staff/orders/${id}/reopen`),
+  settleOrder: (id: number) => post<void>(`/api/staff/orders/${id}/settle`),
   cancelOrder: (id: number) => post<void>(`/api/staff/orders/${id}/cancel`),
   staffLookupCoupon: (name: string, phoneLast4?: string) =>
     post<LookupResult>('/api/staff/coupons/lookup', { name, phoneLast4: phoneLast4 || null }),

@@ -27,6 +27,10 @@ public class SchemaMigration {
 			new Column("coupon", "free_drinks", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("coupon", "phone", "TEXT"),
 			new Column("menu_option", "option_group", "TEXT"),
+			new Column("orders", "edited_at", "TEXT"),
+			new Column("orders", "edit_note", "TEXT"),
+			new Column("orders", "settled_cash", "INTEGER NOT NULL DEFAULT 0"),
+			new Column("orders", "settled_transfer", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("coupon_tx", "free_delta", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_amount", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_item_name", "TEXT"),
@@ -78,6 +82,16 @@ public class SchemaMigration {
 		log.info("메뉴 순서를 하나의 순서로 다시 매겼습니다 ({}개)", ids.size());
 	}
 
+	/** 새 컬럼에 기존 행의 값을 채워야 하는 경우. 예전 주문은 지금 금액을 그대로 받은 것으로 본다. */
+	private void backfill(Column c) {
+		if (c.table().equals("orders") && c.name().equals("settled_cash")) {
+			jdbc.sql("UPDATE orders SET settled_cash = cash_amount").update();
+		}
+		if (c.table().equals("orders") && c.name().equals("settled_transfer")) {
+			jdbc.sql("UPDATE orders SET settled_transfer = transfer_amount").update();
+		}
+	}
+
 	private void addMissingColumns() {
 		for (Column c : COLUMNS) {
 			Set<String> existing = Set.copyOf(jdbc.sql("SELECT name FROM pragma_table_info('" + c.table() + "')")
@@ -86,6 +100,7 @@ public class SchemaMigration {
 			if (!existing.contains(c.name())) {
 				log.info("컬럼 추가: {}.{}", c.table(), c.name());
 				jdbc.sql("ALTER TABLE " + c.table() + " ADD COLUMN " + c.name() + " " + c.definition()).update();
+				backfill(c);
 			}
 		}
 	}

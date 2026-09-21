@@ -71,7 +71,7 @@ test.describe('주문 처리', () => {
     await expect(card).toBeVisible()
 
     page.once('dialog', (d) => {
-      expect(d.message()).toContain('쿠폰 차감액(무료 1잔 포함)은 되돌려집니다')
+      expect(d.message()).toContain('쿠폰 차감액(무료 1잔 포함)은 자동으로 되돌려집니다')
       d.accept()
     })
     await card.getByRole('button', { name: '취소' }).click()
@@ -428,14 +428,20 @@ test.describe('사역자', () => {
     await expect(oc.locator('.lines')).toContainText('(사역자 3)')
     await expect(oc.locator('.pay')).toHaveText('사역자 무료 3,000원')
 
-    // 수정: 사역자 칩 해제 → 3잔 현금
+    // 수정: 사역자 칩은 한 잔씩 해제 → 세 번 누르면 3잔 현금
     await oc.getByRole('button', { name: '수정' }).click()
     const modal = page.locator('.modal')
-    await modal.getByRole('button', { name: /사역자/ }).click()
+    await modal.locator('.cart-line-wrap').first().getByRole('button', { name: /사역자/ }).click()
+    await expect(modal.locator('.total-box .amount')).toHaveText('1,000원')
+    await expect(modal.locator('.cart-line-wrap')).toHaveCount(2)
+    await modal.locator('.cart-line-wrap').first().getByRole('button', { name: /사역자/ }).click()
+    await modal.locator('.cart-line-wrap').first().getByRole('button', { name: /사역자/ }).click()
+    await expect(modal.locator('.cart-line-wrap')).toHaveCount(1)
     await expect(modal.locator('.total-box .amount')).toHaveText('3,000원')
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(oc.locator('.badge-staff')).toHaveCount(0)
     await expect(oc.locator('.pay')).toHaveText('현금 3,000원')
+    await expect(oc.locator('.settle')).toContainText('현금 3,000원 더 받기')   // 결제 없음이던 주문 → 받을 돈
   })
 })
 
@@ -472,5 +478,59 @@ test.describe('기록', () => {
 
     await today.locator('.day-head').click()
     await expect(today).not.toHaveClass(/open/)
+  })
+})
+
+test.describe('수정과 정산', () => {
+  test('아메리카노 2잔 샷 추가 → 모달에서 샷 해제하면 1잔만 해제, 카드에 수정됨 + 돌려줄 돈 + 정산', async ({ page, request }) => {
+    const name = uniq('정산')
+    // 현금 3,000원 받은 주문: 아메리카노 ICE 샷추가 ×2
+    await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 2, optionIds: [1] }] })
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await expect(card.locator('.pay')).toHaveText('현금 3,000원')
+    await expect(card.locator('.badge-edited')).toHaveCount(0)
+
+    await card.getByRole('button', { name: '수정' }).click()
+    const modal = page.locator('.modal')
+    const lines = modal.locator('.cart-line-wrap')
+    await expect(lines).toHaveCount(1)
+    await lines.nth(0).getByRole('button', { name: /샷 추가/ }).click()   // 한 잔만 해제
+    await expect(lines).toHaveCount(2)
+    await expect(lines.nth(0).locator('.line-options')).toHaveText('샷 추가')
+    await expect(lines.nth(0).locator('.qty .n')).toHaveText('1')
+    await expect(lines.nth(1).locator('.line-options')).toHaveCount(0)
+    await expect(modal.locator('.total-box .amount')).toHaveText('2,500원')
+    await modal.getByRole('button', { name: '저장' }).click()
+
+    // 카드: 수정됨 배지 + 이전 내용 + 돌려줄 500원
+    await expect(card.locator('.badge-edited')).toContainText('수정됨')
+    await expect(card.locator('.edited')).toContainText('이전: 아메리카노 ICE(샷 추가) ×2 · 3,000원')
+    await expect(card.locator('.pay')).toHaveText('현금 2,500원')
+    await expect(card.locator('.settle')).toContainText('현금 500원 돌려주기')
+
+    await card.getByRole('button', { name: '정산했어요' }).click()
+    await expect(card.locator('.settle')).toHaveCount(0)
+    await expect(card.locator('.badge-edited')).toBeVisible()   // 수정 표시는 남는다
+    const o = await orderOf(request, name)
+    expect(o.settledCash).toBe(2500)
+  })
+
+  test('더 비싸게 고치면 더 받을 돈, 취소 확인창에 돌려줄 돈', async ({ page, request }) => {
+    const name = uniq('추가')
+    await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 1 }] })   // 현금 1,000
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await card.getByRole('button', { name: '수정' }).click()
+    const modal = page.locator('.modal')
+    await modal.locator('.chips').last().getByRole('button', { name: /^아이스크림 컵/ }).click()
+    await modal.getByRole('button', { name: '저장' }).click()
+    await expect(card.locator('.settle')).toContainText('현금 3,000원 더 받기')
+
+    let message = ''
+    page.once('dialog', (d) => { message = d.message(); d.dismiss() })
+    await card.getByRole('button', { name: '취소' }).click()
+    expect(message).toContain('받은 현금 1,000원을 돌려주세요')
+    await expect(card).toBeVisible()
   })
 })

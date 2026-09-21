@@ -1,22 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../shared/api'
+import {
+  addPlainCup, blockedByGroup, cartStaffFree, cartTotal, lineKeyOf, lineName, lineUnitPrice, setLineQty,
+  toLineRequests, toggleOptionOnOneCup, toggleStaffFreeOnOneCup, type CartLine,
+} from '../shared/cart'
 import type { FloorGroup, MenuItem, MenuOption, Order, ReceiveType } from '../shared/types'
-import { blockedByGroup, won } from '../shared/types'
-
-interface Line {
-  variantId: number
-  name: string
-  category: string
-  /** 기본가 */
-  price: number
-  qty: number
-  options: MenuOption[]
-  staffFreeQty: number
-}
-
-const unitPrice = (l: Line) => l.price + l.options.reduce((s, o) => s + o.price, 0)
-const keyOf = (variantId: number, optionIds: number[], staffFree = false) =>
-  variantId + ':' + [...optionIds].sort((a, b) => a - b).join(',') + (staffFree ? ':staff' : '')
+import { won } from '../shared/types'
 
 interface Props {
   order: Order
@@ -24,7 +13,10 @@ interface Props {
   onSaved: () => void
 }
 
-/** 항목 수량, 이름, 받는 방법/장소를 고친다. 결제 수단은 서버가 유지하고 금액만 다시 계산한다. */
+/**
+ * 항목/이름/장소/메모를 고친다. 결제 수단은 서버가 유지하고 금액만 다시 계산한다.
+ * 칩(옵션/사역자)은 키오스크와 똑같이 한 번에 한 잔만 바뀐다.
+ */
 export function EditOrderModal({ order, onClose, onSaved }: Props) {
   const [menu, setMenu] = useState<MenuItem[]>([])
   const [allOptions, setAllOptions] = useState<MenuOption[]>([])
@@ -33,70 +25,47 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
   const [receiveType, setReceiveType] = useState<ReceiveType>(order.receiveType)
   const [placeId, setPlaceId] = useState<number | null>(order.placeId)
   const [memo, setMemo] = useState(order.memo ?? '')
-  // 기존 줄은 메뉴표를 받은 뒤 category/기본가를 채운다 (아래 useEffect)
-  const [lines, setLines] = useState<Line[]>(() => order.lines
-    .filter((l) => l.variantId !== null)
-    .map((l) => ({
-      variantId: l.variantId!,
-      name: l.variantLabel ? `${l.menuName} ${l.variantLabel}` : l.menuName,
-      category: '',
-      price: l.unitPrice - l.options.reduce((s, o) => s + o.price, 0),
-      qty: l.quantity,
-      options: l.options.filter((o) => o.optionId !== null).map((o) => ({ id: o.optionId!, name: o.name, price: o.price, category: '', group: null })),
-      staffFreeQty: l.staffFreeQty,
-    })))
+  const [lines, setLines] = useState<CartLine[]>([])
+  const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  // 주문 줄을 장바구니 줄로 바꾸려면 메뉴표(카테고리/기본가)와 옵션표(그룹)가 필요하다.
   useEffect(() => {
-    api.menu().then((m) => {
+    Promise.all([api.menu(), api.menuOptions(), api.places()]).then(([m, opts, f]) => {
       setMenu(m)
-      // 기존 줄에 카테고리를 채워 옵션 칩이 뜨게 한다
-      const catOf = new Map<number, string>()
-      m.forEach((item) => item.variants.forEach((v) => catOf.set(v.id, item.category)))
-      setLines((ls) => ls.map((l) => ({ ...l, category: catOf.get(l.variantId) ?? l.category })))
-    }).catch(() => {})
-    api.menuOptions().then((opts) => {
       setAllOptions(opts)
-      // 기존 줄의 옵션에 그룹 정보를 채워 배타 규칙이 먹게 한다
-      const byId = new Map(opts.map((o) => [o.id, o]))
-      setLines((ls) => ls.map((l) => ({ ...l, options: l.options.map((o) => byId.get(o.id) ?? o) })))
-    }).catch(() => {})
-    api.places().then(setFloors).catch(() => {})
-  }, [])
-
-  const total = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * (l.qty - l.staffFreeQty), 0), [lines])
-  const staffFree = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * l.staffFreeQty, 0), [lines])
-
-  /** 사역자 칩: 줄 전체를 무료/유료로. 잔을 나누고 싶으면 수량을 줄이고 같은 메뉴를 다시 추가한다. */
-  const toggleStaffFree = (index: number) =>
-    setLines((ls) => ls.map((l, i) => i === index ? { ...l, staffFreeQty: l.staffFreeQty > 0 ? 0 : l.qty } : l))
-  const keyOfLine = (l: Line) => keyOf(l.variantId, l.options.map((o) => o.id), l.staffFreeQty > 0)
-
-  const setQty = (index: number, qty: number) =>
-    setLines((ls) => qty <= 0 ? ls.filter((_, i) => i !== index)
-      : ls.map((l, i) => i === index ? { ...l, qty, staffFreeQty: l.staffFreeQty > 0 ? qty : 0 } : l))
-
-  const addVariant = (item: MenuItem, variantId: number, label: string | null, price: number) => {
-    setLines((ls) => {
-      const idx = ls.findIndex((l) => keyOfLine(l) === keyOf(variantId, []))
-      if (idx >= 0) return ls.map((l, i) => i === idx ? { ...l, qty: l.qty + 1 } : l)
-      return [...ls, { variantId, name: label ? `${item.name} ${label}` : item.name, category: item.category, price, qty: 1, options: [], staffFreeQty: 0 }]
-    })
-  }
-
-  const toggleOption = (index: number, opt: MenuOption) => {
-    setLines((ls) => {
-      const line = ls[index]
-      const has = line.options.some((o) => o.id === opt.id)
-      const changed: Line = { ...line, options: has ? line.options.filter((o) => o.id !== opt.id) : [...line.options, opt] }
-      const mergeIdx = ls.findIndex((l, i) => i !== index && keyOfLine(l) === keyOfLine(changed))
-      if (mergeIdx >= 0) {
-        return ls.map((l, i) => i === mergeIdx ? { ...l, qty: l.qty + line.qty, staffFreeQty: l.staffFreeQty > 0 ? l.qty + line.qty : 0 } : l).filter((_, i) => i !== index)
+      setFloors(f)
+      const variantOf = new Map<number, { item: MenuItem; label: string | null; price: number }>()
+      m.forEach((item) => item.variants.forEach((v) => variantOf.set(v.id, { item, label: v.label, price: v.price })))
+      const optionOf = new Map(opts.map((o) => [o.id, o]))
+      const converted: CartLine[] = []
+      for (const l of order.lines) {
+        if (l.variantId === null) continue
+        const v = variantOf.get(l.variantId)
+        const options = l.options.map((o) => (o.optionId !== null && optionOf.get(o.optionId))
+          || { id: o.optionId ?? -1, name: o.name, price: o.price, category: '', group: null })
+        const base = {
+          variantId: l.variantId,
+          itemName: v?.item.name ?? l.menuName,
+          category: v?.item.category ?? '',
+          label: v?.label ?? l.variantLabel,
+          price: l.unitPrice - l.options.reduce((s, o) => s + o.price, 0),
+          options,
+        }
+        // 한 줄에 사역자 잔과 유료 잔이 섞여 있었으면 두 줄로 나눈다
+        const free = l.staffFreeQty
+        const paid = l.quantity - free
+        if (paid > 0) converted.push({ ...base, qty: paid, staffFree: false })
+        if (free > 0) converted.push({ ...base, qty: free, staffFree: true })
       }
-      return ls.map((l, i) => i === index ? changed : l)
-    })
-  }
+      setLines(converted)
+      setReady(true)
+    }).catch(() => setError('메뉴를 불러오지 못했습니다.'))
+  }, [order])
+
+  const total = useMemo(() => cartTotal(lines), [lines])
+  const staffFree = useMemo(() => cartStaffFree(lines), [lines])
 
   const save = async () => {
     setBusy(true)
@@ -106,7 +75,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
         customerName: name,
         receiveType,
         placeId: receiveType === 'DELIVERY' ? placeId : null,
-        lines: lines.map((l) => ({ variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id), staffFreeQty: l.staffFreeQty })),
+        lines: toLineRequests(lines),
         memo: memo || null,
       })
       onSaved()
@@ -153,35 +122,42 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
         )}
 
         <div className="field">
-          <label>메뉴</label>
+          <label>메뉴 <span className="muted">(칩은 한 잔씩 바뀝니다)</span></label>
+          {!ready && <div className="muted">불러오는 중…</div>}
           <div className="stack">
             {lines.map((l, index) => {
               const applicable = allOptions.filter((o) => o.category === l.category)
               return (
-                <div key={keyOfLine(l)} className="cart-line-wrap">
+                <div key={lineKeyOf(l)} className={'cart-line-wrap' + (l.staffFree ? ' staff-free' : '')}>
                   <div className="cart-line" style={{ padding: '8px 12px' }}>
                     <div className="name" style={{ fontSize: 18 }}>
-                      {l.name}
-                      {l.options.length > 0 && <div className="line-options" style={{ fontSize: 14 }}>{l.options.map((o) => o.name).join(' · ')}</div>}
+                      {lineName(l)}
+                      {(l.options.length > 0 || l.staffFree) && (
+                        <div className="line-options" style={{ fontSize: 14 }}>
+                          {[...l.options.map((o) => o.name), ...(l.staffFree ? ['사역자 무료'] : [])].join(' · ')}
+                        </div>
+                      )}
                     </div>
                     <div className="qty">
-                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(index, l.qty - 1)}>−</button>
+                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setLines(setLineQty(lines, index, l.qty - 1))}>−</button>
                       <span className="n" style={{ fontSize: 20 }}>{l.qty}</span>
-                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(index, l.qty + 1)}>+</button>
+                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setLines(setLineQty(lines, index, l.qty + 1))}>+</button>
                     </div>
+                    <div className="sum" style={{ fontSize: 16, minWidth: 80 }}>{l.staffFree ? '0원' : won(lineUnitPrice(l) * l.qty)}</div>
                   </div>
                   <div className="chips" style={{ padding: '0 8px' }}>
                     {applicable.map((o) => {
                       const on = l.options.some((x) => x.id === o.id)
                       const blocked = !on && blockedByGroup(o, l.options)
                       return (
-                        <button key={o.id} className={'btn' + (on ? ' selected' : '')} disabled={blocked} onClick={() => toggleOption(index, o)}>
+                        <button key={o.id} className={'btn' + (on ? ' selected' : '')} disabled={blocked}
+                          onClick={() => setLines(toggleOptionOnOneCup(lines, index, o))}>
                           {on ? '☑' : '☐'} {o.name}{o.price > 0 && ` +${won(o.price)}`}
                         </button>
                       )
                     })}
-                    <button className={'btn' + (l.staffFreeQty > 0 ? ' selected' : '')} onClick={() => toggleStaffFree(index)}>
-                      {l.staffFreeQty > 0 ? '☑' : '☐'} 사역자
+                    <button className={'btn' + (l.staffFree ? ' selected' : '')} onClick={() => setLines(toggleStaffFreeOnOneCup(lines, index))}>
+                      {l.staffFree ? '☑' : '☐'} 사역자
                     </button>
                   </div>
                 </div>
@@ -194,7 +170,8 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
           <label>메뉴 추가</label>
           <div className="chips">
             {menu.flatMap((item) => item.variants.map((v) => (
-              <button key={v.id} className="btn" onClick={() => addVariant(item, v.id, v.label, v.price)}>
+              <button key={v.id} className="btn"
+                onClick={() => setLines(addPlainCup(lines, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price }))}>
                 {item.name}{v.label ? ` ${v.label}` : ''} <span className="muted">{won(v.price)}</span>
               </button>
             )))}
@@ -213,8 +190,14 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
         {order.couponId !== null && (
           <div className="muted" style={{ fontSize: 14 }}>쿠폰 주문입니다. 저장하면 새 합계 기준으로 쿠폰 차감을 다시 계산합니다.</div>
         )}
+        {(order.settledCash > 0 || order.settledTransfer > 0) && (
+          <div className="muted" style={{ fontSize: 14 }}>
+            받은 돈: {[order.settledCash > 0 ? `현금 ${won(order.settledCash)}` : '', order.settledTransfer > 0 ? `이체 ${won(order.settledTransfer)}` : ''].filter(Boolean).join(' · ')}
+            {' '}— 저장 후 차액이 있으면 카드에 표시됩니다.
+          </div>
+        )}
 
-        <button className="btn big primary" disabled={busy || lines.length === 0 || !name.trim()} onClick={save}>
+        <button className="btn big primary" disabled={busy || !ready || lines.length === 0 || !name.trim()} onClick={save}>
           {busy ? '저장 중…' : '저장'}
         </button>
       </div>

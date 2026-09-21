@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../shared/api'
 import type { MenuItem, MenuVariant } from '../shared/types'
 import { won } from '../shared/types'
-import { lineKey, lineKeyOf, type CartLine } from './KioskApp'
+import { addPlainCup, type CartLine } from '../shared/cart'
 
 interface Props {
   cart: CartLine[]
@@ -30,13 +30,7 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
   const setQty = (item: MenuItem, v: MenuVariant, qty: number) => {
     const current = qtyOf(v.id)
     if (qty > current) {
-      const plainKey = lineKey(v.id, [])
-      const existing = cart.find((l) => lineKeyOf(l) === plainKey)
-      if (existing) {
-        onChange(cart.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l)))
-      } else {
-        onChange([...cart, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price, qty: 1, options: [], staffFree: false }])
-      }
+      onChange(addPlainCup(cart, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price }))
       return
     }
     const idx = cart.map((l) => l.variantId).lastIndexOf(v.id)

@@ -81,6 +81,10 @@ public final class OrderDtos {
 							Long couponId, int couponAmount, int freeAmount, String freeItemName,
 							int cashAmount, int transferAmount,
 							Status status, String memo, String createdAt, String completedAt,
+							/** 스태프가 고친 시각/내용. 안 고쳤으면 null */
+							String editedAt, String editNote,
+							/** 실제로 받은 현금/이체. cashAmount - settledCash 가 양수면 더 받을 돈, 음수면 돌려줄 돈 */
+							int settledCash, int settledTransfer,
 							List<LineView> lines) {}
 
 	/** 스태프 화면 상단의 오늘 집계. */

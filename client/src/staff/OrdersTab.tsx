@@ -64,6 +64,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
     <>
       {orders.map((o) => (
         <OrderCard key={o.id} order={o} busy={busyId === o.id}
+          onSettle={() => run(o.id, () => api.settleOrder(o.id), '정산 표시했습니다')}
           canSms={o.couponId !== null && !!coupons[o.couponId]?.phone}
           onSms={() => { if (!sendBalanceSms(o)) onToast('쿠폰에 전화번호가 없어 문자를 못 보냅니다') }}
           onDone={() => {
@@ -74,7 +75,10 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
           }}
           onReopen={() => run(o.id, () => api.reopenOrder(o.id), `${orderLabel(o)} 다시 만들 것으로 이동`)}
           onCancel={() => {
-            if (window.confirm(`${orderLabel(o)} ${o.customerName}님 주문을 취소할까요?${o.couponId ? '\n쿠폰 차감액(무료 1잔 포함)은 되돌려집니다.' : ''}`)) {
+            const refund = [o.settledCash > 0 ? `현금 ${won(o.settledCash)}` : '', o.settledTransfer > 0 ? `계좌로 ${won(o.settledTransfer)}` : ''].filter(Boolean).join(', ')
+            if (window.confirm(`${orderLabel(o)} ${o.customerName}님 주문을 취소할까요?`
+              + (refund ? `\n받은 ${refund}을 돌려주세요.` : '')
+              + (o.couponId ? '\n쿠폰 차감액(무료 1잔 포함)은 자동으로 되돌려집니다.' : ''))) {
               void run(o.id, () => api.cancelOrder(o.id), `${orderLabel(o)} 취소됨`)
             }
           }}
@@ -91,6 +95,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
 interface CardProps {
   order: Order
   busy: boolean
+  onSettle: () => void
   canSms: boolean
   onSms: () => void
   onDone: () => void
@@ -126,10 +131,23 @@ function orderLabel(o: Order): string {
   return `${Number(m)}/${Number(d)} #${o.orderNo}`
 }
 
-function OrderCard({ order: o, busy, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
+/** 수정 뒤 실제 받은 돈과 현재 금액의 차이. "현금 500원 돌려주기" / "현금 500원 더 받기" */
+function settlementNotes(o: Order): string[] {
+  const notes: string[] = []
+  const cash = o.cashAmount - o.settledCash
+  const transfer = o.transferAmount - o.settledTransfer
+  if (cash < 0) notes.push(`현금 ${won(-cash)} 돌려주기`)
+  if (cash > 0) notes.push(`현금 ${won(cash)} 더 받기`)
+  if (transfer < 0) notes.push(`계좌로 ${won(-transfer)} 돌려주기`)
+  if (transfer > 0) notes.push(`계좌이체 ${won(transfer)} 더 받기`)
+  return notes
+}
+
+function OrderCard({ order: o, busy, onSettle, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
   const delivery = o.receiveType === 'DELIVERY'
   const time = o.createdAt.slice(11, 16)
   const stale = o.orderDate !== localToday()
+  const settlement = o.status === 'CANCELED' ? [] : settlementNotes(o)
   return (
     <div className={'order-card' + (delivery ? ' delivery' : '') + (stale ? ' stale' : '')}>
       <div className="top">
@@ -150,6 +168,18 @@ function OrderCard({ order: o, busy, canSms, onSms, onDone, onReopen, onCancel, 
       </div>
       <div className="pay">{payLine(o)}</div>
       {o.memo && <div className="memo">📝 {o.memo}</div>}
+      {o.editedAt && (
+        <div className="edited">
+          <span className="badge-edited">수정됨 {o.editedAt.slice(11, 16)}</span>
+          {o.editNote && <span className="muted"> 이전: {o.editNote}</span>}
+        </div>
+      )}
+      {settlement.length > 0 && (
+        <div className="settle">
+          <span className="grow">💸 {settlement.join(' · ')}</span>
+          <button className="btn" disabled={busy} onClick={onSettle}>정산했어요</button>
+        </div>
+      )}
       <div className="actions">
         {o.status === 'PENDING' ? (
           <>

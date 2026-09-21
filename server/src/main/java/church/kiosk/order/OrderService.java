@@ -179,13 +179,35 @@ public class OrderService {
 				priced.total(), priced.staffFreeAmount(),
 				existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
 				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
-		orderRepository.update(orderId, row);
+		orderRepository.update(orderId, row, describe(existing));
 		orderRepository.deleteLines(orderId);
 		orderRepository.insertLines(orderId, priced.lines());
 
 		OrderView updated = orderRepository.findById(orderId).orElseThrow();
 		events.broadcastOrdersChanged();
 		return updated;
+	}
+
+	/** 수정 전 주문을 한 줄로: "아메리카노 ICE ×2 (샷 추가) · 3,000원" */
+	static String describe(OrderView o) {
+		String lines = String.join(", ", o.lines().stream().map(l -> {
+			String name = l.variantLabel() == null ? l.menuName() : l.menuName() + " " + l.variantLabel();
+			if (!l.options().isEmpty()) {
+				name += "(" + String.join("+", l.options().stream().map(OrderDtos.LineOptionView::name).toList()) + ")";
+			}
+			String qty = "×" + l.quantity();
+			if (l.staffFreeQty() > 0) qty += "(사역자" + l.staffFreeQty() + ")";
+			return name + " " + qty;
+		}).toList());
+		return lines + " · " + String.format("%,d", o.totalAmount()) + "원";
+	}
+
+	/** 스태프가 차액을 돌려주거나 더 받은 뒤 누른다. */
+	@Transactional
+	public void settle(long orderId) {
+		require(orderId);
+		orderRepository.settle(orderId);
+		events.broadcastOrdersChanged();
 	}
 
 	@Transactional

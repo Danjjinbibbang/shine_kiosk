@@ -48,6 +48,12 @@ public class StaffOrderController {
 		orderService.complete(id);
 	}
 
+	/** 수정으로 생긴 차액(돌려줄 돈/더 받을 돈)을 처리했다는 표시. */
+	@PostMapping("/{id}/settle")
+	public void settle(@PathVariable long id) {
+		orderService.settle(id);
+	}
+
 	@PostMapping("/{id}/reopen")
 	public void reopen(@PathVariable long id) {
 		orderService.reopen(id);

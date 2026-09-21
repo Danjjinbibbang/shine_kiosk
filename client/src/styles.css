@@ -207,6 +207,10 @@ input { font: inherit; }
 .chip-hint { font-size: 15px; align-self: center; }
 .order-card .pay { font-size: 15px; color: var(--muted); }
 .order-card .memo { font-size: 15px; color: var(--danger); font-weight: 700; }
+.order-card .edited { font-size: 14px; }
+.badge-edited { color: var(--danger); font-weight: 800; background: #fdecea; border-radius: 999px; padding: 2px 8px; }
+.order-card .settle { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fdecea; border: 2px solid var(--danger); border-radius: 12px; color: var(--danger); font-weight: 800; font-size: 16px; }
+.order-card .settle .btn { min-height: 40px; font-size: 14px; padding: 4px 12px; box-shadow: none; }
 .order-card .actions { display: flex; gap: 8px; }
 .order-card .actions .btn { min-height: 56px; font-size: 18px; }
 .order-card .actions .btn.ok { flex: 2; font-size: 22px; }

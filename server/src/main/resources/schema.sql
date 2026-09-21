@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS orders (
     transfer_amount INTEGER NOT NULL DEFAULT 0,
     status          TEXT    NOT NULL,          -- PENDING | DONE | CANCELED
     memo            TEXT,
+    -- 스태프 수정: 언제, 이전엔 뭐였는지. 실제 받은 현금/이체(settled_*)와 현재 금액의 차이가 돌려주거나 더 받을 돈.
+    edited_at       TEXT,
+    edit_note       TEXT,
+    settled_cash    INTEGER NOT NULL DEFAULT 0, -- 실제로 받은 현금 (정산 버튼을 누르면 현재 금액으로 맞춰짐)
+    settled_transfer INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT    NOT NULL,
     completed_at    TEXT,
     canceled_at     TEXT
