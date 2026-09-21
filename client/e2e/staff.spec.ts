@@ -441,3 +441,39 @@ test.describe('사역자', () => {
     await expect(card).toHaveCount(0)
   })
 })
+
+test.describe('기록', () => {
+  test('날짜별 집계 → 펼치면 그날 주문, CSV 내려받기', async ({ page, request }) => {
+    const name = uniq('기록')
+    await createOrder(request, { customerName: name, lines: [{ variantId: 1201, quantity: 2 }] }) // 현금 5,000
+    await staffLogin(page)
+    await page.getByRole('button', { name: '기록' }).click()
+
+    const today = page.locator('.day-card').first()
+    await expect(today).toBeVisible()
+    await expect(page.locator('.month-head').first()).toContainText('월')
+    await expect(today.locator('.day-breakdown')).toContainText('현금')
+
+    await today.locator('.day-head').click()
+    await expect(today).toHaveClass(/open/)
+    const row = today.locator('.report-order').filter({ hasText: name })
+    await expect(row).toBeVisible()
+    await expect(row).toContainText('바닐라라떼 ICE ×2')
+    await expect(row).toContainText('5,000원 · 현금')
+    await expect(row.locator('.status')).toHaveText('대기')
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      today.getByRole('button', { name: /이날 주문 CSV/ }).click(),
+    ])
+    expect(download.suggestedFilename()).toMatch(/^주문-\d{4}-\d{2}-\d{2}\.csv$/)
+    const [all] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /일별 CSV/ }).click(),
+    ])
+    expect(all.suggestedFilename()).toBe('매출-일별.csv')
+
+    await today.locator('.day-head').click()
+    await expect(today).not.toHaveClass(/open/)
+  })
+})

@@ -1,5 +1,5 @@
 import type {
-  AdminItem, AdminOption, AdminPlace, Coupon, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
+  AdminItem, AdminOption, AdminPlace, Coupon, DayReport, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
   LookupResult, MenuItem, MenuOption, Order, StaffMember, OrderStatus, SaveItemRequest, UpdateOrderRequest,
 } from './types'
 
@@ -110,6 +110,8 @@ export const api = {
   createOption: (body: { name: string; price: number; category: string; available: boolean }) => post<AdminOption>('/api/staff/menu/options', body),
   updateOption: (id: number, body: { name: string; price: number; category: string; available: boolean }) => put<AdminOption>(`/api/staff/menu/options/${id}`, body),
   deleteOption: (id: number) => del<void>(`/api/staff/menu/options/${id}`),
+  reportDays: () => request<DayReport[]>('/api/staff/reports/days'),
+  reportOrders: (date: string) => request<Order[]>(`/api/staff/reports/orders?date=${date}`),
   adminMembers: () => request<StaffMember[]>('/api/staff/members'),
   createMember: (name: string) => post<StaffMember>('/api/staff/members', { name, active: true }),
   updateMember: (id: number, body: { name: string; active: boolean }) => put<StaffMember>(`/api/staff/members/${id}`, body),

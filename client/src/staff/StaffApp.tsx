@@ -5,9 +5,10 @@ import { won } from '../shared/types'
 import { LoginPage } from './LoginPage'
 import { OrdersTab } from './OrdersTab'
 import { CouponTab } from './CouponTab'
+import { ReportTab } from './ReportTab'
 import { SettingsTab } from './SettingsTab'
 
-type Tab = 'pending' | 'done' | 'coupon' | 'settings'
+type Tab = 'pending' | 'done' | 'coupon' | 'report' | 'settings'
 
 export function StaffApp() {
   const [authed, setAuthed] = useState<boolean | null>(null)
@@ -82,6 +83,7 @@ export function StaffApp() {
           <button className={'btn' + (tab === 'pending' ? ' selected' : '')} onClick={() => setTab('pending')}>만들 것</button>
           <button className={'btn' + (tab === 'done' ? ' selected' : '')} onClick={() => setTab('done')}>완료</button>
           <button className={'btn' + (tab === 'coupon' ? ' selected' : '')} onClick={() => setTab('coupon')}>쿠폰</button>
+          <button className={'btn' + (tab === 'report' ? ' selected' : '')} onClick={() => setTab('report')}>기록</button>
           <button className={'btn' + (tab === 'settings' ? ' selected' : '')} onClick={() => setTab('settings')}>설정</button>
         </div>
       </header>
@@ -90,6 +92,7 @@ export function StaffApp() {
         {tab === 'pending' && <OrdersTab status="PENDING" tick={tick} onChanged={refresh} onToast={showToast} />}
         {tab === 'done' && <OrdersTab status="DONE" tick={tick} onChanged={refresh} onToast={showToast} />}
         {tab === 'coupon' && <CouponTab onToast={showToast} />}
+        {tab === 'report' && <ReportTab onToast={showToast} />}
         {tab === 'settings' && <SettingsTab onToast={showToast} />}
       </main>
 

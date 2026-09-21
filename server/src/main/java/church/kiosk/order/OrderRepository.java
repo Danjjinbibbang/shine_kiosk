@@ -169,6 +169,14 @@ public class OrderRepository {
 				.list());
 	}
 
+	/** 기록 화면용: 그날 주문 전부 (취소 포함), 번호순. */
+	public List<OrderView> findByDate(String orderDate) {
+		return attachLines(jdbc.sql("SELECT " + ORDER_COLUMNS + " FROM orders WHERE order_date = :date ORDER BY order_no")
+				.param("date", orderDate)
+				.query(OrderRepository::mapOrder)
+				.list());
+	}
+
 	public DailySummary summarize(String orderDate) {
 		return jdbc.sql("""
 						SELECT COUNT(*) AS cnt,

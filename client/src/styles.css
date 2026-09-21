@@ -143,10 +143,28 @@ input { font: inherit; }
 }
 .staff-head .row .btn { min-height: 44px; font-size: 16px; padding: 6px 14px; }
 .tabs { display: flex; gap: 6px; }
-.tabs .btn { flex: 1; min-height: 48px; font-size: 16px; padding: 6px 4px; border-radius: 12px; box-shadow: none; white-space: nowrap; }
+.tabs .btn { flex: 1; min-height: 48px; font-size: 15px; padding: 6px 2px; border-radius: 12px; box-shadow: none; white-space: nowrap; }
 .tabs .btn.selected { background: var(--primary); color: #fff; }
 .tabs.sub .btn { min-height: 40px; font-size: 15px; background: var(--panel); border: 1px solid var(--line); }
 .tabs.sub .btn.selected { background: var(--accent); color: var(--ink); border-color: var(--primary); }
+
+/* 기록 (매출) */
+.month-head { display: flex; align-items: baseline; gap: 10px; padding: 8px 4px 0; font-size: 18px; }
+.month-head .muted { font-size: 14px; }
+.day-card { padding: 10px 14px; gap: 6px; }
+.day-card.open { border-color: var(--primary); }
+.day-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font-size: 18px; min-height: 40px; }
+.day-head .day-label { font-weight: 800; }
+.day-breakdown { font-size: 13px; }
+.day-breakdown .charge { color: var(--ok); font-weight: 700; }
+.day-orders { border-top: 1px solid var(--line); padding-top: 8px; }
+.report-order { padding: 8px 10px; background: var(--bg); border-radius: 10px; font-size: 15px; display: flex; flex-direction: column; gap: 2px; }
+.report-order.canceled { opacity: 0.5; text-decoration: line-through; }
+.report-order .no { font-weight: 800; color: var(--primary); }
+.report-order .lines { font-size: 14px; }
+.report-order .status { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent); }
+.report-order .status.done { background: #e8efe9; color: var(--ok); }
+.report-order .status.canceled { background: #fdecea; color: var(--danger); }
 
 /* 설정 (메뉴/장소 관리) */
 .admin-item.off { opacity: 0.6; }

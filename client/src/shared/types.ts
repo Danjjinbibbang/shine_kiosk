@@ -201,6 +201,19 @@ export interface DailySummary {
   staffFreeAmount: number
 }
 
+/** 기록 화면의 하루 집계. totalAmount 는 주문 금액 합, couponChargeAmount 는 그날 쿠폰 충전 입금 */
+export interface DayReport {
+  date: string
+  orderCount: number
+  totalAmount: number
+  cashAmount: number
+  transferAmount: number
+  couponAmount: number
+  freeAmount: number
+  staffFreeAmount: number
+  couponChargeAmount: number
+}
+
 export const PAY_LABEL: Record<PayMethod, string> = {
   TRANSFER: '계좌이체',
   COUPON: '쿠폰',
