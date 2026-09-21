@@ -9,7 +9,6 @@ export const RULES = {
   priceMax: 100_000,
   priceUnit: 100,
   chargeMax: 1_000_000,
-  chargeUnit: 1_000,
   freeDrinksMax: 100,
   qtyMax: 99,
   floorMax: 99,
@@ -30,7 +29,7 @@ export function formatPhoneInput(raw: string): string {
 }
 
 export function isChargeAmount(n: number): boolean {
-  return n > 0 && n <= RULES.chargeMax && n % RULES.chargeUnit === 0
+  return n > 0 && n <= RULES.chargeMax
 }
 
 export function isPrice(n: number): boolean {

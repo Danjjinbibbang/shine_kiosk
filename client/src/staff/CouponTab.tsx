@@ -285,11 +285,11 @@ function AmountPicker({ preset, amount, custom, busy, label, onAmount, onSubmit 
     <div className="stack">
       <button className="btn big primary" disabled={busy} onClick={() => onSubmit(preset)}>{label(preset)}</button>
       <div className="row">
-        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액 (1,000원 단위)" value={amount} maxLength={7}
+        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액" value={amount} maxLength={7}
           onChange={(e) => onAmount(e.target.value.replace(/[^0-9]/g, ''))} />
         <button className="btn" disabled={busy || !ok} onClick={() => onSubmit(custom)}>{custom > 0 ? label(custom) : '확인'}</button>
       </div>
-      {custom > 0 && !ok && <div className="error" style={{ fontSize: 13 }}>1,000원 단위로, 한 번에 {won(RULES.chargeMax)}까지 됩니다.</div>}
+      {custom > 0 && !ok && <div className="error" style={{ fontSize: 13 }}>한 번에 {won(RULES.chargeMax)}까지 충전할 수 있어요.</div>}
     </div>
   )
 }

@@ -124,20 +124,10 @@ public abstract class ApiTestSupport {
 		return registerCoupon(name, amount, "0100000" + (phoneSeq++));
 	}
 
-	/**
-	 * 충전은 1,000원 단위만 되므로, 단위에 안 맞는 잔액(예: 1,500)을 만들고 싶으면
-	 * 1,000원으로 등록한 뒤 정정 API 로 잔액만 맞춘다 (무료잔은 금액/20,000).
-	 */
 	protected long registerCoupon(String name, int amount, String phone) throws Exception {
-		int chargeable = Math.max(1000, amount / 1000 * 1000);
-		Response r = staffPost("/api/staff/coupons", Map.of("name", name, "amount", chargeable, "phone", phone));
+		Response r = staffPost("/api/staff/coupons", Map.of("name", name, "amount", amount, "phone", phone));
 		assertThat(r.status()).as(r.body()).isEqualTo(200);
-		long id = ((Number) r.read("$.id")).longValue();
-		if (chargeable != amount) {
-			Response a = staffPost("/api/staff/coupons/" + id + "/adjust", Map.of("balance", amount, "freeDrinks", amount / 20000));
-			assertThat(a.status()).as(a.body()).isEqualTo(200);
-		}
-		return id;
+		return ((Number) r.read("$.id")).longValue();
 	}
 
 	protected Map<String, Object> line(long variantId, int qty) {

@@ -18,16 +18,9 @@ let phoneSeq = 1000
 /** 전화번호는 필수. 안 주면 테스트용으로 매번 다른 번호를 만든다. */
 export async function registerCoupon(request: APIRequestContext, name: string, amount: number, phone?: string) {
   const token = await staffToken(request)
-  const chargeable = Math.max(1000, Math.floor(amount / 1000) * 1000)   // 충전은 1,000원 단위만
-  const r = await request.post('/api/staff/coupons', { headers: { 'X-Staff-Token': token }, data: { name, amount: chargeable, phone: phone ?? `0105${String(phoneSeq++).padStart(7, '0')}` } })
+  const r = await request.post('/api/staff/coupons', { headers: { 'X-Staff-Token': token }, data: { name, amount, phone: phone ?? `0105${String(phoneSeq++).padStart(7, '0')}` } })
   expect(r.ok(), await r.text()).toBeTruthy()
-  let coupon = await r.json()
-  if (chargeable !== amount) {
-    const a = await request.post(`/api/staff/coupons/${coupon.id}/adjust`, { headers: { 'X-Staff-Token': token }, data: { balance: amount, freeDrinks: Math.floor(amount / 20000) } })
-    expect(a.ok(), await a.text()).toBeTruthy()
-    coupon = await a.json()
-  }
-  return coupon
+  return await r.json()
 }
 
 export async function lookupCoupon(request: APIRequestContext, name: string, phoneLast4?: string) {

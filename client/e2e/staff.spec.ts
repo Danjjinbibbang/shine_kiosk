@@ -158,10 +158,10 @@ test.describe('쿠폰 관리', () => {
     await page.getByRole('button', { name: '저장' }).click()
     await expect(couponCard(page)).toContainText(name + 'A')
 
-    // 1,000원 단위가 아니면 충전 버튼이 잠긴다
-    await page.getByPlaceholder(/다른 금액/).fill('5500')
+    // 100만원 넘으면 충전 버튼이 잠긴다
+    await page.getByPlaceholder(/다른 금액/).fill('1000001')
     await expect(page.getByRole('button', { name: /충전$/ }).last()).toBeDisabled()
-    await expect(couponCard(page)).toContainText('1,000원 단위')
+    await expect(couponCard(page)).toContainText('1,000,000원까지')
     // 다른 금액 충전 5,000 → 25,000, 무료잔 그대로, 이력 2줄
     await page.getByPlaceholder(/다른 금액/).fill('5000')
     await page.getByRole('button', { name: '5,000원 충전' }).click()

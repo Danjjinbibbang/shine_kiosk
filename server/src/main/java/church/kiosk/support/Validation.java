@@ -19,8 +19,7 @@ public final class Validation {
 	public static final int PRICE_MAX = 100_000;
 	public static final int PRICE_UNIT = 100;
 	public static final int CHARGE_MAX = 1_000_000;
-	public static final int CHARGE_UNIT = 1_000;
-	public static final int FREE_DRINKS_MAX = 100;
+	public static final int FREE_DRINKS_MAX = 100;   // 정정 화면에서 잔액 숫자를 무료잔 칸에 잘못 넣는 실수 방지용
 	public static final int QTY_MAX = 99;
 	public static final int LINES_MAX = 50;
 	public static final int FLOOR_MAX = 99;
@@ -60,7 +59,6 @@ public final class Validation {
 	public static int chargeAmount(int amount) {
 		if (amount <= 0) throw new BusinessException("충전 금액을 확인해 주세요.");
 		if (amount > CHARGE_MAX) throw new BusinessException("한 번에 " + String.format("%,d", CHARGE_MAX) + "원까지 충전할 수 있습니다.");
-		if (amount % CHARGE_UNIT != 0) throw new BusinessException("충전 금액은 " + String.format("%,d", CHARGE_UNIT) + "원 단위로 입력해 주세요.");
 		return amount;
 	}
 
