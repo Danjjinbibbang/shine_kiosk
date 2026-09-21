@@ -219,3 +219,94 @@ test.describe('실시간', () => {
     await expect.poll(async () => page.locator('.summary').textContent(), { timeout: 5000 }).not.toBe(before)
   })
 })
+
+test.describe('설정 · 메뉴 관리', () => {
+  test('새 메뉴 추가 → 고객 메뉴에 등장 → 품절 → 사라짐 → 가격 수정 → 삭제', async ({ page, request }) => {
+    const name = uniq('유자차')
+    await staffLogin(page)
+    await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('button', { name: '＋ 새 메뉴' }).click()
+    const modal = page.locator('.modal')
+    await modal.getByPlaceholder('예: 유자차').fill(name)
+    await modal.locator('.chips').first().getByRole('button', { name: '논커피' }).click()
+    await modal.getByRole('button', { name: 'ICE / HOT 으로' }).click()
+    const rows = modal.locator('.variant-edit')
+    await expect(rows).toHaveCount(2)
+    await rows.nth(0).getByPlaceholder('가격').fill('2500')
+    await rows.nth(1).getByPlaceholder('가격').fill('2500')
+    await modal.getByRole('button', { name: '저장' }).click()
+    await expect(page.locator('.toast')).toContainText('추가됨')
+
+    const card = page.locator('.admin-item').filter({ hasText: name })
+    await expect(card).toBeVisible()
+    await expect(card).toContainText('ICE 2,500원 · HOT 2,500원')
+    const menu = async () => (await (await request.get('/api/menu')).json()) as Array<{ name: string; category: string; variants: Array<{ label: string; price: number }> }>
+    const created = (await menu()).find((m) => m.name === name)!
+    expect(created.category).toBe('논커피')
+    expect(created.variants.map((v) => v.label)).toEqual(['ICE', 'HOT'])
+
+    // 품절
+    await card.getByRole('button', { name: '판매중' }).click()
+    await expect(card.getByRole('button', { name: '품절' })).toBeVisible()
+    expect((await menu()).some((m) => m.name === name)).toBe(false)
+    await card.getByRole('button', { name: '품절' }).click()
+    expect((await menu()).some((m) => m.name === name)).toBe(true)
+
+    // 가격 수정 + HOT 삭제
+    await card.getByRole('button', { name: '수정' }).click()
+    await modal.locator('.variant-edit').nth(0).getByPlaceholder('가격').fill('3000')
+    await modal.locator('.variant-edit').nth(1).getByRole('button', { name: '선택지 삭제' }).click()
+    await modal.getByRole('button', { name: '저장' }).click()
+    await expect(card).toContainText('ICE 3,000원')
+    await expect(card).not.toContainText('HOT')
+    expect((await menu()).find((m) => m.name === name)!.variants).toEqual([expect.objectContaining({ label: 'ICE', price: 3000 })])
+
+    // 순서: 위로 한 칸
+    const before = await page.locator('.admin-item .admin-name').allTextContents()
+    const idx = before.findIndex((t) => t.startsWith(name))
+    await card.getByRole('button', { name: '위로' }).click()
+    await expect.poll(async () => (await page.locator('.admin-item .admin-name').allTextContents()).findIndex((t) => t.startsWith(name))).toBe(idx - 1)
+
+    // 삭제
+    page.once('dialog', (d) => d.accept())
+    await card.getByRole('button', { name: '삭제' }).click()
+    await expect(card).toHaveCount(0)
+    expect((await menu()).some((m) => m.name === name)).toBe(false)
+  })
+
+  test('빈 이름/가격 없는 메뉴는 저장 불가', async ({ page }) => {
+    await staffLogin(page)
+    await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('button', { name: '＋ 새 메뉴' }).click()
+    const modal = page.locator('.modal')
+    await expect(modal.getByRole('button', { name: '저장' })).toBeDisabled()
+    await modal.getByPlaceholder('예: 유자차').fill('x')
+    await expect(modal.getByRole('button', { name: '저장' })).toBeEnabled() // 가격 0원도 허용(무료 메뉴)
+    await modal.getByRole('button', { name: '닫기' }).click()
+    await expect(modal).toHaveCount(0)
+  })
+})
+
+test.describe('설정 · 배달 장소', () => {
+  test('추가 → 고객 화면에 층 등장 → 숨김 → 삭제', async ({ page, request }) => {
+    const name = uniq('방')
+    await staffLogin(page)
+    await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('button', { name: '배달 장소' }).click()
+    await page.getByLabel('층').fill('2')
+    await page.getByPlaceholder('장소 이름 (예: 식당)').fill(name)
+    await page.getByRole('button', { name: '추가' }).click()
+    const card = page.locator('.admin-item').filter({ hasText: `2층 ${name}` })
+    await expect(card).toBeVisible()
+    const floors = async () => ((await (await request.get('/api/places')).json()) as Array<{ floor: number; places: Array<{ name: string }> }>)
+    expect((await floors()).map((f) => f.floor)).toEqual([1, 2])
+
+    await card.getByRole('button', { name: '표시중' }).click()
+    await expect(card.getByRole('button', { name: '숨김' })).toBeVisible()
+    expect((await floors()).map((f) => f.floor)).toEqual([1])
+
+    page.once('dialog', (d) => d.accept())
+    await card.getByRole('button', { name: '삭제' }).click()
+    await expect(card).toHaveCount(0)
+  })
+})

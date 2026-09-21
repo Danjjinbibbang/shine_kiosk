@@ -25,10 +25,10 @@ client/   React 19 · Vite · TypeScript  (/kiosk, /staff 두 화면이 한 앱)
 cd client && npm install && npm run dev
 ```
 
-DB 파일은 `./data/kiosk.db` 에 자동 생성된다. 스키마/시드는 매 기동마다 실행되지만 멱등이라 데이터가 지워지지 않는다.
-나중에 추가된 컬럼은 `SchemaMigration` 이 기동 때 없으면 붙이므로, 기존 DB 를 지우지 않고 jar 만 바꿔도 된다.
-메뉴 이름/가격/카테고리와 배달 장소는 `server/src/main/resources/data.sql` 이 기준이다. 고치고 재시작하면 id 기준으로 DB 에 덮어써진다.
-메뉴를 잠시 빼고 싶으면 DB 에서 `menu_item.available` 또는 `delivery_place.active` 를 0 으로 (이 값은 시드가 건드리지 않는다).
+DB 파일은 `./data/kiosk.db` 에 자동 생성된다. 스키마는 매 기동마다 실행되지만 `IF NOT EXISTS` 라 데이터가 지워지지 않고,
+나중에 추가된 컬럼은 `SchemaMigration` 이 기동 때 붙이므로 기존 DB 를 지우지 않고 jar 만 바꿔도 된다.
+메뉴와 배달 장소는 **스태프 화면 > 설정** 에서 관리한다 (품절/판매중, 가격, 선택지, 순서, 추가/삭제).
+`seed-menu.sql` / `seed-places.sql` 은 처음 설치해서 테이블이 비어 있을 때 한 번만 들어가는 기본값이다.
 
 ## 테스트
 

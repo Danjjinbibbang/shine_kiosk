@@ -38,6 +38,33 @@ public class SchemaMigration {
 
 	@PostConstruct
 	public void migrate() {
+		addMissingColumns();
+		renumberMenuOrderIfNeeded();
+	}
+
+	/**
+	 * 예전 시드는 카테고리마다 10,20,30… 을 따로 매겼는데, 지금은 메뉴 전체가 한 순서다.
+	 * 값이 겹치는 DB 를 만나면 (카테고리 첫 등장 순 → 카테고리 안 순서) 로 한 번 다시 매긴다.
+	 */
+	private void renumberMenuOrderIfNeeded() {
+		int duplicates = jdbc.sql("SELECT COUNT(*) - COUNT(DISTINCT sort_order) FROM menu_item").query(Integer.class).single();
+		if (duplicates == 0) {
+			return;
+		}
+		List<Long> ids = jdbc.sql("""
+						SELECT id FROM menu_item
+						ORDER BY MIN(id) OVER (PARTITION BY category), sort_order, id
+						""")
+				.query(Long.class).list();
+		int order = 10;
+		for (Long id : ids) {
+			jdbc.sql("UPDATE menu_item SET sort_order = :sort WHERE id = :id").param("sort", order).param("id", id).update();
+			order += 10;
+		}
+		log.info("메뉴 순서를 하나의 순서로 다시 매겼습니다 ({}개)", ids.size());
+	}
+
+	private void addMissingColumns() {
 		for (Column c : COLUMNS) {
 			Set<String> existing = Set.copyOf(jdbc.sql("SELECT name FROM pragma_table_info('" + c.table() + "')")
 					.query(String.class)

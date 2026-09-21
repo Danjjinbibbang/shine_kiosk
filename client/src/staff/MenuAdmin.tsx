@@ -1,0 +1,198 @@
+import { useCallback, useEffect, useState } from 'react'
+import { api, ApiError } from '../shared/api'
+import type { AdminItem, AdminVariant, SaveItemRequest } from '../shared/types'
+import { won } from '../shared/types'
+
+/**
+ * 메뉴 관리. 자주 쓰는 건 품절 토글이라 목록에서 바로 되게 하고,
+ * 이름/가격/선택지 편집은 모달로.
+ */
+export function MenuAdmin({ onToast }: { onToast: (msg: string) => void }) {
+  const [items, setItems] = useState<AdminItem[] | null>(null)
+  const [editing, setEditing] = useState<AdminItem | 'new' | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(() => {
+    api.adminMenu().then(setItems).catch((e) => onToast(e.message))
+  }, [onToast])
+
+  useEffect(() => { load() }, [load])
+
+  const run = async (fn: () => Promise<unknown>, doneMsg?: string) => {
+    setBusy(true)
+    try {
+      await fn()
+      if (doneMsg) onToast(doneMsg)
+      load()
+    } catch (e) {
+      onToast(e instanceof ApiError ? e.message : '처리하지 못했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const move = (index: number, dir: -1 | 1) => {
+    if (!items) return
+    const target = index + dir
+    if (target < 0 || target >= items.length) return
+    const ids = items.map((i) => i.id)
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    void run(() => api.reorderMenu(ids))
+  }
+
+  if (!items) return <div className="empty">불러오는 중…</div>
+
+  return (
+    <div className="stack">
+      <button className="btn primary" onClick={() => setEditing('new')}>＋ 새 메뉴</button>
+      {items.length === 0 && <div className="empty">메뉴가 없습니다. 새 메뉴를 추가해 주세요.</div>}
+
+      {items.map((item, idx) => (
+        <div key={item.id} className={'card admin-item' + (item.available ? '' : ' off')}>
+          <div className="row between">
+            <div>
+              <div className="admin-name">{item.name} <span className="muted admin-cat">{item.category}</span></div>
+              <div className="muted admin-variants">
+                {item.variants.map((v) => `${v.label ?? ''} ${won(v.price)}${v.available ? '' : ' (품절)'}`.trim()).join(' · ')}
+              </div>
+            </div>
+            <button className={'btn toggle' + (item.available ? ' on' : '')} disabled={busy}
+              onClick={() => void run(() => api.setMenuAvailable(item.id, !item.available), item.available ? `${item.name} 품절` : `${item.name} 판매중`)}>
+              {item.available ? '판매중' : '품절'}
+            </button>
+          </div>
+          <div className="row admin-actions">
+            <button className="btn" disabled={busy || idx === 0} onClick={() => move(idx, -1)} aria-label="위로">↑</button>
+            <button className="btn" disabled={busy || idx === items.length - 1} onClick={() => move(idx, 1)} aria-label="아래로">↓</button>
+            <span className="grow" />
+            <button className="btn" disabled={busy} onClick={() => setEditing(item)}>수정</button>
+            <button className="btn danger" disabled={busy} onClick={() => {
+              if (window.confirm(`"${item.name}" 메뉴를 삭제할까요?\n지난 주문 기록은 남습니다.`)) {
+                void run(() => api.deleteMenuItem(item.id), `${item.name} 삭제됨`)
+              }
+            }}>삭제</button>
+          </div>
+        </div>
+      ))}
+
+      {editing && (
+        <MenuItemModal item={editing === 'new' ? null : editing}
+          categories={[...new Set(items.map((i) => i.category))]}
+          onClose={() => setEditing(null)}
+          onSaved={(msg) => { setEditing(null); onToast(msg); load() }} />
+      )}
+    </div>
+  )
+}
+
+interface ModalProps {
+  item: AdminItem | null
+  categories: string[]
+  onClose: () => void
+  onSaved: (msg: string) => void
+}
+
+const EMPTY_VARIANT: AdminVariant = { id: null, label: null, price: 0, available: true }
+
+function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
+  const [name, setName] = useState(item?.name ?? '')
+  const [category, setCategory] = useState(item?.category ?? (categories[0] ?? '커피'))
+  const [available, setAvailable] = useState(item?.available ?? true)
+  const [variants, setVariants] = useState<AdminVariant[]>(item?.variants ?? [{ ...EMPTY_VARIANT }])
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const setVariant = (i: number, patch: Partial<AdminVariant>) =>
+    setVariants((vs) => vs.map((v, k) => (k === i ? { ...v, ...patch } : v)))
+
+  const useIceHot = () => {
+    const price = variants[0]?.price ?? 0
+    setVariants([{ ...EMPTY_VARIANT, label: 'ICE', price }, { ...EMPTY_VARIANT, label: 'HOT', price }])
+  }
+
+  const save = async () => {
+    setBusy(true)
+    setError(null)
+    const body: SaveItemRequest = {
+      name: name.trim(),
+      category: category.trim(),
+      available,
+      variants: variants.map((v) => ({ ...v, label: v.label?.trim() || null })),
+    }
+    try {
+      if (item) await api.updateMenuItem(item.id, body)
+      else await api.createMenuItem(body)
+      onSaved(item ? `${body.name} 수정됨` : `${body.name} 추가됨`)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '저장하지 못했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const valid = name.trim() && category.trim() && variants.length > 0 && variants.every((v) => v.price >= 0)
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="row between">
+          <h2>{item ? '메뉴 수정' : '새 메뉴'}</h2>
+          <button className="btn ghost" onClick={onClose}>닫기</button>
+        </div>
+        {error && <div className="error">{error}</div>}
+
+        <div className="field">
+          <label>이름</label>
+          <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 유자차" autoFocus={!item} />
+        </div>
+
+        <div className="field">
+          <label>카테고리</label>
+          <input className="text-input" list="category-options" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="예: 커피" />
+          <datalist id="category-options">
+            {categories.map((c) => <option key={c} value={c} />)}
+          </datalist>
+          <div className="chips" style={{ marginTop: 6 }}>
+            {categories.map((c) => (
+              <button key={c} className={'btn' + (category === c ? ' selected' : '')} onClick={() => setCategory(c)}>{c}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <label>선택지와 가격 <span className="muted">(ICE/HOT 처럼 나뉘면 여러 줄, 하나면 이름 비워두기)</span></label>
+          <div className="stack">
+            {variants.map((v, i) => (
+              <div key={i} className="row variant-edit">
+                <input className="text-input" placeholder="예: ICE" value={v.label ?? ''}
+                  onChange={(e) => setVariant(i, { label: e.target.value })} />
+                <input className="text-input price" inputMode="numeric" placeholder="가격" value={v.price || ''}
+                  onChange={(e) => setVariant(i, { price: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })} />
+                <button className={'btn toggle small' + (v.available ? ' on' : '')} onClick={() => setVariant(i, { available: !v.available })}>
+                  {v.available ? '판매' : '품절'}
+                </button>
+                <button className="btn ghost" disabled={variants.length === 1} aria-label="선택지 삭제"
+                  onClick={() => setVariants((vs) => vs.filter((_, k) => k !== i))}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div className="chips" style={{ marginTop: 6 }}>
+            <button className="btn" onClick={() => setVariants((vs) => [...vs, { ...EMPTY_VARIANT, price: vs[vs.length - 1]?.price ?? 0 }])}>＋ 선택지 추가</button>
+            <button className="btn" onClick={useIceHot}>ICE / HOT 으로</button>
+          </div>
+        </div>
+
+        <div className="field">
+          <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={available} onChange={(e) => setAvailable(e.target.checked)} style={{ width: 22, height: 22 }} />
+            <span style={{ color: 'var(--ink)', fontSize: 16 }}>판매중</span>
+          </label>
+        </div>
+
+        <button className="btn big primary" disabled={busy || !valid} onClick={() => void save()}>
+          {busy ? '저장 중…' : '저장'}
+        </button>
+      </div>
+    </div>
+  )
+}

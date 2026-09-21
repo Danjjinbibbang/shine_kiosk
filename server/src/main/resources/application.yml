@@ -8,9 +8,10 @@ spring:
     name: shine-kiosk
   sql:
     init:
-      mode: always          # schema.sql / data.sql 을 매 기동마다 실행 (모두 멱등)
+      mode: always          # schema.sql 을 매 기동마다 실행 (IF NOT EXISTS 라 멱등). 시드는 SeedData 가 빈 테이블에만
       schema-locations: classpath:schema.sql
-      data-locations: classpath:data.sql
+      data-locations: ""
+
   jackson:
     default-property-inclusion: non_null
   web:

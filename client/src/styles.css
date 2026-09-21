@@ -137,8 +137,23 @@ input { font: inherit; }
 }
 .staff-head .row .btn { min-height: 44px; font-size: 16px; padding: 6px 14px; }
 .tabs { display: flex; gap: 6px; }
-.tabs .btn { flex: 1; min-height: 48px; font-size: 17px; border-radius: 12px; box-shadow: none; }
+.tabs .btn { flex: 1; min-height: 48px; font-size: 16px; padding: 6px 4px; border-radius: 12px; box-shadow: none; white-space: nowrap; }
 .tabs .btn.selected { background: var(--primary); color: #fff; }
+.tabs.sub .btn { min-height: 40px; font-size: 15px; background: var(--panel); border: 1px solid var(--line); }
+.tabs.sub .btn.selected { background: var(--accent); color: var(--ink); border-color: var(--primary); }
+
+/* 설정 (메뉴/장소 관리) */
+.admin-item.off { opacity: 0.6; }
+.admin-name { font-size: 19px; font-weight: 800; }
+.admin-cat { font-size: 13px; font-weight: 600; margin-left: 6px; }
+.admin-variants { font-size: 14px; margin-top: 2px; }
+.admin-actions .btn { min-height: 40px; font-size: 15px; padding: 4px 12px; box-shadow: none; }
+.btn.toggle { min-height: 40px; font-size: 14px; padding: 4px 12px; border-radius: 999px; box-shadow: none; color: var(--muted); }
+.btn.toggle.on { background: #e8efe9; color: var(--ok); border-color: var(--ok); }
+.btn.toggle.small { min-height: 46px; font-size: 13px; padding: 4px 8px; flex-shrink: 0; }
+.variant-edit .text-input { min-height: 46px; font-size: 17px; padding: 6px 10px; }
+.variant-edit .text-input.price { width: 110px; flex-shrink: 0; }
+.variant-edit .btn.ghost { min-height: 46px; padding: 0 8px; }
 .summary { display: flex; gap: 14px; flex-wrap: wrap; color: var(--muted); font-size: 15px; }
 .summary b { color: var(--ink); }
 .staff-body { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 12px; }

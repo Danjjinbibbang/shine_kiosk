@@ -28,6 +28,39 @@ export interface FloorGroup {
   places: Place[]
 }
 
+// ── 스태프 설정 화면 ──────────────────────────────────
+
+export interface AdminVariant {
+  id: number | null
+  label: string | null
+  price: number
+  available: boolean
+}
+
+export interface AdminItem {
+  id: number
+  name: string
+  category: string
+  sortOrder: number
+  available: boolean
+  variants: AdminVariant[]
+}
+
+export interface SaveItemRequest {
+  name: string
+  category: string
+  available: boolean
+  variants: AdminVariant[]
+}
+
+export interface AdminPlace {
+  id: number
+  floor: number
+  name: string
+  sortOrder: number
+  active: boolean
+}
+
 export interface Coupon {
   id: number
   name: string

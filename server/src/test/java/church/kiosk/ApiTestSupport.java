@@ -56,13 +56,18 @@ public abstract class ApiTestSupport {
 	@Autowired
 	protected JdbcClient jdbc;
 
+	@Autowired
+	protected church.kiosk.config.SeedData seedData;
+
 	protected String staffToken;
 
 	@BeforeEach
 	void cleanTables() throws Exception {
-		for (String table : List.of("order_line", "orders", "coupon_tx", "coupon", "customer")) {
+		for (String table : List.of("order_line", "orders", "coupon_tx", "coupon", "customer",
+				"menu_variant", "menu_item", "delivery_place")) {
 			jdbc.sql("DELETE FROM " + table).update();
 		}
+		seedData.seedIfEmpty(); // 메뉴/장소는 매번 기본 시드로
 		staffToken = JsonPath.read(postJson("/api/staff-auth/login", Map.of("pin", PIN)).body, "$.token");
 	}
 

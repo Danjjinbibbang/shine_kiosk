@@ -1,6 +1,6 @@
 import type {
-  Coupon, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
-  LookupResult, MenuItem, Order, OrderStatus, UpdateOrderRequest,
+  AdminItem, AdminPlace, Coupon, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
+  LookupResult, MenuItem, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest,
 } from './types'
 
 const STAFF_TOKEN_KEY = 'shine-kiosk.staffToken'
@@ -60,6 +60,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
+const put = <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) })
+const del = <T>(path: string) => request<T>(path, { method: 'DELETE' })
 
 // ── 공개 (고객 키오스크) ──────────────────────────────────
 export const api = {
@@ -79,8 +81,7 @@ export const api = {
   staffLogout: () => post<void>('/api/staff-auth/logout'),
   orders: (status: OrderStatus) => request<Order[]>(`/api/staff/orders?status=${status}`),
   summary: () => request<DailySummary>('/api/staff/orders/summary'),
-  updateOrder: (id: number, body: UpdateOrderRequest) =>
-    request<Order>(`/api/staff/orders/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  updateOrder: (id: number, body: UpdateOrderRequest) => put<Order>(`/api/staff/orders/${id}`, body),
   doneOrder: (id: number) => post<void>(`/api/staff/orders/${id}/done`),
   reopenOrder: (id: number) => post<void>(`/api/staff/orders/${id}/reopen`),
   cancelOrder: (id: number) => post<void>(`/api/staff/orders/${id}/cancel`),
@@ -89,8 +90,20 @@ export const api = {
   chargeCoupon: (id: number, amount: number) => post<Coupon>(`/api/staff/coupons/${id}/charge`, { amount }),
   adjustCoupon: (id: number, balance: number, freeDrinks: number) =>
     post<Coupon>(`/api/staff/coupons/${id}/adjust`, { balance, freeDrinks }),
-  deleteCoupon: (id: number) => request<void>(`/api/staff/coupons/${id}`, { method: 'DELETE' }),
+  deleteCoupon: (id: number) => del<void>(`/api/staff/coupons/${id}`),
   couponPreset: () => request<{ amount: number }>('/api/staff/coupons/preset'),
+
+  // ── 스태프 설정 (메뉴 / 장소) ────────────────────────
+  adminMenu: () => request<AdminItem[]>('/api/staff/menu'),
+  createMenuItem: (body: SaveItemRequest) => post<AdminItem>('/api/staff/menu', body),
+  updateMenuItem: (id: number, body: SaveItemRequest) => put<AdminItem>(`/api/staff/menu/${id}`, body),
+  setMenuAvailable: (id: number, available: boolean) => put<AdminItem>(`/api/staff/menu/${id}/available`, { available }),
+  deleteMenuItem: (id: number) => del<void>(`/api/staff/menu/${id}`),
+  reorderMenu: (ids: number[]) => put<AdminItem[]>('/api/staff/menu/order', { ids }),
+  adminPlaces: () => request<AdminPlace[]>('/api/staff/places'),
+  createPlace: (body: { floor: number; name: string; active: boolean }) => post<AdminPlace>('/api/staff/places', body),
+  updatePlace: (id: number, body: { floor: number; name: string; active: boolean }) => put<AdminPlace>(`/api/staff/places/${id}`, body),
+  deletePlace: (id: number) => del<void>(`/api/staff/places/${id}`),
 }
 
 /** 서버가 ORDERS_CHANGED 를 뿌리면 onChange 를 부른다. 끊기면 알아서 다시 붙는다. */
