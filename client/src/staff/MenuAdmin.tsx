@@ -7,7 +7,7 @@ import { won } from '../shared/types'
  * 메뉴 관리. 자주 쓰는 건 품절 토글이라 목록에서 바로 되게 하고,
  * 이름/가격/선택지 편집은 모달로.
  */
-export function MenuAdmin({ onToast }: { onToast: (msg: string) => void }) {
+export function MenuAdmin({ onToast, categories }: { onToast: (msg: string) => void; categories: string[] }) {
   const [items, setItems] = useState<AdminItem[] | null>(null)
   const [editing, setEditing] = useState<AdminItem | 'new' | null>(null)
   const [busy, setBusy] = useState(false)
@@ -77,7 +77,7 @@ export function MenuAdmin({ onToast }: { onToast: (msg: string) => void }) {
 
       {editing && (
         <MenuItemModal item={editing === 'new' ? null : editing}
-          categories={[...new Set(items.map((i) => i.category))]}
+          categories={categories}
           onClose={() => setEditing(null)}
           onSaved={(msg) => { setEditing(null); onToast(msg); load() }} />
       )}
@@ -147,12 +147,8 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
         </div>
 
         <div className="field">
-          <label>카테고리</label>
-          <input className="text-input" list="category-options" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="예: 커피" />
-          <datalist id="category-options">
-            {categories.map((c) => <option key={c} value={c} />)}
-          </datalist>
-          <div className="chips" style={{ marginTop: 6 }}>
+          <label>카테고리 <span className="muted">(새 카테고리는 설정 &gt; 카테고리에서)</span></label>
+          <div className="chips">
             {categories.map((c) => (
               <button key={c} className={'btn' + (category === c ? ' selected' : '')} onClick={() => setCategory(c)}>{c}</button>
             ))}

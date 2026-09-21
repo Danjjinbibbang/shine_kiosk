@@ -26,14 +26,15 @@ public class MenuRepository {
 	private record FlatRow(long itemId, String itemName, String category,
 						   long variantId, String label, int price) {}
 
-	/** 판매중인 메뉴만. 순서는 설정 화면에서 정한 sort_order 하나로 (카테고리 순서 = 그 카테고리 첫 메뉴의 순서). */
+	/** 판매중인 메뉴만. 카테고리 순서(설정 > 카테고리) → 그 안에서 메뉴 순서. */
 	public List<ItemView> findAvailableMenu() {
 		List<FlatRow> rows = jdbc.sql("""
 						SELECT i.id, i.name, i.category, v.id AS variant_id, v.label, v.price
 						FROM menu_item i
 						JOIN menu_variant v ON v.menu_item_id = i.id
+						LEFT JOIN menu_category c ON c.name = i.category
 						WHERE i.available = 1 AND v.available = 1
-						ORDER BY i.sort_order, i.id, v.sort_order, v.id
+						ORDER BY COALESCE(c.sort_order, 999999), i.sort_order, i.id, v.sort_order, v.id
 						""")
 				.query((rs, n) -> new FlatRow(
 						rs.getLong("id"), rs.getString("name"), rs.getString("category"),
@@ -68,7 +69,8 @@ public class MenuRepository {
 						       v.id AS variant_id, v.label, v.price, v.available AS v_available
 						FROM menu_item i
 						LEFT JOIN menu_variant v ON v.menu_item_id = i.id
-						ORDER BY i.sort_order, i.id, v.sort_order, v.id
+						LEFT JOIN menu_category c ON c.name = i.category
+						ORDER BY COALESCE(c.sort_order, 999999), i.sort_order, i.id, v.sort_order, v.id
 						""")
 				.query((rs, n) -> {
 					long vid = rs.getLong("variant_id");

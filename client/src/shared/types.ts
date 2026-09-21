@@ -49,6 +49,14 @@ export interface FloorGroup {
 
 // ── 스태프 설정 화면 ──────────────────────────────────
 
+/** 메뉴 카테고리. 키오스크 순서 = 이 순서 */
+export interface Category {
+  id: number
+  name: string
+  sortOrder: number
+  itemCount: number
+}
+
 export interface AdminVariant {
   id: number | null
   label: string | null

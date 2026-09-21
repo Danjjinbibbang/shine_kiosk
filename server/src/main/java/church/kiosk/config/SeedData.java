@@ -27,6 +27,7 @@ public class SeedData {
 	private record Seed(String table, String script) {}
 
 	private static final List<Seed> SEEDS = List.of(
+			new Seed("menu_category", "seed-categories.sql"),
 			new Seed("menu_item", "seed-menu.sql"),
 			new Seed("menu_option", "seed-options.sql"),
 			new Seed("delivery_place", "seed-places.sql")

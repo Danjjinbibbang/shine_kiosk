@@ -16,9 +16,10 @@ class CouponApiTests extends ApiTestSupport {
 	@Test
 	@DisplayName("20,000원 등록 → 잔액 20,000 + 무료 1잔")
 	void registerGrantsFreeDrink() throws Exception {
-		Response r = staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000));
-		assertThat(r.status()).isEqualTo(200);
+		Response r = staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "010-1234-5678"));
+		assertThat(r.status()).as(r.body()).isEqualTo(200);
 		assertThat(r.<Integer>read("$.balance")).isEqualTo(20000);
+		assertThat(r.<String>read("$.phone")).isEqualTo("01012345678");
 		assertThat(r.<Integer>read("$.freeDrinks")).isEqualTo(1);
 		assertThat(r.<String>read("$.name")).isEqualTo("이영희");
 	}
@@ -41,11 +42,15 @@ class CouponApiTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("이름 공백, 금액 0/음수, 없는 쿠폰 충전은 400")
+	@DisplayName("이름 공백, 금액 0/음수, 전화번호 없음/짧음, 없는 쿠폰 충전은 400")
 	void registerAndChargeValidation() throws Exception {
-		assertThat(staffPost("/api/staff/coupons", Map.of("name", "  ", "amount", 20000)).status()).isEqualTo(400);
-		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 0)).status()).isEqualTo(400);
-		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", -5)).status()).isEqualTo(400);
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "  ", "amount", 20000, "phone", "01011112222")).status()).isEqualTo(400);
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 0, "phone", "01011112222")).status()).isEqualTo(400);
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", -5, "phone", "01011112222")).status()).isEqualTo(400);
+		Response noPhone = staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000));
+		assertThat(noPhone.status()).isEqualTo(400);
+		assertThat(noPhone.message()).contains("전화번호");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "123")).message()).contains("10~11자리");
 		assertThat(staffPost("/api/staff/coupons/999/charge", Map.of("amount", 1000)).status()).isEqualTo(400);
 		long id = registerCoupon("이영희", 20000);
 		assertThat(staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 0)).status()).isEqualTo(400);
@@ -55,19 +60,15 @@ class CouponApiTests extends ApiTestSupport {
 	@DisplayName("등록/충전은 PIN 없이 못 한다")
 	void registerRequiresStaff() throws Exception {
 		staffToken = null;
-		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000)).status()).isEqualTo(401);
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "01011112222")).status()).isEqualTo(401);
 	}
 
 	// ── 동명이인 ────────────────────────────────────────────
 
 	@Test
-	@DisplayName("같은 이름 두 번째 등록은 전화 뒤 4자리가 있어야 한다")
+	@DisplayName("같은 이름은 전화 뒤 4자리로 구분되고, 뒤 4자리까지 같으면 거부")
 	void duplicateNameNeedsPhone() throws Exception {
-		registerCoupon("김철수", 20000);
-
-		Response dup = staffPost("/api/staff/coupons", Map.of("name", "김철수", "amount", 20000));
-		assertThat(dup.status()).isEqualTo(400);
-		assertThat(dup.message()).contains("전화번호");
+		registerCoupon("김철수", 20000, "01099990000");
 
 		Response ok = staffPost("/api/staff/coupons", Map.of("name", "김철수", "phone", "010-1111-1234", "amount", 5000));
 		assertThat(ok.status()).isEqualTo(200);
@@ -79,7 +80,7 @@ class CouponApiTests extends ApiTestSupport {
 	void lookupStatuses() throws Exception {
 		assertThat(lookup("없는사람").<String>read("$.status")).isEqualTo("NOT_FOUND");
 
-		registerCoupon("김철수", 20000);
+		registerCoupon("김철수", 20000, "01099990000");
 		assertThat(lookup("김철수").<String>read("$.status")).isEqualTo("FOUND");
 		assertThat(lookup(" 김철수 ").<String>read("$.status")).as("앞뒤 공백 무시").isEqualTo("FOUND");
 
@@ -99,10 +100,10 @@ class CouponApiTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("전화번호: 등록 때 저장, 나중에 추가/변경, 형식 검사, 고객 조회엔 전체 번호가 안 나간다")
+	@DisplayName("전화번호: 변경, 형식 검사, 비울 수 없음, 고객 조회엔 전체 번호가 안 나간다")
 	void phone() throws Exception {
-		long id = registerCoupon("이영희", 20000);
-		assertThat(staffGet("/api/staff/coupons/" + id).body()).doesNotContain("\"phone\"");
+		long id = registerCoupon("이영희", 20000, "01000001111");
+		assertThat(staffGet("/api/staff/coupons/" + id).<String>read("$.phone")).isEqualTo("01000001111");
 
 		Response set = staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "010-2222-3333"));
 		assertThat(set.status()).as(set.body()).isEqualTo(200);
@@ -119,14 +120,11 @@ class CouponApiTests extends ApiTestSupport {
 		Response staff = staffPost("/api/staff/coupons/lookup", Map.of("name", "이영희"));
 		assertThat(staff.<String>read("$.coupon.phone")).isEqualTo("01022223333");
 
-		// 번호 비우기: 동명이인 없으면 가능
-		Response cleared = staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", ""));
-		assertThat(cleared.body()).doesNotContain("\"phone\"");
+		// 번호는 비울 수 없다 (동명이인 구분·환불 혼동 방지)
+		assertThat(staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "")).message()).contains("전화번호");
 
-		// 동명이인이 생기면 비울 수 없고, 뒤 4자리가 겹쳐도 안 된다
-		staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "01022223333"));
+		// 동명이인과 뒤 4자리가 겹치면 안 된다
 		long other = ((Number) staffPost("/api/staff/coupons", Map.of("name", "이영희", "phone", "01044445555", "amount", 1000)).read("$.id")).longValue();
-		assertThat(staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "")).message()).contains("동명이인");
 		assertThat(staffPut("/api/staff/coupons/" + other + "/phone", Map.of("phone", "01000003333")).message()).contains("같은 뒤 4자리");
 		assertThat(staffGet("/api/staff/coupons/999").status()).isEqualTo(400);
 	}

@@ -14,10 +14,11 @@ export async function staffToken(request: APIRequestContext) {
   return (await r.json()).token as string
 }
 
-/** phone 은 전체 번호. 뒤 4자리가 동명이인 구분에 쓰인다. */
+let phoneSeq = 1000
+/** 전화번호는 필수. 안 주면 테스트용으로 매번 다른 번호를 만든다. */
 export async function registerCoupon(request: APIRequestContext, name: string, amount: number, phone?: string) {
   const token = await staffToken(request)
-  const r = await request.post('/api/staff/coupons', { headers: { 'X-Staff-Token': token }, data: { name, amount, phone: phone ?? null } })
+  const r = await request.post('/api/staff/coupons', { headers: { 'X-Staff-Token': token }, data: { name, amount, phone: phone ?? `0105${String(phoneSeq++).padStart(7, '0')}` } })
   expect(r.ok(), await r.text()).toBeTruthy()
   return await r.json()
 }

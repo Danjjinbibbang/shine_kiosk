@@ -52,6 +52,27 @@ public class SchemaMigration {
 		groupSeedOptionsIfNeeded();
 		jdbc.sql("CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_client_request ON orders(client_request_id)").update();
 		dropColumnIfExists("coupon", "phone_last4"); // phone 에서 계산하므로 더 이상 저장하지 않는다
+		registerMissingCategories();
+	}
+
+	/** 메뉴/옵션에 쓰인 카테고리가 카테고리 표에 없으면 (예전 DB) 메뉴 순서대로 등록한다. */
+	private void registerMissingCategories() {
+		List<String> used = jdbc.sql("""
+						SELECT category FROM (
+						    SELECT category, MIN(sort_order) AS o FROM menu_item GROUP BY category
+						    UNION ALL
+						    SELECT category, 1000000 + MIN(sort_order) FROM menu_option GROUP BY category
+						) ORDER BY o
+						""").query(String.class).list();
+		Set<String> known = Set.copyOf(jdbc.sql("SELECT name FROM menu_category").query(String.class).list());
+		int next = jdbc.sql("SELECT COALESCE(MAX(sort_order), 0) + 10 FROM menu_category").query(Integer.class).single();
+		java.util.LinkedHashSet<String> missing = new java.util.LinkedHashSet<>(used);
+		missing.removeAll(known);
+		for (String name : missing) {
+			jdbc.sql("INSERT INTO menu_category (name, sort_order) VALUES (:name, :sort)").param("name", name).param("sort", next).update();
+			log.info("카테고리 등록: {}", name);
+			next += 10;
+		}
 	}
 
 	private void dropColumnIfExists(String table, String column) {

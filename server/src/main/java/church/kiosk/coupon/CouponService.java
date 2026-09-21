@@ -59,7 +59,7 @@ public class CouponService {
 		return matched.map(LookupResult::found).orElseGet(LookupResult::notFound);
 	}
 
-	/** phone 은 전체 번호(선택). 같은 이름이 이미 있으면 구분을 위해 번호가 꼭 있어야 한다. */
+	/** 전화번호는 필수. 동명이인 구분과 잔액 문자, 취소·차액 환불을 쿠폰에 넣을 때 혼동을 막기 위해서다. */
 	@Transactional
 	public Coupon register(String name, String phoneRaw, int amount) {
 		String trimmed = name.trim();
@@ -70,15 +70,12 @@ public class CouponService {
 			throw new BusinessException("충전 금액을 확인해 주세요.");
 		}
 		String phone = validPhone(phoneRaw);
-		List<Coupon> sameName = couponRepository.findByName(trimmed);
-		if (!sameName.isEmpty()) {
-			if (phone == null) {
-				throw new BusinessException("같은 이름이 이미 있습니다. 전화번호를 입력해 주세요.");
-			}
-			String last4 = Coupon.last4Of(phone);
-			if (sameName.stream().anyMatch(c -> last4.equals(c.phoneLast4()))) {
-				throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
-			}
+		if (phone == null) {
+			throw new BusinessException("전화번호를 입력해 주세요.");
+		}
+		String last4 = Coupon.last4Of(phone);
+		if (couponRepository.findByName(trimmed).stream().anyMatch(c -> last4.equals(c.phoneLast4()))) {
+			throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
 		}
 		int free = freeDrinksFor(amount);
 		long id = couponRepository.insert(trimmed, phone, amount, free);
@@ -104,16 +101,14 @@ public class CouponService {
 	public Coupon updatePhone(long couponId, String phoneRaw) {
 		Coupon coupon = require(couponId);
 		String phone = validPhone(phoneRaw);
-		if (phone != null) {
-			String last4 = Coupon.last4Of(phone);
-			boolean clash = couponRepository.findByName(coupon.name()).stream()
-					.anyMatch(c -> c.id() != couponId && last4.equals(c.phoneLast4()));
-			if (clash) {
-				throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
-			}
+		if (phone == null) {
+			throw new BusinessException("전화번호를 입력해 주세요.");
 		}
-		else if (couponRepository.findByName(coupon.name()).size() > 1) {
-			throw new BusinessException("동명이인이 있어 번호를 비울 수 없습니다.");
+		String last4 = Coupon.last4Of(phone);
+		boolean clash = couponRepository.findByName(coupon.name()).stream()
+				.anyMatch(c -> c.id() != couponId && last4.equals(c.phoneLast4()));
+		if (clash) {
+			throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
 		}
 		couponRepository.updatePhone(couponId, phone);
 		return couponRepository.findById(couponId).orElseThrow();

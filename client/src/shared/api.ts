@@ -1,5 +1,5 @@
 import type {
-  AdminItem, AdminOption, AdminPlace, Coupon, DayReport, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
+  AdminItem, AdminOption, AdminPlace, Category, Coupon, DayReport, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
   LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest,
 } from './types'
 
@@ -87,7 +87,7 @@ export const api = {
   reopenOrder: (id: number) => post<void>(`/api/staff/orders/${id}/reopen`),
   settleOrder: (id: number, couponId: number | null = null) => post<void>(`/api/staff/orders/${id}/settle`, { couponId }),
   couponsByName: (name: string) => request<Coupon[]>(`/api/staff/coupons?name=${encodeURIComponent(name)}`),
-  cancelOrder: (id: number) => post<void>(`/api/staff/orders/${id}/cancel`),
+  cancelOrder: (id: number, refundToCouponId: number | null = null) => post<void>(`/api/staff/orders/${id}/cancel`, { refundToCouponId }),
   staffLookupCoupon: (name: string, phoneLast4?: string) =>
     post<LookupResult>('/api/staff/coupons/lookup', { name, phoneLast4: phoneLast4 || null }),
   getCoupon: (id: number) => request<Coupon>(`/api/staff/coupons/${id}`),
@@ -101,6 +101,11 @@ export const api = {
   couponPreset: () => request<{ amount: number }>('/api/staff/coupons/preset'),
 
   // ── 스태프 설정 (메뉴 / 장소) ────────────────────────
+  categories: () => request<Category[]>('/api/staff/categories'),
+  createCategory: (name: string) => post<Category>('/api/staff/categories', { name }),
+  renameCategory: (id: number, name: string) => put<Category>(`/api/staff/categories/${id}`, { name }),
+  deleteCategory: (id: number) => del<void>(`/api/staff/categories/${id}`),
+  reorderCategories: (ids: number[]) => put<Category[]>('/api/staff/categories/order', { ids }),
   adminMenu: () => request<AdminItem[]>('/api/staff/menu'),
   createMenuItem: (body: SaveItemRequest) => post<AdminItem>('/api/staff/menu', body),
   updateMenuItem: (id: number, body: SaveItemRequest) => put<AdminItem>(`/api/staff/menu/${id}`, body),

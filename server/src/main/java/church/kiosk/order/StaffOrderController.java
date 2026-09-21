@@ -62,8 +62,11 @@ public class StaffOrderController {
 		orderService.reopen(id);
 	}
 
+	/** refundToCouponId 가 있으면 받은 현금/이체를 그 쿠폰 잔액으로 돌려준다. 없으면 현금으로 돌려준 것으로. */
+	public record CancelRequest(Long refundToCouponId) {}
+
 	@PostMapping("/{id}/cancel")
-	public void cancel(@PathVariable long id) {
-		orderService.cancel(id);
+	public void cancel(@PathVariable long id, @RequestBody(required = false) CancelRequest request) {
+		orderService.cancel(id, request == null ? null : request.refundToCouponId());
 	}
 }

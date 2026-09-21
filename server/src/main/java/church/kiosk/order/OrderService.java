@@ -256,8 +256,12 @@ public class OrderService {
 		events.broadcastOrdersChanged();
 	}
 
+	/**
+	 * 취소. 쿠폰으로 낸 몫은 자동 복원. 현금/이체로 받은 돈(settled)은 현금으로 돌려주거나,
+	 * refundToCouponId 를 주면 그 쿠폰 잔액에 넣는다 (쿠폰 주문이면 그 쿠폰이어야 한다).
+	 */
 	@Transactional
-	public void cancel(long orderId) {
+	public void cancel(long orderId, Long refundToCouponId) {
 		OrderView order = require(orderId);
 		if (order.status() == Status.CANCELED) {
 			return;
@@ -265,7 +269,15 @@ public class OrderService {
 		if (order.couponId() != null) {
 			couponService.refundForOrder(order.couponId(), order.couponAmount(), order.freeAmount() > 0, orderId);
 		}
-		orderRepository.markCanceled(orderId);
+		int received = order.settledCash() + order.settledTransfer();
+		if (refundToCouponId != null && received > 0) {
+			if (order.couponId() != null && !order.couponId().equals(refundToCouponId)) {
+				throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
+			}
+			couponService.require(refundToCouponId);
+			couponService.refundForOrder(refundToCouponId, received, false, orderId);
+		}
+		orderRepository.markCanceled(orderId); // 받은 돈(settled)도 0 으로 — 돌려준 것으로 본다
 		events.broadcastOrdersChanged();
 	}
 

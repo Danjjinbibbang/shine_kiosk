@@ -39,7 +39,9 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   }
 
   // 조회는 뒤 4자리로 구분한다 (전체 번호를 넣어도 뒤 4자리만 씀)
-  const last4 = phone.replace(/[^0-9]/g, '').slice(-4)
+  const digits = phone.replace(/[^0-9]/g, '')
+  const last4 = digits.slice(-4)
+  const phoneValid = digits.length >= 10 && digits.length <= 11
   const lookup = () => wrap(async () => {
     const r = await api.staffLookupCoupon(name.trim(), last4.length === 4 ? last4 : undefined)
     setResult(r)
@@ -106,7 +108,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
         </div>
         <div className="field">
           <label>
-            전화번호 <span className="muted">(잔액 문자 발송용{result?.status === 'NEED_PHONE' ? ` · 같은 이름 ${result.candidateCount}명, 뒤 4자리로 구분` : ', 없어도 등록 가능'})</span>
+            전화번호 <span className="muted">(등록 필수 — 동명이인 구분·잔액 문자·환불용{result?.status === 'NEED_PHONE' ? ` · 같은 이름 ${result.candidateCount}명, 뒤 4자리로 구분` : ''})</span>
           </label>
           <input className="text-input" inputMode="tel" placeholder="010-0000-0000" value={phone}
             onChange={(e) => setPhone(e.target.value.replace(/[^0-9-]/g, ''))} />
@@ -127,7 +129,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
           {/* 번호가 있으면 잠겨 있고 '번호 변경' 을 눌러야 고칠 수 있다. 없으면 바로 입력. */}
           <div className="row" style={{ fontSize: 15 }}>
             <span className="muted">📱</span>
-            <input className="text-input grow" inputMode="tel" placeholder="전화번호 없음 — 잔액 문자를 받으려면 입력"
+            <input className="text-input grow" inputMode="tel" placeholder="전화번호 없음 — 입력해 주세요"
               value={phoneEditing || !result.coupon.phone ? phoneDraft : formatPhone(result.coupon.phone)}
               disabled={!!result.coupon.phone && !phoneEditing}
               onChange={(e) => setPhoneDraft(e.target.value.replace(/[^0-9-]/g, ''))}
@@ -136,7 +138,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
               <button className="btn" style={{ minHeight: 44, fontSize: 14 }} onClick={() => { setPhoneEditing(true); setPhoneDraft(result.coupon!.phone ?? '') }}>번호 변경</button>
             ) : (
               <>
-                <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || phoneDraft.trim() === (result.coupon.phone ?? '')}
+                <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || phoneDraft.trim() === (result.coupon.phone ?? '') || phoneDraft.replace(/[^0-9]/g, '').length < 10}
                   onClick={() => void savePhone(result.coupon!)}>저장</button>
                 {result.coupon.phone && <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setPhoneEditing(false)}>취소</button>}
               </>
@@ -177,12 +179,10 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
       {result?.status === 'NOT_FOUND' && (
         <div className="card">
           <b style={{ fontSize: 18 }}>"{name.trim()}" 쿠폰이 없습니다. 새로 등록할까요?</b>
-          {!phone && (
-            <div className="muted" style={{ fontSize: 14 }}>
-              전화번호를 넣어 두면 주문 완료 때 잔액을 문자로 보낼 수 있습니다.
-            </div>
+          {!phoneValid && (
+            <div className="error" style={{ fontSize: 14 }}>위 전화번호 칸에 010 번호를 넣어야 등록할 수 있어요.</div>
           )}
-          <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy}
+          <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy || !phoneValid}
             label={(n) => `${won(n)} 등록`} onSubmit={(n) => void register(n)} custom={customAmount} />
         </div>
       )}

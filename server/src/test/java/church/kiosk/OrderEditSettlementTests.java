@@ -162,12 +162,35 @@ class OrderEditSettlementTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("취소한 주문도 받은 돈이 남아 있어 돌려줄 금액을 알 수 있다")
-	void cancelKeepsSettled() throws Exception {
+	@DisplayName("취소: 받은 돈은 현금으로 돌려주거나(기본) 쿠폰 잔액에 넣을 수 있다")
+	void cancelRefund() throws Exception {
+		// 기본: 현금으로 돌려준 것으로 보고 받은 돈을 0 으로
 		long id = id(createOrder(cashOrder("손님", line(ICECREAM_CUP, 1))));
 		staffPost("/api/staff/orders/" + id + "/cancel", null);
-		Response r = staffGet("/api/staff/orders?status=CANCELED");
-		assertThat(r.<List<Integer>>read("$[?(@.id==" + id + ")].settledCash")).containsExactly(3000);
+		assertThat(staffGet("/api/staff/orders?status=CANCELED").<List<Integer>>read("$[?(@.id==" + id + ")].settledCash")).containsExactly(0);
+
+		// 현금 주문을 취소하면서 이름의 쿠폰에 넣기
+		long coupon = registerCoupon("이영희", 20000);
+		long cash = id(createOrder(cashOrder("이영희", line(ICECREAM_CUP, 1))));
+		assertThat(staffPost("/api/staff/orders/" + cash + "/cancel", Map.of("refundToCouponId", 999)).status()).isEqualTo(400);
+		assertThat(staffPost("/api/staff/orders/" + cash + "/cancel", Map.of("refundToCouponId", coupon)).status()).isEqualTo(200);
+		assertThat(balanceOf("이영희")).isEqualTo(23000);
+
+		// 쿠폰+현금 주문 취소: 쿠폰 몫은 자동 복원, 현금 몫도 그 쿠폰에 (다른 쿠폰은 거부)
+		long poor = registerCoupon("김철수", 1500);
+		Map<String, Object> mixed = new HashMap<>(cashOrder("김철수", line(ICECREAM_CUP, 1)));
+		mixed.put("payMethod", "COUPON");
+		mixed.put("couponId", poor);
+		mixed.put("remainderMethod", "CASH");
+		long mixedId = id(createOrder(mixed));                                       // 쿠폰 1,500 + 현금 1,500
+		assertThat(balanceOf("김철수")).isZero();
+		assertThat(staffPost("/api/staff/orders/" + mixedId + "/cancel", Map.of("refundToCouponId", coupon)).message()).contains("이 주문에 쓴 쿠폰");
+		staffPost("/api/staff/orders/" + mixedId + "/cancel", Map.of("refundToCouponId", poor));
+		assertThat(balanceOf("김철수")).as("쿠폰 1,500 복원 + 현금 1,500 넣음").isEqualTo(3000);
+
+		// 두 번 취소해도 두 번 환불되지 않는다
+		staffPost("/api/staff/orders/" + mixedId + "/cancel", Map.of("refundToCouponId", poor));
+		assertThat(balanceOf("김철수")).isEqualTo(3000);
 	}
 
 	@Test

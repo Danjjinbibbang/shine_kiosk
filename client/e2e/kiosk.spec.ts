@@ -145,7 +145,7 @@ test.describe('결제 흐름', () => {
 
   test('쿠폰: 없는 이름 오류 → 동명이인 전화번호 → 무료 1잔 토글 → 결제 (이름 화면 건너뜀)', async ({ page, request }) => {
     const name = uniq('쿠폰')
-    await registerCoupon(request, name, 20000)          // 잔액 20,000 / 무료 1잔
+    await registerCoupon(request, name, 20000, '01000001111')  // 잔액 20,000 / 무료 1잔
     await registerCoupon(request, name, 500, '01000004321')    // 동명이인
 
     await toReceiveStep(page, [['아메리카노', 'ICE', 2], ['아이스크림', '컵', 1]]) // 5,000원

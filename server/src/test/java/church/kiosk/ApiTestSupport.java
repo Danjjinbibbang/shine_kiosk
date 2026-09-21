@@ -65,7 +65,7 @@ public abstract class ApiTestSupport {
 	@BeforeEach
 	void cleanTables() throws Exception {
 		for (String table : List.of("order_line", "orders", "coupon_tx", "coupon", "customer",
-				"order_line_option", "menu_variant", "menu_item", "menu_option", "delivery_place")) {
+				"order_line_option", "menu_variant", "menu_item", "menu_option", "menu_category", "delivery_place")) {
 			jdbc.sql("DELETE FROM " + table).update();
 		}
 		seedData.seedIfEmpty(); // 메뉴/장소는 매번 기본 시드로
@@ -117,8 +117,15 @@ public abstract class ApiTestSupport {
 
 	// ── 시나리오 도우미 ─────────────────────────────────────
 
+	private static int phoneSeq = 1000;
+
+	/** 전화번호는 필수라 테스트마다 다른 번호를 만들어 넣는다. */
 	protected long registerCoupon(String name, int amount) throws Exception {
-		Response r = staffPost("/api/staff/coupons", Map.of("name", name, "amount", amount));
+		return registerCoupon(name, amount, "0100000" + (phoneSeq++));
+	}
+
+	protected long registerCoupon(String name, int amount, String phone) throws Exception {
+		Response r = staffPost("/api/staff/coupons", Map.of("name", name, "amount", amount, "phone", phone));
 		assertThat(r.status()).as(r.body()).isEqualTo(200);
 		return ((Number) r.read("$.id")).longValue();
 	}

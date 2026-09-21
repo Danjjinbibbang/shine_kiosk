@@ -153,7 +153,7 @@ public class OrderRepository {
 	}
 
 	public void markCanceled(long orderId) {
-		jdbc.sql("UPDATE orders SET status = 'CANCELED', canceled_at = :now WHERE id = :id")
+		jdbc.sql("UPDATE orders SET status = 'CANCELED', canceled_at = :now, settled_cash = 0, settled_transfer = 0 WHERE id = :id")
 				.param("now", LocalDateTime.now().toString()).param("id", orderId).update();
 	}
 

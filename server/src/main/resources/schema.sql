@@ -1,6 +1,13 @@
 -- 교회 카페 키오스크 스키마 (SQLite)
 -- 매 기동 시 실행되므로 모든 DDL은 IF NOT EXISTS 로 작성한다.
 
+-- 메뉴 카테고리 (커피 / 논커피 / 아이스크림 / 디저트 …). 키오스크에 보이는 순서 = sort_order.
+CREATE TABLE IF NOT EXISTS menu_category (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS menu_item (
     id          INTEGER PRIMARY KEY,
     name        TEXT    NOT NULL,

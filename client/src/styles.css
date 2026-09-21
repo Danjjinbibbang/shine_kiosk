@@ -213,6 +213,8 @@ input { font: inherit; }
 .order-card .settle .btn { min-height: 40px; font-size: 14px; padding: 4px 12px; box-shadow: none; }
 .order-card .settle .settle-note { flex-basis: 100%; font-size: 13px; font-weight: 600; }
 .order-card .settle .settle-pick { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
+.order-card .settle.cancel-panel { background: #fff5f4; }
+.order-card .settle.cancel-panel .btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
 .order-card .actions { display: flex; gap: 8px; }
 .order-card .actions .btn { min-height: 56px; font-size: 18px; }
 .order-card .actions .btn.ok { flex: 2; font-size: 22px; }

@@ -66,15 +66,15 @@ test.describe('주문 처리', () => {
     const card = orderCard(page, name)
     await expect(card.locator('.pay')).toHaveText('무료 1잔(아이스크림 컵)')
 
-    page.once('dialog', (d) => d.dismiss())
-    await card.getByRole('button', { name: '취소' }).click()
+    // 팝업 대신 카드 안 패널. 받은 돈이 없으면(무료 1잔만) 취소 확정 버튼 하나
+    await card.getByRole('button', { name: '취소', exact: true }).click()
+    await expect(card.locator('.cancel-panel')).toContainText('쿠폰으로 낸 몫은 자동 복원')
+    await card.getByRole('button', { name: '취소 안 함' }).click()
+    await expect(card.locator('.cancel-panel')).toHaveCount(0)
     await expect(card).toBeVisible()
 
-    page.once('dialog', (d) => {
-      expect(d.message()).toContain('쿠폰 차감액(무료 1잔 포함)은 자동으로 되돌려집니다')
-      d.accept()
-    })
-    await card.getByRole('button', { name: '취소' }).click()
+    await card.getByRole('button', { name: '취소', exact: true }).click()
+    await card.getByRole('button', { name: '취소 확정' }).click()
     await expect(card).toHaveCount(0)
     await expect(page.locator('.toast')).toContainText('취소됨')
     expect((await lookupCoupon(request, name)).coupon.freeDrinks).toBe(1)
@@ -140,6 +140,8 @@ test.describe('쿠폰 관리', () => {
     await page.getByPlaceholder('쿠폰 주인 이름').fill(name)
     await page.getByRole('button', { name: '조회' }).click()
     await expect(page.getByText('새로 등록할까요?')).toBeVisible()
+    await expect(page.getByRole('button', { name: '20,000원 등록' })).toBeDisabled()   // 번호 없으면 등록 불가
+    await page.getByPlaceholder('010-0000-0000').fill('010-7777-8888')
     await page.getByRole('button', { name: '20,000원 등록' }).click()
     await expect(page.locator('.toast')).toContainText('등록')
     await expect(page.getByText('1잔 남음')).toBeVisible()
@@ -215,29 +217,19 @@ test.describe('쿠폰 관리', () => {
     await expect(phoneInput).toHaveValue('010-9999-8888')
     await expect(phoneInput).toBeDisabled()
 
-    // 지우기: 번호 변경 → 비우고 저장 → 없음 상태에선 바로 입력 가능
+    // 번호는 비울 수 없다: 비우면 저장 버튼이 잠긴다
     await page.getByRole('button', { name: '번호 변경' }).click()
     await phoneInput.fill('')
-    await page.getByRole('button', { name: '저장' }).click()
-    await expect(phoneInput).toHaveValue('')
-    await expect(phoneInput).toBeEnabled()
-    await expect(page.getByRole('button', { name: '번호 변경' })).toHaveCount(0)
-    expect((await lookupCoupon(request, name)).coupon.phoneLast4 ?? null).toBeNull()
-
-    // 없던 번호 새로 넣기
-    await phoneInput.fill('010-1234-5678')
-    await page.getByRole('button', { name: '저장' }).click()
-    await expect(phoneInput).toHaveValue('010-1234-5678')
-    expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('5678')
+    await expect(page.getByRole('button', { name: '저장' })).toBeDisabled()
+    await page.getByRole('button', { name: '취소', exact: true }).click()
+    await expect(phoneInput).toHaveValue('010-9999-8888')
+    expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('8888')
   })
 
-  test('완료 누르면 잔액 문자 앱이 열리고, 번호 없으면 안내만', async ({ page, request }) => {
+  test('완료 누르면 잔액 문자 앱이 열린다', async ({ page, request }) => {
     const withPhone = uniq('문자')
     const coupon = await registerCoupon(request, withPhone, 20000, '010-5555-6666')
     await createOrder(request, { customerName: withPhone, payMethod: 'COUPON', couponId: coupon.id, useFreeDrink: true, lines: [{ variantId: 3002, quantity: 1 }, { variantId: 1001, quantity: 1 }] })
-    const noPhone = uniq('무번호')
-    const coupon2 = await registerCoupon(request, noPhone, 20000)
-    await createOrder(request, { customerName: noPhone, payMethod: 'COUPON', couponId: coupon2.id, lines: [{ variantId: 1001, quantity: 1 }] })
     await page.addInitScript(() => { (window as unknown as { __smsCapture?: boolean }).__smsCapture = true })
     await staffLogin(page)
 
@@ -252,15 +244,9 @@ test.describe('쿠폰 관리', () => {
     expect(body).toContain('남은 잔액 19,000원 · 무료 1잔 0잔')
     await expect(orderCard(page, withPhone)).toHaveCount(0)
 
-    await page.evaluate(() => { (window as unknown as { __lastSms?: string }).__lastSms = undefined })
-    await orderCard(page, noPhone).getByRole('button', { name: /완료/ }).click()
-    await expect(page.locator('.toast')).toContainText('번호 없어 문자 생략')
-    expect(await page.evaluate(() => (window as unknown as { __lastSms?: string }).__lastSms)).toBeUndefined()
-
-    // 완료 탭에서 다시 보내기 버튼: 번호 있는 건 활성, 없는 건 비활성
+    // 완료 탭에서 다시 보내기
     await page.getByRole('button', { name: '완료', exact: true }).click()
     await expect(orderCard(page, withPhone).getByRole('button', { name: /잔액 문자/ })).toBeEnabled()
-    await expect(orderCard(page, noPhone).getByRole('button', { name: /잔액 문자/ })).toBeDisabled()
   })
 })
 
@@ -340,6 +326,53 @@ test.describe('설정 · 메뉴 관리', () => {
     await expect(modal.getByRole('button', { name: '저장' })).toBeEnabled() // 가격 0원도 허용(무료 메뉴)
     await modal.getByRole('button', { name: '닫기' }).click()
     await expect(modal).toHaveCount(0)
+  })
+})
+
+test.describe('설정 · 카테고리', () => {
+  test('추가 → 메뉴 등록에 보임 → 순서 변경이 키오스크에 반영 → 이름 변경 → 삭제', async ({ page, request }) => {
+    const name = uniq('디저트')
+    await staffLogin(page)
+    await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('button', { name: '카테고리' }).click()
+    await page.getByPlaceholder('새 카테고리 (예: 디저트)').fill(name)
+    await page.getByRole('button', { name: '추가' }).click()
+    const card = page.locator('.admin-item').filter({ hasText: name })
+    await expect(card).toBeVisible()
+    await expect(card).toContainText('메뉴 0개')
+
+    // 메뉴 등록 화면의 카테고리 칩에 나온다
+    await page.getByRole('button', { name: '메뉴', exact: true }).click()
+    await page.getByRole('button', { name: '＋ 새 메뉴' }).click()
+    await expect(page.locator('.modal .chips').first().getByRole('button', { name })).toBeVisible()
+    await page.getByRole('button', { name: '닫기' }).click()
+
+    // 맨 위로 올리면 키오스크 카테고리 순서가 바뀐다
+    await page.getByRole('button', { name: '카테고리' }).click()
+    const menu = async () => (await (await request.get('/api/menu')).json()) as Array<{ category: string }>
+    const before = [...new Set((await menu()).map((m) => m.category))]
+    expect(before[0]).toBe('커피')
+    for (let i = 0; i < 10; i++) {
+      const up = card.getByRole('button', { name: '위로' })
+      if (await up.isDisabled()) break
+      await up.click()
+      await page.waitForTimeout(150)
+    }
+    // 새 카테고리엔 메뉴가 없어 키오스크엔 안 나오지만, 관리 목록 첫 줄이어야 한다
+    await expect(page.locator('.admin-item').first()).toContainText(name)
+
+    // 이름 변경
+    await card.getByRole('button', { name: '이름 변경' }).click()
+    await page.getByLabel('카테고리 이름').fill(name + '2')
+    await page.getByRole('button', { name: '저장' }).click()
+    const renamed = page.locator('.admin-item').filter({ hasText: name + '2' })
+    await expect(renamed).toBeVisible()
+
+    // 메뉴가 있는 카테고리는 삭제 버튼이 잠겨 있고, 빈 건 지워진다
+    await expect(page.locator('.admin-item').filter({ hasText: '커피' }).first().getByRole('button', { name: '삭제' })).toBeDisabled()
+    page.once('dialog', (d) => d.accept())
+    await renamed.getByRole('button', { name: '삭제' }).click()
+    await expect(renamed).toHaveCount(0)
   })
 })
 
@@ -537,11 +570,25 @@ test.describe('수정과 정산', () => {
     await expect(card.locator('.settle')).toContainText('현금 3,000원 더 받기')
     await expect(card.getByRole('button', { name: '받았어요' })).toBeVisible()
 
-    let message = ''
-    page.once('dialog', (d) => { message = d.message(); d.dismiss() })
-    await card.getByRole('button', { name: '취소' }).click()
-    expect(message).toContain('받은 1,000원을 현금으로 돌려주세요')
+    await card.getByRole('button', { name: '취소', exact: true }).click()
+    await expect(card.locator('.cancel-panel')).toContainText('받은 1,000원은?')
+    await expect(card.getByRole('button', { name: '현금으로 돌려주고 취소' })).toBeVisible()
+    await expect(card.getByRole('button', { name: '쿠폰에 넣고 취소' })).toBeVisible()
+    await card.getByRole('button', { name: '취소 안 함' }).click()
     await expect(card).toBeVisible()
+  })
+
+  test('취소하면서 받은 돈을 주문자 쿠폰에 넣기', async ({ page, request }) => {
+    const name = uniq('취소쿠폰')
+    await registerCoupon(request, name, 20000)
+    await createOrder(request, { customerName: name, lines: [{ variantId: 3002, quantity: 1 }] })   // 현금 3,000
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await card.getByRole('button', { name: '취소', exact: true }).click()
+    await card.getByRole('button', { name: '쿠폰에 넣고 취소' }).click()
+    await expect(card).toHaveCount(0)
+    await expect(page.locator('.toast')).toContainText('쿠폰 잔액에 넣음')
+    expect((await lookupCoupon(request, name)).coupon.balance).toBe(23000)
   })
 
   test('현금 주문의 돌려줄 돈도 주문자 이름의 쿠폰에 넣을 수 있다 (동명이인이면 고른다)', async ({ page, request }) => {

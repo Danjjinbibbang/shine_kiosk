@@ -55,7 +55,11 @@ class MenuAdminApiTests extends ApiTestSupport {
 		List<String> cats = getJson("/api/menu").read("$[*].category");
 		assertThat(cats.stream().distinct().toList()).as("논커피 묶음 안에 들어간다").containsExactly("커피", "논커피", "아이스크림");
 
+		// 없는 카테고리는 거부, 카테고리를 만들면 그 순서대로 키오스크에 나온다
+		assertThat(staffPost("/api/staff/menu", item("쿠키", "디저트", List.of(variant(null, "", 1500, true)))).message()).contains("없는 카테고리");
+		staffPost("/api/staff/categories", Map.of("name", "디저트"));
 		Response single = staffPost("/api/staff/menu", item("쿠키", "디저트", List.of(variant(null, "", 1500, true))));
+		assertThat(single.status()).as(single.body()).isEqualTo(200);
 		assertThat(single.body()).doesNotContain("\"label\"");
 		assertThat(single.<Integer>read("$.variants[0].price")).isEqualTo(1500);
 		assertThat(getJson("/api/menu").<List<String>>read("$[*].category").stream().distinct().toList())
@@ -105,20 +109,60 @@ class MenuAdminApiTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("순서 변경: 보낸 id 순서대로, 카테고리 순서도 따라간다")
+	@DisplayName("순서 변경: 메뉴 순서는 카테고리 안에서, 카테고리 순서는 카테고리 표에서")
 	void reorder() throws Exception {
+		// 메뉴 순서: 라떼(11) 를 커피 맨 앞으로
 		List<Integer> ids = staffGet("/api/staff/menu").read("$[*].id");
 		List<Long> newOrder = new ArrayList<>();
-		newOrder.add(30L); // 아이스크림을 맨 앞으로
-		ids.stream().filter(i -> i != 30).forEach(i -> newOrder.add(i.longValue()));
-
+		newOrder.add(11L);
+		ids.stream().filter(i -> i != 11).forEach(i -> newOrder.add(i.longValue()));
 		Response r = staffPut("/api/staff/menu/order", Map.of("ids", newOrder));
 		assertThat(r.status()).as(r.body()).isEqualTo(200);
-		assertThat(r.<String>read("$[0].name")).isEqualTo("아이스크림");
-		List<String> cats = getJson("/api/menu").read("$[*].category");
-		assertThat(cats.stream().distinct().toList()).containsExactly("아이스크림", "커피", "논커피");
+		assertThat(r.<String>read("$[0].name")).isEqualTo("라떼");
+		assertThat(getJson("/api/menu").<List<String>>read("$[*].category").stream().distinct().toList())
+				.as("카테고리 순서는 그대로").containsExactly("커피", "논커피", "아이스크림");
+
+		// 카테고리 순서: 아이스크림을 맨 앞으로
+		List<Integer> catIds = staffGet("/api/staff/categories").read("$[*].id");
+		List<Long> catOrder = new ArrayList<>();
+		catOrder.add(3L);
+		catIds.stream().filter(i -> i != 3).forEach(i -> catOrder.add(i.longValue()));
+		staffPut("/api/staff/categories/order", Map.of("ids", catOrder));
+		assertThat(getJson("/api/menu").<List<String>>read("$[*].category").stream().distinct().toList())
+				.containsExactly("아이스크림", "커피", "논커피");
+		assertThat(staffGet("/api/staff/menu").<String>read("$[0].name")).as("관리 목록도 같은 순서").isEqualTo("아이스크림");
 
 		assertThat(staffPut("/api/staff/menu/order", Map.of("ids", List.of())).status()).isEqualTo(400);
+	}
+
+	@Test
+	@DisplayName("카테고리: 추가/이름 변경(메뉴·옵션도 따라감)/삭제(메뉴 있으면 불가)/중복 거부")
+	void categories() throws Exception {
+		Response list = staffGet("/api/staff/categories");
+		assertThat(list.<List<String>>read("$[*].name")).containsExactly("커피", "논커피", "아이스크림");
+		assertThat(list.<List<Integer>>read("$[*].itemCount")).containsExactly(6, 3, 1);
+
+		Response created = staffPost("/api/staff/categories", Map.of("name", " 디저트 "));
+		assertThat(created.status()).as(created.body()).isEqualTo(200);
+		assertThat(created.<String>read("$.name")).isEqualTo("디저트");
+		long dessert = ((Number) created.read("$.id")).longValue();
+		assertThat(staffPost("/api/staff/categories", Map.of("name", "디저트")).message()).contains("이미 있는");
+		assertThat(staffPost("/api/staff/categories", Map.of("name", " ")).status()).isEqualTo(400);
+
+		// 이름 변경 → 메뉴/옵션의 카테고리도 바뀐다
+		Response renamed = staffPut("/api/staff/categories/1", Map.of("name", "커피류"));
+		assertThat(renamed.<String>read("$.name")).isEqualTo("커피류");
+		assertThat(getJson("/api/menu").<List<String>>read("$[?(@.name=='아메리카노')].category")).containsExactly("커피류");
+		assertThat(getJson("/api/menu/options").<List<String>>read("$[*].category")).containsExactly("커피류", "커피류");
+		assertThat(staffPut("/api/staff/categories/1", Map.of("name", "논커피")).message()).contains("이미 있는");
+
+		// 메뉴가 있는 카테고리는 못 지우고, 빈 카테고리는 지운다
+		assertThat(staffDelete("/api/staff/categories/1").message()).contains("메뉴가");
+		assertThat(staffDelete("/api/staff/categories/" + dessert).status()).isEqualTo(200);
+		assertThat(staffGet("/api/staff/categories").<List<String>>read("$[*].name")).doesNotContain("디저트");
+		assertThat(staffDelete("/api/staff/categories/999").status()).isEqualTo(400);
+		staffToken = null;
+		assertThat(staffGet("/api/staff/categories").status()).isEqualTo(401);
 	}
 
 	@Test

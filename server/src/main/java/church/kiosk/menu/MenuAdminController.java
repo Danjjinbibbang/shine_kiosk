@@ -28,10 +28,21 @@ public class MenuAdminController {
 
 	private final MenuRepository menuRepository;
 	private final MenuOptionRepository optionRepository;
+	private final MenuCategoryRepository categoryRepository;
 
-	public MenuAdminController(MenuRepository menuRepository, MenuOptionRepository optionRepository) {
+	public MenuAdminController(MenuRepository menuRepository, MenuOptionRepository optionRepository,
+							   MenuCategoryRepository categoryRepository) {
 		this.menuRepository = menuRepository;
 		this.optionRepository = optionRepository;
+		this.categoryRepository = categoryRepository;
+	}
+
+	private String knownCategory(String raw) {
+		String name = raw.trim();
+		if (!categoryRepository.existsByName(name)) {
+			throw new BusinessException("없는 카테고리입니다. 설정 > 카테고리에서 먼저 만들어 주세요.");
+		}
+		return name;
 	}
 
 	// ── 옵션 (샷 추가 / 연하게) ─────────────────────────────
@@ -43,14 +54,14 @@ public class MenuAdminController {
 
 	@PostMapping("/options")
 	public AdminOption createOption(@RequestBody @Valid SaveOptionRequest req) {
-		long id = optionRepository.insert(req.name().trim(), req.price(), req.category().trim(), req.groupOrNull(), req.available());
+		long id = optionRepository.insert(req.name().trim(), req.price(), knownCategory(req.category()), req.groupOrNull(), req.available());
 		return optionRepository.findById(id).orElseThrow();
 	}
 
 	@PutMapping("/options/{id}")
 	public AdminOption updateOption(@PathVariable long id, @RequestBody @Valid SaveOptionRequest req) {
 		optionRepository.findById(id).orElseThrow(() -> new BusinessException("옵션을 찾을 수 없습니다."));
-		optionRepository.update(id, req.name().trim(), req.price(), req.category().trim(), req.groupOrNull(), req.available());
+		optionRepository.update(id, req.name().trim(), req.price(), knownCategory(req.category()), req.groupOrNull(), req.available());
 		return optionRepository.findById(id).orElseThrow();
 	}
 
@@ -70,7 +81,7 @@ public class MenuAdminController {
 	@PostMapping
 	@Transactional
 	public AdminItem create(@RequestBody @Valid SaveItemRequest req) {
-		long id = menuRepository.insertItem(req.name().trim(), req.category().trim(), req.available());
+		long id = menuRepository.insertItem(req.name().trim(), knownCategory(req.category()), req.available());
 		saveVariants(id, req.variants());
 		return menuRepository.findAdminItem(id).orElseThrow();
 	}
@@ -79,7 +90,7 @@ public class MenuAdminController {
 	@Transactional
 	public AdminItem update(@PathVariable long id, @RequestBody @Valid SaveItemRequest req) {
 		require(id);
-		menuRepository.updateItem(id, req.name().trim(), req.category().trim(), req.available());
+		menuRepository.updateItem(id, req.name().trim(), knownCategory(req.category()), req.available());
 		saveVariants(id, req.variants());
 		return menuRepository.findAdminItem(id).orElseThrow();
 	}
