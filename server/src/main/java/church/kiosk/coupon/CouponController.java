@@ -63,6 +63,12 @@ public class CouponController {
 		return couponService.require(id);
 	}
 
+	/** 최근 한 달 이력 (충전/사용/환불/정정). */
+	@GetMapping("/api/staff/coupons/{id}/history")
+	public List<CouponRepository.TxView> history(@PathVariable long id) {
+		return couponService.history(id);
+	}
+
 	@PostMapping("/api/staff/coupons")
 	public Coupon register(@RequestBody @jakarta.validation.Valid RegisterRequest request) {
 		return couponService.register(request.name(), request.phone(), request.amount());

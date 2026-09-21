@@ -45,7 +45,8 @@ interface CouponProps {
 }
 
 /**
- * 이름으로 쿠폰 조회 → (동명이인이면 전화 뒤 4자리) → 잔액/무료 1잔 보여주고 확정.
+ * 이름 → 전화번호 뒤 4자리 → 쿠폰 조회 → 잔액/무료 1잔 보여주고 확정.
+ * 번호는 등록 때 필수라 항상 묻는다 (동명이인 혼동 방지).
  * 무료 1잔이 남아 있으면 체크해서 이번 주문의 가장 비싼 한 잔을 무료로 뺄 수 있다.
  * 잔액이 모자라면 나머지를 현금/계좌이체 중 고른다.
  */
@@ -81,20 +82,21 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
     }
   }
 
-  const lookup = async (n: string, phoneLast4?: string) => {
+  /** 이름을 고르면 바로 번호 키패드로. */
+  const askPhone = (n: string) => {
+    setName(n)
+    setPhone('')
+    setError(null)
+    setNeedPhone(true)
+  }
+
+  const lookup = async (n: string, phoneLast4: string) => {
     setBusy(true)
     setError(null)
     try {
       const r = await api.lookupCoupon(n, phoneLast4)
-      if (r.status === 'NEED_PHONE') {
-        setName(n)
-        setNeedPhone(true)
-        return
-      }
-      if (r.status === 'NOT_FOUND' || !r.coupon) {
-        setError(phoneLast4
-          ? '전화번호가 맞지 않습니다. 스태프에게 확인해 주세요.'
-          : `"${n}" 이름의 쿠폰이 없습니다. 스태프에게 확인해 주세요.`)
+      if (r.status !== 'FOUND' || !r.coupon) {
+        setError(`"${n}" 이름과 번호 뒤 4자리(${phoneLast4})가 맞는 쿠폰이 없습니다. 스태프에게 확인해 주세요.`)
         return
       }
       setName(n)
@@ -170,13 +172,16 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
     return (
       <div className="stack">
         {error && <div className="error">{error}</div>}
-        <div className="muted center">"{name}" 이름이 여러 분 계십니다. 전화번호 뒤 4자리를 눌러 주세요.</div>
+        <div className="muted center">{name}님, 전화번호 뒤 4자리를 눌러 주세요</div>
         <div className="center" style={{ fontSize: 40, fontWeight: 900, letterSpacing: 12, minHeight: 56 }}>
           {phone.padEnd(4, '·')}
         </div>
         <Keypad value={phone} maxLength={4} onChange={setPhone} />
-        <button className="btn big primary" disabled={busy || phone.length !== 4}
-          onClick={() => void lookup(name, phone)}>확인</button>
+        <div className="kiosk-foot">
+          <button className="btn big" onClick={() => { setNeedPhone(false); setError(null) }}>‹ 다른 이름</button>
+          <button className="btn big primary" disabled={busy || phone.length !== 4}
+            onClick={() => void lookup(name, phone)}>확인</button>
+        </div>
       </div>
     )
   }
@@ -188,8 +193,8 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
         <span className="amount">{won(total)}</span>
       </div>
       {error && <div className="error">{error}</div>}
-      <NamePicker title="쿠폰 주인 이름을 골라 주세요" confirmLabel="쿠폰 조회" disabled={busy}
-        onSelect={(n) => void lookup(n)} />
+      <NamePicker title="쿠폰 주인 이름을 골라 주세요" confirmLabel="다음" disabled={busy}
+        onSelect={askPhone} />
     </div>
   )
 }

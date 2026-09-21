@@ -89,6 +89,9 @@ public class CouponService {
 			throw new BusinessException("충전 금액을 확인해 주세요.");
 		}
 		Coupon coupon = require(couponId);
+		if (coupon.phone() == null) {
+			throw new BusinessException("전화번호가 없는 쿠폰입니다. 번호를 먼저 넣어 주세요.");
+		}
 		int free = freeDrinksFor(amount);
 		int after = coupon.balance() + amount;
 		couponRepository.update(couponId, after, coupon.freeDrinks() + free);
@@ -181,6 +184,13 @@ public class CouponService {
 		int freeDelta = restoreFreeDrink ? 1 : 0;
 		couponRepository.update(couponId, after, coupon.freeDrinks() + freeDelta);
 		couponRepository.insertTx(couponId, orderId, amount, freeDelta, "REFUND", after);
+	}
+
+	/** 최근 한 달 이력 (오늘 포함). */
+	public List<CouponRepository.TxView> history(long couponId) {
+		require(couponId);
+		String since = java.time.LocalDate.now().minusMonths(1).toString();
+		return couponRepository.findTxSince(couponId, since);
 	}
 
 	public Coupon require(long couponId) {

@@ -55,9 +55,23 @@ export function menuCard(page: Page, itemName: string) {
   return page.locator('.menu-card').filter({ has: page.locator('.name', { hasText: new RegExp(`^${itemName}$`) }) })
 }
 
+/** 메뉴는 카테고리 탭 안에 있으므로, 카드가 안 보이면 탭을 차례로 눌러 찾는다. */
+export async function showMenuCard(page: Page, itemName: string) {
+  const card = menuCard(page, itemName)
+  await page.locator('.category-tabs').waitFor()   // 메뉴가 아직 로딩 중일 수 있다
+  if (await card.count() > 0) return card
+  const tabs = page.locator('.category-tabs .btn.tab')
+  const n = await tabs.count()
+  for (let i = 0; i < n; i++) {
+    await tabs.nth(i).click()
+    if (await card.count() > 0) return card
+  }
+  throw new Error(`메뉴 카드를 찾지 못함: ${itemName}`)
+}
+
 /** 메뉴 화면에서 담기. label 이 없으면 '담기' 버튼. */
 export async function addToCart(page: Page, itemName: string, label: string | null, times = 1) {
-  const card = menuCard(page, itemName)
+  const card = await showMenuCard(page, itemName)
   const btn = card.getByRole('button', { name: label ? new RegExp(`^${label}`) : /^담기/ })
   for (let i = 0; i < times; i++) await btn.click()
 }
@@ -80,6 +94,14 @@ export async function pickNameByTyping(page: Page, name: string, confirm: RegExp
   await page.getByRole('button', { name: /직접 입력/ }).click()
   await page.getByPlaceholder('이름').fill(name)
   await page.getByRole('button', { name: confirm }).click()
+}
+
+/** 키오스크 쿠폰 화면: 이름 직접 입력 → 뒤 4자리 키패드 → 확인 */
+export async function kioskCouponLookup(page: Page, name: string, last4: string) {
+  await pickNameByTyping(page, name, '다음')
+  await expect(page.getByText('전화번호 뒤 4자리를 눌러 주세요')).toBeVisible()
+  for (const k of last4) await page.getByRole('button', { name: k, exact: true }).click()
+  await page.getByRole('button', { name: '확인' }).click()
 }
 
 // ── 스태프 화면 조작 ──────────────────────────────────────

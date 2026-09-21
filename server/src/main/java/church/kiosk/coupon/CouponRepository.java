@@ -80,6 +80,31 @@ public class CouponRepository {
 		jdbc.sql("DELETE FROM coupon WHERE id = :id").param("id", couponId).update();
 	}
 
+	/** 이력 한 줄. orderNo/orderDate 는 주문과 관련된 이력에만. */
+	public record TxView(long id, String createdAt, String reason, int delta, int freeDelta, int balanceAfter,
+						 Long orderId, Integer orderNo, String orderDate) {}
+
+	public List<TxView> findTxSince(long couponId, String sinceDate) {
+		return jdbc.sql("""
+						SELECT t.id, t.created_at, t.reason, t.delta, t.free_delta, t.balance_after,
+						       t.order_id, o.order_no, o.order_date
+						FROM coupon_tx t LEFT JOIN orders o ON o.id = t.order_id
+						WHERE t.coupon_id = :id AND substr(t.created_at, 1, 10) >= :since
+						ORDER BY t.id DESC
+						""")
+				.param("id", couponId).param("since", sinceDate)
+				.query((rs, n) -> {
+					long orderId = rs.getLong("order_id");
+					Long orderIdOrNull = rs.wasNull() ? null : orderId;
+					int orderNo = rs.getInt("order_no");
+					Integer orderNoOrNull = rs.wasNull() ? null : orderNo;
+					return new TxView(rs.getLong("id"), rs.getString("created_at"), rs.getString("reason"),
+							rs.getInt("delta"), rs.getInt("free_delta"), rs.getInt("balance_after"),
+							orderIdOrNull, orderNoOrNull, rs.getString("order_date"));
+				})
+				.list();
+	}
+
 	public void insertTx(long couponId, Long orderId, int delta, int freeDelta, String reason, int balanceAfter) {
 		jdbc.sql("""
 						INSERT INTO coupon_tx (coupon_id, order_id, delta, free_delta, reason, balance_after, created_at)

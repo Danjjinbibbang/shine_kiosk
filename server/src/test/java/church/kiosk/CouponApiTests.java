@@ -129,6 +129,43 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(staffGet("/api/staff/coupons/999").status()).isEqualTo(400);
 	}
 
+	@Test
+	@DisplayName("전화번호 없는 옛 쿠폰은 번호를 넣기 전까지 충전할 수 없다")
+	void chargeNeedsPhone() throws Exception {
+		long id = registerCoupon("옛날", 5000);
+		jdbc.sql("UPDATE coupon SET phone = NULL WHERE id = :id").param("id", id).update(); // 예전 DB 의 쿠폰처럼
+		Response r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 20000));
+		assertThat(r.status()).isEqualTo(400);
+		assertThat(r.message()).contains("전화번호");
+		staffPut("/api/staff/coupons/" + id + "/phone", Map.of("phone", "01012341234"));
+		assertThat(staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 20000)).status()).isEqualTo(200);
+	}
+
+	@Test
+	@DisplayName("이력: 최근 한 달, 최신순, 주문 관련 건은 주문 번호 포함")
+	void history() throws Exception {
+		long id = registerCoupon("이영희", 20000);
+		Map<String, Object> body = new HashMap<>(cashOrder("이영희", line(ICECREAM_CUP, 1)));
+		body.put("payMethod", "COUPON");
+		body.put("couponId", id);
+		body.put("useFreeDrink", true);
+		long orderId = ((Number) createOrder(body).read("$.id")).longValue();
+		staffPost("/api/staff/orders/" + orderId + "/cancel", null);
+		staffPost("/api/staff/coupons/" + id + "/adjust", Map.of("balance", 25000, "freeDrinks", 1));
+		// 두 달 전 이력은 빠진다
+		jdbc.sql("INSERT INTO coupon_tx (coupon_id, order_id, delta, free_delta, reason, balance_after, created_at) VALUES (:id, NULL, 1000, 0, 'CHARGE', 1000, '2026-06-01T10:00:00')")
+				.param("id", id).update();
+
+		Response h = staffGet("/api/staff/coupons/" + id + "/history");
+		assertThat(h.status()).as(h.body()).isEqualTo(200);
+		assertThat(h.<List<String>>read("$[*].reason")).containsExactly("ADJUST", "REFUND", "USE", "CHARGE");
+		assertThat(h.<List<Integer>>read("$[*].delta")).containsExactly(5000, 0, 0, 20000);
+		assertThat(h.<List<Integer>>read("$[*].freeDelta")).containsExactly(0, 1, -1, 1);
+		assertThat(h.<List<Integer>>read("$[?(@.reason=='USE')].orderNo")).containsExactly(1);
+		assertThat(h.<List<Integer>>read("$[?(@.reason=='CHARGE')].orderNo")).isEmpty();
+		assertThat(staffGet("/api/staff/coupons/999/history").status()).isEqualTo(400);
+	}
+
 	// ── 정정 / 삭제 ─────────────────────────────────────────
 
 	@Test

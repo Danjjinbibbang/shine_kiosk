@@ -18,6 +18,7 @@ interface Props {
 export function MenuStep({ cart, total, onChange, onNext }: Props) {
   const [menu, setMenu] = useState<MenuItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<string | null>(null) // 선택한 카테고리. 서버가 준 순서의 첫 카테고리가 기본
 
   useEffect(() => {
     api.menu().then(setMenu).catch((e) => setError(e.message))
@@ -44,13 +45,22 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
   if (error) return <div className="error">{error}</div>
   if (!menu) return <div className="empty">메뉴를 불러오는 중…</div>
 
+  // 카테고리 탭은 서버(설정 > 카테고리) 순서를 그대로 따른다. 설정에서 늘리면 탭도 늘어난다.
   const categories = [...new Set(menu.map((m) => m.category))]
+  const active = tab && categories.includes(tab) ? tab : categories[0]
+  const inCart = (cat: string) => cart.filter((l) => l.category === cat).reduce((s, l) => s + l.qty, 0)
 
   return (
     <div className="stack">
-      {categories.map((cat) => (
+      <div className="category-tabs">
+        {categories.map((cat) => (
+          <button key={cat} className={'btn tab' + (cat === active ? ' selected' : '')} onClick={() => setTab(cat)}>
+            {cat}{inCart(cat) > 0 && <span className="tab-badge">{inCart(cat)}</span>}
+          </button>
+        ))}
+      </div>
+      {categories.filter((cat) => cat === active).map((cat) => (
         <section key={cat}>
-          <div className="category-title">{cat}</div>
           <div className="menu-grid">
             {menu.filter((m) => m.category === cat).map((item) => (
               <div key={item.id} className="menu-card">

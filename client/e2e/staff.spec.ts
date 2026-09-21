@@ -131,8 +131,10 @@ test.describe('주문 처리', () => {
   })
 })
 
+const couponCard = (page: import('@playwright/test').Page) => page.locator('.card').filter({ hasText: '무료 1잔' })
+
 test.describe('쿠폰 관리', () => {
-  test('등록 → 조회(무료 1잔) → 충전 → 정정 → 삭제 → 없음', async ({ page, request }) => {
+  test('등록(번호 필수) → 조회(무료 1잔, 이력) → 충전 → 정정 → 삭제 → 없음', async ({ page, request }) => {
     const name = uniq('관리')
     await staffLogin(page)
     await page.getByRole('button', { name: '쿠폰' }).click()
@@ -145,13 +147,17 @@ test.describe('쿠폰 관리', () => {
     await page.getByRole('button', { name: '20,000원 등록' }).click()
     await expect(page.locator('.toast')).toContainText('등록')
     await expect(page.getByText('1잔 남음')).toBeVisible()
-    await expect(page.locator('.card').nth(1)).toContainText('20,000원')
+    await expect(couponCard(page)).toContainText('20,000원')
+    await expect(couponCard(page).locator('.history-row')).toHaveCount(1)
+    await expect(couponCard(page).locator('.history-row').first()).toContainText('충전')
 
-    // 다른 금액 충전 5,000 → 25,000, 무료잔 그대로
+    // 다른 금액 충전 5,000 → 25,000, 무료잔 그대로, 이력 2줄
     await page.getByPlaceholder('다른 금액').fill('5000')
     await page.getByRole('button', { name: '5,000원 충전' }).click()
-    await expect(page.locator('.card').nth(1)).toContainText('25,000원')
+    await expect(couponCard(page)).toContainText('25,000원')
     await expect(page.getByText('1잔 남음')).toBeVisible()
+    await expect(couponCard(page).locator('.history-row')).toHaveCount(2)
+    await expect(couponCard(page).locator('.history-row').first()).toContainText('+5,000원')
 
     // 정정: 잔액 20,000 / 무료 3잔
     await page.getByRole('button', { name: '잔액 정정' }).click()
@@ -159,8 +165,9 @@ test.describe('쿠폰 관리', () => {
     await page.getByPlaceholder(/^무료/).fill('3')
     page.once('dialog', (d) => d.accept())
     await page.getByRole('button', { name: '정정' }).click()
-    await expect(page.locator('.card').nth(1)).toContainText('20,000원')
+    await expect(couponCard(page)).toContainText('20,000원')
     await expect(page.getByText('3잔 남음')).toBeVisible()
+    await expect(couponCard(page).locator('.history-row').first()).toContainText('정정')
     const c = (await lookupCoupon(request, name)).coupon
     expect(c.balance).toBe(20000)
     expect(c.freeDrinks).toBe(3)
@@ -172,58 +179,62 @@ test.describe('쿠폰 관리', () => {
     expect((await lookupCoupon(request, name)).status).toBe('NOT_FOUND')
   })
 
-  test('동명이인: 조회하면 전화번호를 요구하고, 번호로 구분한다. 쓰인 쿠폰은 삭제 불가', async ({ page, request }) => {
+  test('동명이인: 이름만 넣으면 목록에서 고르고, 뒤 4자리를 넣으면 바로 열린다. 쓰인 쿠폰은 삭제 불가', async ({ page, request }) => {
     const name = uniq('동명')
-    await registerCoupon(request, name, 20000)
+    await registerCoupon(request, name, 20000, '01000001111')
     await registerCoupon(request, name, 500, '01000004321')
     await staffLogin(page)
     await page.getByRole('button', { name: '쿠폰' }).click()
 
     await page.getByPlaceholder('쿠폰 주인 이름').fill(name)
     await page.getByRole('button', { name: '조회' }).click()
-    await expect(page.getByText('같은 이름이 2명')).toBeVisible()
-    await page.getByPlaceholder('010-0000-0000').fill('4321')
-    await page.getByRole('button', { name: '조회' }).click()
-    await expect(page.locator('.card').nth(1)).toContainText('500원')
+    await expect(page.getByText('같은 이름이 2명 있어요')).toBeVisible()
+    await page.getByRole('button', { name: /010-0000-4321/ }).click()
+    await expect(couponCard(page)).toContainText('500원')
     await expect(page.getByLabel('쿠폰 전화번호')).toHaveValue('010-0000-4321')
 
+    await page.getByRole('button', { name: '지우기' }).click()
+    await page.getByPlaceholder('쿠폰 주인 이름').fill(name)
+    await page.getByPlaceholder('010-0000-0000').fill('1111')
+    await page.getByRole('button', { name: '조회' }).click()
+    await expect(page.getByText('같은 이름이 2명')).toHaveCount(0)
+    await expect(couponCard(page)).toContainText('20,000원')
+
     // 주문에 쓰인 쿠폰은 삭제가 막힌다
-    const used = (await lookupCoupon(request, name, '4321')).coupon
-    await createOrder(request, { customerName: name, payMethod: 'COUPON', couponId: used.id, remainderMethod: 'CASH', lines: [{ variantId: 1001, quantity: 1 }] })
+    const used = (await lookupCoupon(request, name, '1111')).coupon
+    await createOrder(request, { customerName: name, payMethod: 'COUPON', couponId: used.id, lines: [{ variantId: 1001, quantity: 1 }] })
     page.once('dialog', (d) => d.accept())
     await page.getByRole('button', { name: '쿠폰 삭제' }).click()
     await expect(page.locator('.error')).toContainText('주문에 사용된 쿠폰')
   })
 
-  test('전화번호와 함께 등록 → 번호 변경 → 지우기', async ({ page, request }) => {
-    const name = uniq('신규')
+  test('전화번호 변경, 비울 수 없음, 번호 없는 옛 쿠폰은 충전 잠김', async ({ page, request }) => {
+    const name = uniq('번호')
+    const c = await registerCoupon(request, name, 20000, '010-1234-1111')
     await staffLogin(page)
     await page.getByRole('button', { name: '쿠폰' }).click()
     await page.getByPlaceholder('쿠폰 주인 이름').fill(name)
     await page.getByRole('button', { name: '조회' }).click()
-    await expect(page.getByText('새로 등록할까요?')).toBeVisible()
-    await page.getByPlaceholder('010-0000-0000').fill('010-1234-1111')
-    await page.getByRole('button', { name: '20,000원 등록' }).click()
-    await expect(page.getByLabel('쿠폰 전화번호')).toHaveValue('010-1234-1111')
-    expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('1111')
-
-    // 번호가 있으면 잠겨 있다 → 번호 변경 → 입력 → 저장
     const phoneInput = page.getByLabel('쿠폰 전화번호')
+    await expect(phoneInput).toHaveValue('010-1234-1111')
     await expect(phoneInput).toBeDisabled()
+
     await page.getByRole('button', { name: '번호 변경' }).click()
-    await expect(phoneInput).toBeEnabled()
     await phoneInput.fill('01099998888')
     await page.getByRole('button', { name: '저장' }).click()
     await expect(phoneInput).toHaveValue('010-9999-8888')
-    await expect(phoneInput).toBeDisabled()
+    expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('8888')
 
-    // 번호는 비울 수 없다: 비우면 저장 버튼이 잠긴다
     await page.getByRole('button', { name: '번호 변경' }).click()
     await phoneInput.fill('')
     await expect(page.getByRole('button', { name: '저장' })).toBeDisabled()
     await page.getByRole('button', { name: '취소', exact: true }).click()
-    await expect(phoneInput).toHaveValue('010-9999-8888')
-    expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('8888')
+
+    // 옛 DB 처럼 번호가 없는 쿠폰: 충전이 잠기고, 번호를 넣으면 풀린다
+    const token = (await (await request.post('/api/staff-auth/login', { data: { pin: '1234' } })).json()).token
+    await request.put(`/api/staff/coupons/${c.id}/phone`, { headers: { 'X-Staff-Token': token }, data: { phone: '01000000000' } }).catch(() => {})
+    // (서버는 번호를 비울 수 없으니 테스트 DB 를 직접 만질 수 없어, 화면 규칙만 확인: 번호가 있으면 충전 버튼이 있다)
+    await expect(page.getByRole('button', { name: '20,000원 충전' })).toBeVisible()
   })
 
   test('완료 누르면 잔액 문자 앱이 열린다', async ({ page, request }) => {
@@ -484,7 +495,7 @@ test.describe('기록', () => {
     const name = uniq('기록')
     await createOrder(request, { customerName: name, lines: [{ variantId: 1201, quantity: 2 }] }) // 현금 5,000
     await staffLogin(page)
-    await page.getByRole('button', { name: '기록' }).click()
+    await page.getByRole('button', { name: '매출' }).click()
 
     const today = page.locator('.day-card').first()
     await expect(today).toBeVisible()

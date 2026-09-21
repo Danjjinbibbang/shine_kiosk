@@ -1,5 +1,5 @@
 import type {
-  AdminItem, AdminOption, AdminPlace, Category, Coupon, DayReport, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
+  AdminItem, AdminOption, AdminPlace, Category, Coupon, CouponTx, DayReport, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
   LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest,
 } from './types'
 
@@ -91,6 +91,7 @@ export const api = {
   staffLookupCoupon: (name: string, phoneLast4?: string) =>
     post<LookupResult>('/api/staff/coupons/lookup', { name, phoneLast4: phoneLast4 || null }),
   getCoupon: (id: number) => request<Coupon>(`/api/staff/coupons/${id}`),
+  couponHistory: (id: number) => request<CouponTx[]>(`/api/staff/coupons/${id}/history`),
   registerCoupon: (name: string, phone: string | null, amount: number) =>
     post<Coupon>('/api/staff/coupons', { name, phone, amount }),
   updateCouponPhone: (id: number, phone: string) => put<Coupon>(`/api/staff/coupons/${id}/phone`, { phone }),

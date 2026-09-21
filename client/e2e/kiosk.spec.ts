@@ -1,15 +1,20 @@
 import { expect, test } from '@playwright/test'
 import {
-  addToCart, createOrder, gotoKiosk, lookupCoupon, menuCard, orderOf, pickNameByTyping,
-  registerCoupon, toReceiveStep, uniq,
+  addToCart, createOrder, gotoKiosk, kioskCouponLookup, lookupCoupon, menuCard, orderOf, pickNameByTyping,
+  registerCoupon, showMenuCard, toReceiveStep, uniq,
 } from './helpers'
 
 test.describe('메뉴 화면', () => {
-  test('카테고리 순서, 담기/스테퍼, 장바구니 바', async ({ page }) => {
+  test('카테고리 탭 순서, 담기/스테퍼, 장바구니 바', async ({ page }) => {
     await gotoKiosk(page)
-    const titles = await page.locator('.category-title').allTextContents()
-    expect(titles).toEqual(['커피', '논커피', '아이스크림'])
-    await expect(menuCard(page, '아포카토')).toBeVisible()
+    const tabs = page.locator('.category-tabs .btn.tab')
+    expect((await tabs.allTextContents()).map((t) => t.replace(/\d+$/, ''))).toEqual(['커피', '논커피', '아이스크림'])
+    await expect(tabs.nth(0)).toHaveClass(/selected/)            // 첫 카테고리가 기본
+    await expect(menuCard(page, '아포카토')).toBeVisible()        // 커피 탭
+    await expect(menuCard(page, '오미자')).toHaveCount(0)         // 다른 탭은 안 보임
+    await tabs.nth(1).click()
+    await expect(menuCard(page, '오미자')).toBeVisible()
+    await tabs.nth(0).click()
     await expect(page.getByRole('button', { name: /주문 확인/ })).toHaveCount(0)
 
     // 한 번 누르면 1개, 스테퍼가 생긴다
@@ -32,6 +37,8 @@ test.describe('메뉴 화면', () => {
     // 선택지 없는 메뉴는 '담기'
     await addToCart(page, '아샷추', null)
     await expect(page.locator('.cart-bar')).toContainText('1개 · 2,500원')
+    // 탭에 담긴 개수 배지
+    await expect(page.locator('.category-tabs .btn.tab').nth(0).locator('.tab-badge')).toHaveText('1')
   })
 })
 
@@ -143,7 +150,7 @@ test.describe('결제 흐름', () => {
     await expect(page.getByRole('heading', { name: '이름을 골라 주세요' })).toBeVisible({ timeout: 15_000 })
   })
 
-  test('쿠폰: 없는 이름 오류 → 동명이인 전화번호 → 무료 1잔 토글 → 결제 (이름 화면 건너뜀)', async ({ page, request }) => {
+  test('쿠폰: 이름+뒤 4자리 → 틀리면 오류 → 무료 1잔 토글 → 결제 (이름 화면 건너뜀)', async ({ page, request }) => {
     const name = uniq('쿠폰')
     await registerCoupon(request, name, 20000, '01000001111')  // 잔액 20,000 / 무료 1잔
     await registerCoupon(request, name, 500, '01000004321')    // 동명이인
@@ -153,33 +160,25 @@ test.describe('결제 흐름', () => {
     await page.getByRole('button', { name: /쿠폰/ }).click()
     await expect(page.getByRole('heading', { name: '쿠폰' })).toBeVisible()
 
-    await pickNameByTyping(page, '없는사람', '쿠폰 조회')
-    await expect(page.locator('.error')).toContainText('쿠폰이 없습니다')
-
-    await page.getByPlaceholder('이름').fill(name)
-    await page.getByRole('button', { name: '쿠폰 조회' }).click()
-    await expect(page.getByText('여러 분 계십니다')).toBeVisible()
-    await expect(page.getByRole('button', { name: '확인' })).toBeDisabled()
-    for (const k of '9999') await page.getByRole('button', { name: k, exact: true }).click()
-    await page.getByRole('button', { name: '확인' }).click()
-    await expect(page.locator('.error')).toContainText('전화번호가 맞지 않습니다')
+    // 이름을 고르면 항상 번호 뒤 4자리를 묻는다
+    await kioskCouponLookup(page, '없는사람', '1234')
+    await expect(page.locator('.error')).toContainText('맞는 쿠폰이 없습니다')
+    await page.getByRole('button', { name: /다른 이름/ }).click()
+    await kioskCouponLookup(page, name, '9999')
+    await expect(page.locator('.error')).toContainText('9999')
     await page.getByRole('button', { name: '⌫' }).click({ clickCount: 4 })
     for (const k of '4321') await page.getByRole('button', { name: k, exact: true }).click()
     await page.getByRole('button', { name: '확인' }).click()
 
-    // 동명이인 쪽(잔액 500, 무료 없음) 이 조회됨 → 잔액 부족 화면
+    // 동명이인 중 4321 쪽(잔액 500, 무료 없음) → 잔액 부족 화면
     await expect(page.locator('.total-box .amount')).toHaveText('500원')
     await expect(page.getByText('남은 무료 1잔이 없습니다')).toBeVisible()
     await expect(page.getByText('추가로 내실 금액')).toBeVisible()
-    await expect(page.getByRole('button', { name: /현금/ })).toBeVisible()
-    await expect(page.getByRole('button', { name: /계좌이체/ })).toBeVisible()
 
-    // 뒤로 가서 원래 쿠폰(무료 1잔 있는 쪽)으로 다시. 동명이인이라 같은 이름으로는 못 고르니 새 쿠폰으로 검증한다.
-    const rich = uniq('부자')
-    await registerCoupon(request, rich, 20000)
+    // 뒤로 가서 1111 쪽(무료 1잔 있음)으로
     await page.getByRole('button', { name: '‹ 이전' }).click()
     await page.getByRole('button', { name: /쿠폰/ }).click()
-    await pickNameByTyping(page, rich, '쿠폰 조회')
+    await kioskCouponLookup(page, name, '1111')
     await expect(page.locator('.total-box .amount')).toHaveText('20,000원')
 
     // 무료 토글 전: 전액 차감
@@ -193,23 +192,23 @@ test.describe('결제 흐름', () => {
 
     await page.getByRole('button', { name: /쿠폰으로 결제/ }).click()
     await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
-    await expect(page.locator('.hero .amount')).toHaveText(`${rich}님`)
+    await expect(page.locator('.hero .amount')).toHaveText(`${name}님`)
 
-    const coupon = (await lookupCoupon(request, rich)).coupon
+    const coupon = (await lookupCoupon(request, name, '1111')).coupon
     expect(coupon.balance).toBe(18000)
     expect(coupon.freeDrinks).toBe(0)
-    const order = await orderOf(request, rich)
+    const order = await orderOf(request, name)
     expect(order.freeAmount).toBe(3000)
     expect(order.couponAmount).toBe(2000)
   })
 
   test('쿠폰 잔액 부족: 나머지를 현금으로', async ({ page, request }) => {
     const name = uniq('부족')
-    await registerCoupon(request, name, 1500)
+    await registerCoupon(request, name, 1500, '01000007777')
     await toReceiveStep(page, [['아이스크림', '컵', 1]]) // 3,000원
     await page.getByRole('button', { name: /카페에서 받기/ }).click()
     await page.getByRole('button', { name: /쿠폰/ }).click()
-    await pickNameByTyping(page, name, '쿠폰 조회')
+    await kioskCouponLookup(page, name, '7777')
     await expect(page.getByText('나머지 1,500원은 어떻게')).toBeVisible()
     await expect(page.locator('.hero .account')).toHaveText('테스트은행 123-45-678901')
     await page.getByRole('button', { name: /현금/ }).click()
@@ -322,7 +321,7 @@ test.describe('옵션 (샷 추가 / 연하게)', () => {
 
     // 메뉴로 돌아가면 아메리카노 수량은 옵션 상관없이 합쳐서 2
     await page.getByRole('button', { name: '더 담기' }).click()
-    await expect(menuCard(page, '아메리카노').locator('.stepper .n')).toHaveText('2')
+    await expect((await showMenuCard(page, '아메리카노')).locator('.stepper .n')).toHaveText('2')
     await page.getByRole('button', { name: /주문 확인/ }).click()
 
     await page.getByRole('button', { name: /^주문하기/ }).click()

@@ -83,7 +83,7 @@ export function StaffApp() {
           <button className={'btn' + (tab === 'pending' ? ' selected' : '')} onClick={() => setTab('pending')}>만들 것</button>
           <button className={'btn' + (tab === 'done' ? ' selected' : '')} onClick={() => setTab('done')}>완료</button>
           <button className={'btn' + (tab === 'coupon' ? ' selected' : '')} onClick={() => setTab('coupon')}>쿠폰</button>
-          <button className={'btn' + (tab === 'report' ? ' selected' : '')} onClick={() => setTab('report')}>기록</button>
+          <button className={'btn' + (tab === 'report' ? ' selected' : '')} onClick={() => setTab('report')}>매출</button>
           <button className={'btn' + (tab === 'settings' ? ' selected' : '')} onClick={() => setTab('settings')}>설정</button>
         </div>
       </header>

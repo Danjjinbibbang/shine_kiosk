@@ -99,6 +99,19 @@ export interface Coupon {
   freeDrinks: number
 }
 
+/** 쿠폰 잔액 변동 이력 한 줄 */
+export interface CouponTx {
+  id: number
+  createdAt: string
+  reason: 'CHARGE' | 'USE' | 'REFUND' | 'ADJUST' | string
+  delta: number
+  freeDelta: number
+  balanceAfter: number
+  orderId: number | null
+  orderNo: number | null
+  orderDate: string | null
+}
+
 export type LookupStatus = 'FOUND' | 'NOT_FOUND' | 'NEED_PHONE'
 
 export interface LookupResult {
