@@ -130,6 +130,8 @@ export interface CreateOrderRequest {
   remainderMethod?: PayMethod | null
   lines: LineRequest[]
   memo?: string | null
+  /** 키오스크가 만든 요청 번호. 와이파이가 끊겨 다시 보내도 한 번만 접수된다 */
+  clientRequestId?: string
 }
 
 export interface UpdateOrderRequest {

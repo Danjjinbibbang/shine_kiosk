@@ -7,6 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 
 @SpringBootApplication
 @EnableConfigurationProperties(KioskProperties.class)
+@org.springframework.scheduling.annotation.EnableScheduling
 public class KioskServerApplication {
 
 	public static void main(String[] args) {

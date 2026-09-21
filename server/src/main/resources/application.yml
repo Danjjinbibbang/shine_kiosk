@@ -30,6 +30,8 @@ kiosk:
   coupon-preset-amount: 20000
   # 단골 명단에 노출할 기간 (일)
   regular-customer-days: 21
+  # DB 자동 백업 폴더 (기동 시 + 매일 04:00). 태블릿에선 다운로드 폴더로.
+  backup-dir: ${KIOSK_BACKUP_DIR:./backups}
 
 logging:
   level:

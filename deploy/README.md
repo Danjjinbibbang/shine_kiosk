@@ -65,7 +65,8 @@ Termux:Boot 는 **설치 후 한 번은 직접 열어줘야** 부팅 시 실행 
 pkill -f kiosk-server.jar; ~/.termux/boot/start-kiosk.sh &
 ```
 
-DB(`~/kiosk/data/kiosk.db`)와 설정(`~/kiosk/config/application.yml`)은 그대로 남는다. 백업은 DB 파일 하나만 복사하면 된다.
+DB(`~/kiosk/data/kiosk.db`)와 설정(`~/kiosk/config/application.yml`)은 그대로 남는다.
+자동 백업은 내 파일 > 다운로드 > `kiosk-backups` 에 매일 쌓이고, 스태프 폰에서 기록 > 백업 내려받기로도 받을 수 있다.
 
 ## 자주 생기는 문제
 

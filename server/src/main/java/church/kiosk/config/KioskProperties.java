@@ -10,6 +10,7 @@ public class KioskProperties {
 	private String bankAccount = "";
 	private int couponPresetAmount = 20000;
 	private int regularCustomerDays = 21;
+	private String backupDir = "./backups";
 
 	public String getDbPath() { return dbPath; }
 	public void setDbPath(String dbPath) { this.dbPath = dbPath; }
@@ -22,6 +23,9 @@ public class KioskProperties {
 
 	public int getCouponPresetAmount() { return couponPresetAmount; }
 	public void setCouponPresetAmount(int couponPresetAmount) { this.couponPresetAmount = couponPresetAmount; }
+
+	public String getBackupDir() { return backupDir; }
+	public void setBackupDir(String backupDir) { this.backupDir = backupDir; }
 
 	public int getRegularCustomerDays() { return regularCustomerDays; }
 	public void setRegularCustomerDays(int regularCustomerDays) { this.regularCustomerDays = regularCustomerDays; }

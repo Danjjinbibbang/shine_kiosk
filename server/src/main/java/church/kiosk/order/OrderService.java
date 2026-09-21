@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class OrderService {
@@ -88,6 +89,14 @@ public class OrderService {
 
 	@Transactional
 	public OrderView create(CreateRequest req) {
+		// 와이파이가 끊겨 키오스크가 같은 주문을 다시 보내면 처음 접수한 것을 그대로 돌려준다.
+		String requestId = (req.clientRequestId() == null || req.clientRequestId().isBlank()) ? null : req.clientRequestId().trim();
+		if (requestId != null) {
+			Optional<OrderView> already = orderRepository.findByClientRequestId(requestId);
+			if (already.isPresent()) {
+				return already.get();
+			}
+		}
 		PricedLines priced = price(req.lines());
 		Place place = resolvePlace(req.receiveType(), req.placeId());
 		String name = req.customerName().trim();
@@ -131,7 +140,7 @@ public class OrderService {
 		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
 				place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
-				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
+				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()), requestId);
 		long orderId = orderRepository.insert(row);
 		orderRepository.insertLines(orderId, priced.lines());
 		if (couponId != null) {
@@ -178,7 +187,7 @@ public class OrderService {
 				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(),
 				existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
-				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
+				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()), null);
 		orderRepository.update(orderId, row, describe(existing));
 		orderRepository.deleteLines(orderId);
 		orderRepository.insertLines(orderId, priced.lines());

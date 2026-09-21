@@ -9,6 +9,7 @@ client/dist/
 
 # 런타임 데이터 (SQLite)
 data/
+backups/
 *.db
 *.db-shm
 *.db-wal

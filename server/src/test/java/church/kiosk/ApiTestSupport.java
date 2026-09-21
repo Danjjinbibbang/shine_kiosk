@@ -48,6 +48,7 @@ public abstract class ApiTestSupport {
 		registry.add("kiosk.db-path", () -> dir.resolve("kiosk.db").toString());
 		registry.add("kiosk.staff-pin", () -> PIN);
 		registry.add("kiosk.bank-account", () -> "테스트은행 000-00");
+		registry.add("kiosk.backup-dir", () -> dir.resolve("backups").toString());
 	}
 
 	@Autowired

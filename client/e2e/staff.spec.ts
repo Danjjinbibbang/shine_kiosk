@@ -476,6 +476,11 @@ test.describe('기록', () => {
       page.getByRole('button', { name: /일별 CSV/ }).click(),
     ])
     expect(all.suggestedFilename()).toBe('매출-일별.csv')
+    const [backup] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /백업 내려받기/ }).click(),
+    ])
+    expect(backup.suggestedFilename()).toMatch(/^kiosk-backup-\d{4}-\d{2}-\d{2}\.db$/)
 
     await today.locator('.day-head').click()
     await expect(today).not.toHaveClass(/open/)

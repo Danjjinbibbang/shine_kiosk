@@ -43,11 +43,16 @@ export function ReportTab({ onToast }: { onToast: (msg: string) => void }) {
 
   return (
     <div className="stack">
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
+      <div className="row" style={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button className="btn" style={{ minHeight: 40, fontSize: 14 }} onClick={() => void downloadCsv('/api/staff/reports/days.csv', '매출-일별.csv', onToast)}>
           ⬇ 일별 CSV
         </button>
+        <button className="btn" style={{ minHeight: 40, fontSize: 14 }} title="태블릿이 고장 나도 복구할 수 있게 이 폰에 DB 를 저장"
+          onClick={() => void downloadCsv('/api/staff/reports/backup.db', `kiosk-backup-${localDate()}.db`, onToast)}>
+          💾 백업 내려받기
+        </button>
       </div>
+      <div className="muted" style={{ fontSize: 13 }}>백업은 태블릿에 매일 자동으로도 남지만, 태블릿이 고장 나면 같이 사라집니다. 한 달에 한 번쯤 폰에 내려받아 두세요.</div>
 
       {months.map(([month, list]) => {
         const sum = (f: (d: DayReport) => number) => list.reduce((s, d) => s + f(d), 0)
@@ -105,6 +110,12 @@ export function ReportTab({ onToast }: { onToast: (msg: string) => void }) {
       })}
     </div>
   )
+}
+
+function localDate(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 /** 토큰 헤더가 필요해서 링크 대신 받아서 저장한다. */

@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS orders (
     edit_note       TEXT,
     settled_cash    INTEGER NOT NULL DEFAULT 0, -- 실제로 받은 현금 (정산 버튼을 누르면 현재 금액으로 맞춰짐)
     settled_transfer INTEGER NOT NULL DEFAULT 0,
+    client_request_id TEXT,                    -- 키오스크가 붙인 요청 번호. 와이파이가 끊겨 다시 보내도 한 번만 접수
     created_at      TEXT    NOT NULL,
     completed_at    TEXT,
     canceled_at     TEXT
@@ -107,6 +108,7 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_date_no ON orders(order_date, order_no);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
+-- (client_request_id 의 UNIQUE 인덱스는 컬럼이 나중에 추가된 DB 도 있어서 SchemaMigration 이 만든다)
 
 CREATE TABLE IF NOT EXISTS order_line (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,

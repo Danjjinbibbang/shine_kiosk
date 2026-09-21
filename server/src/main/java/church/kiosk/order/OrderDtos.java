@@ -41,7 +41,9 @@ public final class OrderDtos {
 			/** 쿠폰 잔액이 모자랄 때 나머지를 어떻게 낼지 (CASH | TRANSFER). */
 			PayMethod remainderMethod,
 			@NotEmpty(message = "메뉴를 담아 주세요.") @Valid List<LineRequest> lines,
-			String memo) {
+			String memo,
+			/** 키오스크가 만든 요청 번호. 같은 번호로 다시 오면 새로 만들지 않고 처음 것을 돌려준다. */
+			String clientRequestId) {
 		public boolean wantsFreeDrink() { return Boolean.TRUE.equals(useFreeDrink); }
 	}
 

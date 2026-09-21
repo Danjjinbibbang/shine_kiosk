@@ -28,7 +28,7 @@ public class OrderRepository {
 			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
 			total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
 			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at,
-			edited_at, edit_note, settled_cash, settled_transfer
+			edited_at, edit_note, settled_cash, settled_transfer, client_request_id
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
@@ -37,7 +37,7 @@ public class OrderRepository {
 						   PayMethod payMethod,
 						   PayMethod remainderMethod, Long couponId, int couponAmount,
 						   int freeAmount, String freeItemName,
-						   int cashAmount, int transferAmount, String memo) {}
+						   int cashAmount, int transferAmount, String memo, String clientRequestId) {}
 
 	/** unitPrice 는 옵션 가격을 더한 값. options 는 스냅샷으로 함께 저장한다. */
 	public record LineRow(Long menuItemId, Long variantId, String menuName, String variantLabel,
@@ -63,10 +63,10 @@ public class OrderRepository {
 						                    total_amount, staff_free_amount,
 						                    pay_method, remainder_method, coupon_id, coupon_amount,
 						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at,
-						                    settled_cash, settled_transfer)
+						                    settled_cash, settled_transfer, client_request_id)
 						VALUES (:date, :no, :name, :receive, :placeId, :placeName,
 						        :total, :staffFree, :pay, :remainder, :couponId, :couponAmount,
-						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now, :cash, :transfer)
+						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now, :cash, :transfer, :requestId)
 						""")
 				.param("date", row.orderDate()).param("no", row.orderNo())
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
@@ -78,6 +78,7 @@ public class OrderRepository {
 				.param("freeAmount", row.freeAmount()).param("freeItemName", row.freeItemName())
 				.param("cash", row.cashAmount()).param("transfer", row.transferAmount())
 				.param("memo", row.memo()).param("now", LocalDateTime.now().toString())
+				.param("requestId", row.clientRequestId())
 				.update(keys);
 		return keys.getKey().longValue();
 	}
@@ -159,6 +160,14 @@ public class OrderRepository {
 	public Optional<OrderView> findById(long orderId) {
 		List<OrderView> found = attachLines(jdbc.sql("SELECT " + ORDER_COLUMNS + " FROM orders WHERE id = :id")
 				.param("id", orderId)
+				.query(OrderRepository::mapOrder)
+				.list());
+		return found.stream().findFirst();
+	}
+
+	public Optional<OrderView> findByClientRequestId(String requestId) {
+		List<OrderView> found = attachLines(jdbc.sql("SELECT " + ORDER_COLUMNS + " FROM orders WHERE client_request_id = :rid")
+				.param("rid", requestId)
 				.query(OrderRepository::mapOrder)
 				.list());
 		return found.stream().findFirst();

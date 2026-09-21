@@ -31,6 +31,7 @@ public class SchemaMigration {
 			new Column("orders", "edit_note", "TEXT"),
 			new Column("orders", "settled_cash", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "settled_transfer", "INTEGER NOT NULL DEFAULT 0"),
+			new Column("orders", "client_request_id", "TEXT"),
 			new Column("coupon_tx", "free_delta", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_amount", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_item_name", "TEXT"),
@@ -49,6 +50,7 @@ public class SchemaMigration {
 		addMissingColumns();
 		renumberMenuOrderIfNeeded();
 		groupSeedOptionsIfNeeded();
+		jdbc.sql("CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_client_request ON orders(client_request_id)").update();
 	}
 
 	/** 예전 시드로 만들어진 '샷 추가'/'연하게' 에 그룹이 없으면 '농도' 로 묶어 한 잔에 하나만 고르게 한다. */

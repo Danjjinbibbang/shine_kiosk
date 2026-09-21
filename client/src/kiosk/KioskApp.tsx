@@ -24,6 +24,16 @@ export interface Draft {
   remainderMethod?: 'CASH' | 'TRANSFER'
   memo?: string
   customerName?: string
+  /** 이 주문 시도의 요청 번호. 실패해서 다시 눌러도 같은 번호를 보내 중복 접수를 막는다 */
+  requestId?: string
+}
+
+function newRequestId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  }
 }
 
 const EMPTY: Draft = { cart: [] }
@@ -97,9 +107,12 @@ export function KioskApp() {
   const submit = useCallback(async (customerName: string, extra: Partial<Draft> = {}) => {
     const d = { ...draft, ...extra }
     if (!d.receiveType || !d.payMethod) return
+    const requestId = d.requestId ?? newRequestId()
+    if (!d.requestId) update({ requestId })
     setSubmitting(true)
     setError(null)
     const body: CreateOrderRequest = {
+      clientRequestId: requestId,
       customerName,
       receiveType: d.receiveType,
       placeId: d.place?.id ?? null,
@@ -140,9 +153,14 @@ export function KioskApp() {
     }
   }
 
+  // 결제가 끝난 뒤: 쿠폰 주문이면 쿠폰 주인 이름을 이미 아니까 바로 접수, 아니면 이름 화면
   const afterPaid = (extra: Partial<Draft> = {}) => {
-    update(extra)
-    go('name')
+    if (draft.coupon) {
+      void submit(draft.coupon.name, extra)
+    } else {
+      update(extra)
+      go('name')
+    }
   }
 
   const showBack = step !== 'menu' && step !== 'done' && history.length > 0
@@ -195,12 +213,18 @@ export function KioskApp() {
         {step === 'coupon' && (
           <CouponStep lines={lines} total={total} submitting={submitting}
             onDone={(coupon, preview, remainderMethod) => {
-              // 쿠폰 주인 이름을 이미 아니까 이름 화면은 건너뛴다.
-              void submit(coupon.name, { coupon, preview, remainderMethod })
+              if (remainderMethod === 'CASH') {
+                // 모자란 만큼 현금이면 낸 돈/거스름돈 화면을 거친다 (스태프 메모용)
+                update({ coupon, preview, remainderMethod })
+                go('cash')
+              } else {
+                // 쿠폰 주인 이름을 이미 아니까 이름 화면은 건너뛴다.
+                void submit(coupon.name, { coupon, preview, remainderMethod })
+              }
             }} />
         )}
         {step === 'cash' && (
-          <CashStep total={total} onNext={(memo) => afterPaid({ memo })} />
+          <CashStep total={draft.coupon ? (draft.preview?.remainder ?? total) : total} onNext={(memo) => afterPaid({ memo })} />
         )}
         {step === 'name' && (
           <NameStep submitting={submitting} onSelect={(name) => void submit(name)} />

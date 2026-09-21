@@ -23,10 +23,30 @@ public class ReportController {
 
 	private final ReportRepository reportRepository;
 	private final OrderRepository orderRepository;
+	private final church.kiosk.config.BackupService backupService;
 
-	public ReportController(ReportRepository reportRepository, OrderRepository orderRepository) {
+	public ReportController(ReportRepository reportRepository, OrderRepository orderRepository,
+							church.kiosk.config.BackupService backupService) {
 		this.reportRepository = reportRepository;
 		this.orderRepository = orderRepository;
+		this.backupService = backupService;
+	}
+
+	/** DB 파일 통째로. 스태프 폰에 저장해 두면 태블릿이 고장 나도 복구할 수 있다. */
+	@GetMapping(value = "/backup.db", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+	public ResponseEntity<byte[]> backup() throws java.io.IOException {
+		java.nio.file.Path tmp = backupService.snapshotForDownload();
+		try {
+			byte[] bytes = java.nio.file.Files.readAllBytes(tmp);
+			String name = "kiosk-backup-" + LocalDate.now() + ".db";
+			return ResponseEntity.ok()
+					.contentType(MediaType.APPLICATION_OCTET_STREAM)
+					.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + "\"")
+					.body(bytes);
+		}
+		finally {
+			java.nio.file.Files.deleteIfExists(tmp);
+		}
 	}
 
 	/** 주문이나 쿠폰 충전이 있었던 날짜별 집계. 최근 날짜부터. */
