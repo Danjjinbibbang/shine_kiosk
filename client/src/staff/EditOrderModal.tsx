@@ -11,6 +11,7 @@ interface Line {
   price: number
   qty: number
   options: MenuOption[]
+  staffFreeQty: number
 }
 
 const unitPrice = (l: Line) => l.price + l.options.reduce((s, o) => s + o.price, 0)
@@ -41,6 +42,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
       price: l.unitPrice - l.options.reduce((s, o) => s + o.price, 0),
       qty: l.quantity,
       options: l.options.filter((o) => o.optionId !== null).map((o) => ({ id: o.optionId!, name: o.name, price: o.price, category: '' })),
+      staffFreeQty: l.staffFreeQty,
     })))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -57,17 +59,23 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
     api.places().then(setFloors).catch(() => {})
   }, [])
 
-  const total = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * l.qty, 0), [lines])
+  const total = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * (l.qty - l.staffFreeQty), 0), [lines])
+  const staffFree = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * l.staffFreeQty, 0), [lines])
+  const isStaffOrder = order.staffMemberName !== null
+
+  const setStaffFree = (index: number, n: number) =>
+    setLines((ls) => ls.map((l, i) => i === index ? { ...l, staffFreeQty: Math.max(0, Math.min(l.qty, n)) } : l))
   const keyOfLine = (l: Line) => keyOf(l.variantId, l.options.map((o) => o.id))
 
   const setQty = (index: number, qty: number) =>
-    setLines((ls) => qty <= 0 ? ls.filter((_, i) => i !== index) : ls.map((l, i) => i === index ? { ...l, qty } : l))
+    setLines((ls) => qty <= 0 ? ls.filter((_, i) => i !== index)
+      : ls.map((l, i) => i === index ? { ...l, qty, staffFreeQty: Math.min(l.staffFreeQty, qty) } : l))
 
   const addVariant = (item: MenuItem, variantId: number, label: string | null, price: number) => {
     setLines((ls) => {
       const idx = ls.findIndex((l) => keyOfLine(l) === keyOf(variantId, []))
       if (idx >= 0) return ls.map((l, i) => i === idx ? { ...l, qty: l.qty + 1 } : l)
-      return [...ls, { variantId, name: label ? `${item.name} ${label}` : item.name, category: item.category, price, qty: 1, options: [] }]
+      return [...ls, { variantId, name: label ? `${item.name} ${label}` : item.name, category: item.category, price, qty: 1, options: [], staffFreeQty: 0 }]
     })
   }
 
@@ -78,7 +86,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
       const changed: Line = { ...line, options: has ? line.options.filter((o) => o.id !== opt.id) : [...line.options, opt] }
       const mergeIdx = ls.findIndex((l, i) => i !== index && keyOfLine(l) === keyOfLine(changed))
       if (mergeIdx >= 0) {
-        return ls.map((l, i) => i === mergeIdx ? { ...l, qty: l.qty + line.qty } : l).filter((_, i) => i !== index)
+        return ls.map((l, i) => i === mergeIdx ? { ...l, qty: l.qty + line.qty, staffFreeQty: l.staffFreeQty + line.staffFreeQty } : l).filter((_, i) => i !== index)
       }
       return ls.map((l, i) => i === index ? changed : l)
     })
@@ -92,7 +100,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
         customerName: name,
         receiveType,
         placeId: receiveType === 'DELIVERY' ? placeId : null,
-        lines: lines.map((l) => ({ variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id) })),
+        lines: lines.map((l) => ({ variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id), staffFreeQty: l.staffFreeQty })),
         memo: memo || null,
       })
       onSaved()
@@ -156,6 +164,14 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
                       <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(index, l.qty + 1)}>+</button>
                     </div>
                   </div>
+                  {isStaffOrder && (
+                    <div className="row" style={{ padding: '0 8px', fontSize: 15 }}>
+                      <span className="muted">사역자 잔</span>
+                      <button className="btn" style={{ minHeight: 36, minWidth: 36, padding: 0 }} onClick={() => setStaffFree(index, l.staffFreeQty - 1)}>−</button>
+                      <b>{l.staffFreeQty} / {l.qty}</b>
+                      <button className="btn" style={{ minHeight: 36, minWidth: 36, padding: 0 }} onClick={() => setStaffFree(index, l.staffFreeQty + 1)}>+</button>
+                    </div>
+                  )}
                   {applicable.length > 0 && (
                     <div className="chips" style={{ padding: '0 8px' }}>
                       {applicable.map((o) => {
@@ -191,7 +207,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
         </div>
 
         <div className="total-box" style={{ padding: 14 }}>
-          <span className="label" style={{ fontSize: 18 }}>합계</span>
+          <span className="label" style={{ fontSize: 18 }}>받을 금액{staffFree > 0 && <small className="muted"> (사역자 무료 {won(staffFree)} 제외)</small>}</span>
           <span className="amount" style={{ fontSize: 28 }}>{won(total)}</span>
         </div>
         {order.couponId !== null && (

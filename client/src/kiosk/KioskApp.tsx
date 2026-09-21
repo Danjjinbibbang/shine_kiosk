@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../shared/api'
-import type { Coupon, CouponPreview, CreateOrderRequest, MenuOption, Order, PayMethod, Place, ReceiveType } from '../shared/types'
+import type { Coupon, CouponPreview, CreateOrderRequest, MenuOption, Order, PayMethod, Place, ReceiveType, StaffMember } from '../shared/types'
 import { MenuStep } from './MenuStep'
 import { CartStep } from './CartStep'
 import { PaymentStep, PlaceStep, ReceiveStep } from './ChoiceSteps'
@@ -20,6 +20,8 @@ export interface CartLine {
   qty: number
   /** 붙인 옵션. 같은 메뉴라도 옵션이 다르면 다른 줄 */
   options: MenuOption[]
+  /** 이 중 사역자 무료 잔 수 (사역자 주문일 때만) */
+  staffFreeQty: number
 }
 
 /** 옵션 가격까지 더한 한 잔 값 */
@@ -42,6 +44,8 @@ export interface Draft {
   remainderMethod?: 'CASH' | 'TRANSFER'
   memo?: string
   customerName?: string
+  /** 사역자 무료를 적용한 사역자. 주문자 이름이 된다 */
+  staffMember?: StaffMember
 }
 
 const EMPTY: Draft = { cart: [] }
@@ -68,9 +72,10 @@ export function KioskApp() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const total = useMemo(() => draft.cart.reduce((s, l) => s + lineUnitPrice(l) * l.qty, 0), [draft.cart])
+  // 사역자 무료 잔을 뺀, 실제로 낼 금액
+  const total = useMemo(() => draft.cart.reduce((s, l) => s + lineUnitPrice(l) * (l.qty - l.staffFreeQty), 0), [draft.cart])
   const lines = useMemo(() => draft.cart.map((l) => ({
-    variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id),
+    variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id), staffFreeQty: l.staffFreeQty,
   })), [draft.cart])
 
   const reset = useCallback(() => {
@@ -123,6 +128,7 @@ export function KioskApp() {
       receiveType: d.receiveType,
       placeId: d.place?.id ?? null,
       payMethod: d.payMethod,
+      staffMemberId: d.staffMember?.id ?? null,
       couponId: d.coupon?.id ?? null,
       useFreeDrink: d.preview?.useFreeDrink ?? false,
       remainderMethod: d.remainderMethod ?? null,
@@ -148,6 +154,16 @@ export function KioskApp() {
     go(method === 'TRANSFER' ? 'transfer' : method === 'COUPON' ? 'coupon' : 'cash')
   }
 
+  // 결제가 끝난 뒤: 사역자 주문이면 이름을 이미 아니까 바로 접수
+  const afterPaid = (extra: Partial<Draft> = {}) => {
+    if (draft.staffMember) {
+      void submit(draft.staffMember.name, extra)
+    } else {
+      update(extra)
+      go('name')
+    }
+  }
+
   const showBack = step !== 'menu' && step !== 'done' && history.length > 0
 
   return (
@@ -171,25 +187,36 @@ export function KioskApp() {
             onNext={() => go('cart')} />
         )}
         {step === 'cart' && (
-          <CartStep cart={draft.cart} total={total}
+          <CartStep cart={draft.cart} total={total} staffMember={draft.staffMember}
             onChange={(cart) => update({ cart })}
+            onStaffMember={(m) => update({
+              staffMember: m,
+              // 사역자를 고르면 일단 전부 사역자 잔으로, 해제하면 0 으로
+              cart: draft.cart.map((l) => ({ ...l, staffFreeQty: m ? l.qty : 0 })),
+            })}
             onAddMore={back}
             onNext={() => go('receive')} />
         )}
         {step === 'receive' && (
           <ReceiveStep onSelect={(t) => {
             update({ receiveType: t, place: t === 'STORE' ? undefined : draft.place })
-            go(t === 'DELIVERY' ? 'place' : 'payment')
+            if (t === 'DELIVERY') go('place')
+            else if (total === 0 && draft.staffMember) void submit(draft.staffMember.name, { receiveType: t, payMethod: 'NONE' })
+            else go('payment')
           }} />
         )}
         {step === 'place' && (
-          <PlaceStep onSelect={(p) => { update({ place: p }); go('payment') }} />
+          <PlaceStep onSelect={(p) => {
+            update({ place: p })
+            if (total === 0 && draft.staffMember) void submit(draft.staffMember.name, { place: p, payMethod: 'NONE' })
+            else go('payment')
+          }} />
         )}
         {step === 'payment' && (
           <PaymentStep total={total} onSelect={afterPayment} />
         )}
         {step === 'transfer' && (
-          <TransferStep total={total} onNext={() => go('name')} />
+          <TransferStep total={total} onNext={() => afterPaid()} />
         )}
         {step === 'coupon' && (
           <CouponStep lines={lines} total={total} submitting={submitting}
@@ -199,7 +226,7 @@ export function KioskApp() {
             }} />
         )}
         {step === 'cash' && (
-          <CashStep total={total} onNext={(memo) => { update({ memo }); go('name') }} />
+          <CashStep total={total} onNext={(memo) => afterPaid({ memo })} />
         )}
         {step === 'name' && (
           <NameStep submitting={submitting} onSelect={(name) => void submit(name)} />

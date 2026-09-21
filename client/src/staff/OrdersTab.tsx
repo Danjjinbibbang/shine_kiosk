@@ -73,13 +73,14 @@ interface CardProps {
 /** "현금 1,000원" / "5,000원 = 무료 1잔(아메리카노 ICE) + 쿠폰 3,000원 + 현금 1,000원" */
 function payLine(o: Order): string {
   const parts: string[] = []
+  if (o.staffFreeAmount) parts.push(`사역자 무료 ${won(o.staffFreeAmount)}`)
   if (o.freeAmount) parts.push(`무료 1잔(${o.freeItemName ?? won(o.freeAmount)})`)
   if (o.couponAmount) parts.push(`쿠폰 ${won(o.couponAmount)}`)
   if (o.cashAmount) parts.push(`현금 ${won(o.cashAmount)}`)
   if (o.transferAmount) parts.push(`이체 ${won(o.transferAmount)}`)
   if (parts.length === 0) return `${PAY_LABEL[o.payMethod]} ${won(o.totalAmount)}`
   if (parts.length === 1) return parts[0]
-  return `${won(o.totalAmount)} = ${parts.join(' + ')}`
+  return `${won(o.totalAmount + o.staffFreeAmount)} = ${parts.join(' + ')}`
 }
 
 /** 서버의 order_date(로컬 YYYY-MM-DD)와 비교할 오늘 날짜. toISOString 은 UTC 라 새벽에 하루 어긋난다. */
@@ -104,7 +105,7 @@ function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardP
     <div className={'order-card' + (delivery ? ' delivery' : '') + (stale ? ' stale' : '')}>
       <div className="top">
         <span className="no">{orderLabel(o)}</span>
-        <span className="who">{o.customerName}</span>
+        <span className="who">{o.customerName}{o.staffMemberName && <span className="badge-staff">사역자</span>}</span>
         <span className={'where' + (delivery ? '' : ' store')}>{delivery ? `🚶 ${o.placeName}` : '☕ 카페'}</span>
         <span className="muted" style={{ fontSize: 14 }}>{time}</span>
       </div>
@@ -113,6 +114,7 @@ function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardP
           <div key={l.id}>
             {l.menuName}{l.variantLabel && <span className="muted"> {l.variantLabel}</span>}
             <span className="q">×{l.quantity}</span>
+            {l.staffFreeQty > 0 && <span className="staff-free"> (사역자 {l.staffFreeQty})</span>}
             {l.options.length > 0 && <span className="opt"> · {l.options.map((o) => o.name).join(', ')}</span>}
           </div>
         ))}

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import {
-  addToCart, createOrder, gotoKiosk, lookupCoupon, menuCard, orderOf, pickNameByTyping,
+  addStaffMember, addToCart, createOrder, gotoKiosk, lookupCoupon, menuCard, orderOf, pickNameByTyping,
   registerCoupon, toReceiveStep, uniq,
 } from './helpers'
 
@@ -318,5 +318,73 @@ test.describe('옵션 (샷 추가 / 연하게)', () => {
     expect(shot.unitPrice).toBe(1500)
     expect(shot.quantity).toBe(3)
     expect(shot.options[0].name).toBe('샷 추가')
+  })
+})
+
+test.describe('사역자 무료', () => {
+  test('사역자 선택 → 전부 무료 → 결제·이름 없이 바로 접수', async ({ page, request }) => {
+    const member = uniq('목사')
+    await addStaffMember(request, member)
+    await gotoKiosk(page)
+    await addToCart(page, '아메리카노', 'ICE', 2)
+    await page.getByRole('button', { name: /주문 확인/ }).click()
+
+    await page.getByRole('button', { name: /사역자 주문이에요/ }).click()
+    await page.getByRole('button', { name: member, exact: true }).click()
+    await expect(page.locator('.staff-bar')).toContainText(`${member} 사역자 주문 · 무료 2,000원`)
+    await expect(page.locator('.staff-line b')).toHaveText('2 / 2')
+    await expect(page.locator('.total-box .amount')).toHaveText('0원')
+    await page.getByRole('button', { name: /무료로 주문하기/ }).click()
+    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+
+    await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
+    await expect(page.locator('.hero .amount')).toHaveText(`${member}님`)
+    await expect(page.getByText('사역자 무료')).toBeVisible()
+    const order = await orderOf(request, member)
+    expect(order.payMethod).toBe('NONE')
+    expect(order.totalAmount).toBe(0)
+    expect(order.staffFreeAmount).toBe(2000)
+    expect(order.staffMemberName).toBe(member)
+  })
+
+  test('3잔 중 2잔만 사역자 → 나머지 1잔 현금, 이름 화면 건너뜀', async ({ page, request }) => {
+    const member = uniq('전도사')
+    await addStaffMember(request, member)
+    await gotoKiosk(page)
+    await addToCart(page, '아메리카노', 'ICE', 3)
+    await page.getByRole('button', { name: /주문 확인/ }).click()
+    await page.getByRole('button', { name: /사역자 주문이에요/ }).click()
+    await page.getByRole('button', { name: member, exact: true }).click()
+    await page.getByRole('button', { name: '사역자 잔 빼기' }).click()
+    await expect(page.locator('.staff-line b')).toHaveText('2 / 3')
+    await expect(page.locator('.total-box .amount')).toHaveText('1,000원')
+
+    await page.getByRole('button', { name: /^주문하기/ }).click()
+    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await page.getByRole('button', { name: /현금/ }).click()
+    await page.getByRole('button', { name: '딱 맞게' }).click()
+    await page.getByRole('button', { name: /다음/ }).click()
+    // 이름 화면 없이 바로 완료
+    await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
+    const order = await orderOf(request, member)
+    expect(order.totalAmount).toBe(1000)
+    expect(order.cashAmount).toBe(1000)
+    expect(order.staffFreeAmount).toBe(2000)
+    expect(order.lines[0].staffFreeQty).toBe(2)
+  })
+
+  test('해제하면 일반 주문으로 돌아간다', async ({ page, request }) => {
+    const member = uniq('해제')
+    await addStaffMember(request, member)
+    await gotoKiosk(page)
+    await addToCart(page, '아샷추', null)
+    await page.getByRole('button', { name: /주문 확인/ }).click()
+    await page.getByRole('button', { name: /사역자 주문이에요/ }).click()
+    await page.getByRole('button', { name: member, exact: true }).click()
+    await expect(page.locator('.total-box .amount')).toHaveText('0원')
+    await page.getByRole('button', { name: '해제' }).click()
+    await expect(page.locator('.staff-line')).toHaveCount(0)
+    await expect(page.locator('.total-box .amount')).toHaveText('2,500원')
+    await expect(page.getByRole('button', { name: /사역자 주문이에요/ })).toBeVisible()
   })
 })

@@ -35,14 +35,15 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
       if (existing) {
         onChange(cart.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l)))
       } else {
-        onChange([...cart, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price, qty: 1, options: [] }])
+        onChange([...cart, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price, qty: 1, options: [], staffFreeQty: 0 }])
       }
       return
     }
     const idx = cart.map((l) => l.variantId).lastIndexOf(v.id)
     if (idx < 0) return
     const target = cart[idx]
-    onChange(target.qty <= 1 ? cart.filter((_, i) => i !== idx) : cart.map((l, i) => (i === idx ? { ...l, qty: l.qty - 1 } : l)))
+    onChange(target.qty <= 1 ? cart.filter((_, i) => i !== idx)
+      : cart.map((l, i) => (i === idx ? { ...l, qty: l.qty - 1, staffFreeQty: Math.min(l.staffFreeQty, l.qty - 1) } : l)))
   }
 
   const count = cart.reduce((s, l) => s + l.qty, 0)

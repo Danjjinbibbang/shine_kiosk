@@ -75,6 +75,7 @@ export function StaffApp() {
             <span>이체 {won(summary.transferAmount)}</span>
             <span>쿠폰 {won(summary.couponAmount)}</span>
             {summary.freeAmount > 0 && <span>무료잔 {won(summary.freeAmount)}</span>}
+            {summary.staffFreeAmount > 0 && <span>사역자 {won(summary.staffFreeAmount)}</span>}
           </div>
         )}
         <div className="tabs">

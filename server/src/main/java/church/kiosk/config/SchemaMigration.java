@@ -27,7 +27,10 @@ public class SchemaMigration {
 			new Column("coupon", "free_drinks", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("coupon_tx", "free_delta", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_amount", "INTEGER NOT NULL DEFAULT 0"),
-			new Column("orders", "free_item_name", "TEXT")
+			new Column("orders", "free_item_name", "TEXT"),
+			new Column("orders", "staff_member_name", "TEXT"),
+			new Column("orders", "staff_free_amount", "INTEGER NOT NULL DEFAULT 0"),
+			new Column("order_line", "staff_free_qty", "INTEGER NOT NULL DEFAULT 0")
 	);
 
 	private final JdbcClient jdbc;

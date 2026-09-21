@@ -179,6 +179,13 @@ input { font: inherit; }
 .order-card .lines { display: flex; flex-direction: column; gap: 4px; font-size: 20px; }
 .order-card .lines .q { font-weight: 900; margin-left: 6px; }
 .order-card .lines .opt { color: var(--primary); font-weight: 700; font-size: 17px; }
+.order-card .lines .staff-free { color: var(--ok); font-weight: 700; font-size: 16px; }
+.badge-staff { font-size: 12px; font-weight: 700; color: var(--ok); background: #e8efe9; border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: middle; }
+.staff-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #e8efe9; border: 2px solid var(--ok); border-radius: var(--radius); font-size: 20px; }
+.staff-bar b { color: var(--ok); }
+.staff-line { display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 20px; }
+.staff-line .btn { min-height: 48px; min-width: 48px; padding: 0; font-size: 24px; }
+.staff-line b { min-width: 70px; text-align: center; color: var(--ok); }
 .order-card .pay { font-size: 15px; color: var(--muted); }
 .order-card .memo { font-size: 15px; color: var(--danger); font-weight: 700; }
 .order-card .actions { display: flex; gap: 8px; }

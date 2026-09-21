@@ -1,7 +1,8 @@
 // 서버 DTO 와 1:1 로 맞춘 타입. 서버 쪽 OrderDtos / MenuDtos 를 바꾸면 여기도 같이 고친다.
 
 export type ReceiveType = 'STORE' | 'DELIVERY'
-export type PayMethod = 'TRANSFER' | 'COUPON' | 'CASH'
+/** NONE = 사역자 무료로 낼 금액이 0 이라 결제 없음 */
+export type PayMethod = 'TRANSFER' | 'COUPON' | 'CASH' | 'NONE'
 export type OrderStatus = 'PENDING' | 'DONE' | 'CANCELED'
 
 export interface MenuVariant {
@@ -28,6 +29,13 @@ export interface MenuOption {
 export interface AdminOption extends MenuOption {
   sortOrder: number
   available: boolean
+}
+
+/** 사역자 명단. 사역자 잔은 무료. */
+export interface StaffMember {
+  id: number
+  name: string
+  active: boolean
 }
 
 export interface Place {
@@ -95,6 +103,8 @@ export interface LineRequest {
   variantId: number
   quantity: number
   optionIds?: number[]
+  /** 이 줄에서 사역자 무료로 처리할 잔 수 */
+  staffFreeQty?: number
 }
 
 export interface CouponPreview {
@@ -115,6 +125,8 @@ export interface CreateOrderRequest {
   receiveType: ReceiveType
   placeId?: number | null
   payMethod: PayMethod
+  /** 사역자 무료 잔이 있으면 필수 */
+  staffMemberId?: number | null
   couponId?: number | null
   useFreeDrink?: boolean
   remainderMethod?: PayMethod | null
@@ -144,6 +156,8 @@ export interface OrderLine {
   /** 옵션 가격까지 더한 한 잔 값 */
   unitPrice: number
   quantity: number
+  /** 이 중 사역자 무료 잔 수 */
+  staffFreeQty: number
   options: OrderLineOption[]
 }
 
@@ -155,7 +169,10 @@ export interface Order {
   receiveType: ReceiveType
   placeId: number | null
   placeName: string | null
+  /** 사역자 무료를 뺀 실제로 받을 금액 */
   totalAmount: number
+  staffMemberName: string | null
+  staffFreeAmount: number
   payMethod: PayMethod
   remainderMethod: PayMethod | null
   couponId: number | null
@@ -179,12 +196,14 @@ export interface DailySummary {
   transferAmount: number
   couponAmount: number
   freeAmount: number
+  staffFreeAmount: number
 }
 
 export const PAY_LABEL: Record<PayMethod, string> = {
   TRANSFER: '계좌이체',
   COUPON: '쿠폰',
   CASH: '현금',
+  NONE: '결제 없음',
 }
 
 /** "아메리카노 ICE · 샷 추가" 처럼 한 줄 이름. */

@@ -3,6 +3,8 @@ package church.kiosk.order;
 import church.kiosk.coupon.Coupon;
 import church.kiosk.coupon.CouponService;
 import church.kiosk.customer.CustomerRepository;
+import church.kiosk.member.StaffMemberRepository;
+import church.kiosk.member.StaffMemberRepository.StaffMember;
 import church.kiosk.menu.MenuDtos.AdminOption;
 import church.kiosk.menu.MenuDtos.VariantDetail;
 import church.kiosk.menu.MenuOptionRepository;
@@ -38,22 +40,29 @@ public class OrderService {
 	private final PlaceRepository placeRepository;
 	private final CouponService couponService;
 	private final CustomerRepository customerRepository;
+	private final StaffMemberRepository staffMemberRepository;
 	private final KioskEventHandler events;
 
 	public OrderService(OrderRepository orderRepository, MenuRepository menuRepository,
 						MenuOptionRepository optionRepository, PlaceRepository placeRepository,
-						CouponService couponService, CustomerRepository customerRepository, KioskEventHandler events) {
+						CouponService couponService, CustomerRepository customerRepository,
+						StaffMemberRepository staffMemberRepository, KioskEventHandler events) {
 		this.orderRepository = orderRepository;
 		this.menuRepository = menuRepository;
 		this.optionRepository = optionRepository;
 		this.placeRepository = placeRepository;
 		this.couponService = couponService;
 		this.customerRepository = customerRepository;
+		this.staffMemberRepository = staffMemberRepository;
 		this.events = events;
 	}
 
-	/** 가격이 확정된 주문 항목 묶음. maxUnit* 은 가장 비싼 한 잔 (무료 1잔 대상). */
-	private record PricedLines(List<LineRow> lines, int total, int maxUnitPrice, String maxUnitName) {}
+	/**
+	 * 가격이 확정된 주문 항목 묶음.
+	 * total 은 사역자 무료 잔을 뺀 받을 금액, staffFreeAmount 는 사역자 무료로 뺀 금액.
+	 * maxUnit* 은 돈 내는 잔 중 가장 비싼 한 잔 (쿠폰 무료 1잔 대상).
+	 */
+	private record PricedLines(List<LineRow> lines, int total, int staffFreeAmount, int maxUnitPrice, String maxUnitName) {}
 
 	/** 쿠폰 적용 결과. */
 	private record CouponUse(boolean useFree, int freeAmount, String freeItemName, int couponAmount, int remainder) {}
@@ -87,6 +96,14 @@ public class OrderService {
 		PricedLines priced = price(req.lines());
 		Place place = resolvePlace(req.receiveType(), req.placeId());
 		String name = req.customerName().trim();
+		String staffName = resolveStaffMember(priced, req.staffMemberId());
+
+		if (priced.total() == 0 && req.payMethod() != PayMethod.NONE) {
+			throw new BusinessException("낼 금액이 없는 주문입니다. 결제 없이 접수해 주세요.");
+		}
+		if (priced.total() > 0 && req.payMethod() == PayMethod.NONE) {
+			throw new BusinessException("결제 수단을 선택해 주세요.");
+		}
 
 		CouponUse use = new CouponUse(false, 0, null, 0, priced.total());
 		Long couponId = null;
@@ -119,7 +136,7 @@ public class OrderService {
 		String today = LocalDate.now().toString();
 		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
 				place == null ? null : place.id(), place == null ? null : place.name(),
-				priced.total(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
+				priced.total(), staffName, priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
 				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
 		long orderId = orderRepository.insert(row);
 		orderRepository.insertLines(orderId, priced.lines());
@@ -142,6 +159,9 @@ public class OrderService {
 		OrderView existing = requirePending(orderId);
 		PricedLines priced = price(req.lines());
 		Place place = resolvePlace(req.receiveType(), req.placeId());
+		if (priced.staffFreeAmount() > 0 && existing.staffMemberName() == null) {
+			throw new BusinessException("사역자 주문이 아니어서 사역자 무료를 넣을 수 없습니다.");
+		}
 
 		CouponUse use = new CouponUse(false, 0, null, 0, priced.total());
 		PayMethod remainderMethod = existing.remainderMethod();
@@ -157,12 +177,16 @@ public class OrderService {
 		}
 		int remainder = use.remainder();
 		PayMethod remainderBy = existing.payMethod() == PayMethod.COUPON ? remainderMethod : existing.payMethod();
+		if (remainderBy == PayMethod.NONE && remainder > 0) {
+			remainderBy = PayMethod.CASH; // 전부 무료였던 주문에 돈 낼 잔이 생기면 현금으로 받는다
+		}
 		int cash = remainderBy == PayMethod.CASH ? remainder : 0;
 		int transfer = remainderBy == PayMethod.TRANSFER ? remainder : 0;
 
 		OrderRow row = new OrderRow(existing.orderDate(), existing.orderNo(), req.customerName().trim(),
 				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
-				priced.total(), existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
+				priced.total(), existing.staffMemberName(), priced.staffFreeAmount(),
+				existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
 				use.freeAmount(), use.freeItemName(), cash, transfer, blankToNull(req.memo()));
 		orderRepository.update(orderId, row);
 		orderRepository.deleteLines(orderId);
@@ -225,9 +249,15 @@ public class OrderService {
 	private PricedLines price(List<LineRequest> requests) {
 		List<LineRow> lines = new ArrayList<>();
 		int total = 0;
+		int staffFree = 0;
 		int max = 0;
 		String maxName = null;
 		for (LineRequest r : requests) {
+			int freeQty = r.staffFreeQtyOrZero();
+			if (freeQty < 0 || freeQty > r.quantity()) {
+				throw new BusinessException("사역자 잔 수는 0부터 수량까지만 가능합니다.");
+			}
+			int paidQty = r.quantity() - freeQty;
 			VariantDetail v = menuRepository.findVariantDetail(r.variantId())
 					.orElseThrow(() -> new BusinessException("없는 메뉴가 담겨 있습니다. 다시 담아 주세요."));
 			if (!v.available()) {
@@ -247,16 +277,31 @@ public class OrderService {
 				options.add(new LineOptionView(opt.id(), opt.name(), opt.price()));
 				unit += opt.price();
 			}
-			lines.add(new LineRow(v.menuItemId(), v.variantId(), v.menuName(), v.label(), unit, r.quantity(), options));
-			total += unit * r.quantity();
-			if (unit > max) {
+			lines.add(new LineRow(v.menuItemId(), v.variantId(), v.menuName(), v.label(), unit, r.quantity(), freeQty, options));
+			total += unit * paidQty;
+			staffFree += unit * freeQty;
+			if (paidQty > 0 && unit > max) {
 				max = unit;
 				String base = v.label() == null ? v.menuName() : v.menuName() + " " + v.label();
 				maxName = options.isEmpty() ? base
 						: base + " (" + String.join(", ", options.stream().map(LineOptionView::name).toList()) + ")";
 			}
 		}
-		return new PricedLines(lines, total, max, maxName);
+		return new PricedLines(lines, total, staffFree, max, maxName);
+	}
+
+	/** 사역자 무료 잔이 있으면 명단의 사역자여야 한다. 없으면 null. */
+	private String resolveStaffMember(PricedLines priced, Long staffMemberId) {
+		if (priced.staffFreeAmount() == 0 && priced.lines().stream().allMatch(l -> l.staffFreeQty() == 0)) {
+			return null;
+		}
+		if (staffMemberId == null) {
+			throw new BusinessException("사역자를 선택해 주세요.");
+		}
+		StaffMember member = staffMemberRepository.findById(staffMemberId)
+				.filter(StaffMember::active)
+				.orElseThrow(() -> new BusinessException("사역자 명단에 없는 이름입니다."));
+		return member.name();
 	}
 
 	private Place resolvePlace(ReceiveType receiveType, Long placeId) {

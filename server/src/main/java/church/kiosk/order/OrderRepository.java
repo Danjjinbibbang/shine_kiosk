@@ -26,20 +26,21 @@ public class OrderRepository {
 
 	private static final String ORDER_COLUMNS = """
 			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
-			total_amount, pay_method, remainder_method, coupon_id, coupon_amount,
+			total_amount, staff_member_name, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
 			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
 	public record OrderRow(String orderDate, int orderNo, String customerName, ReceiveType receiveType,
-						   Long placeId, String placeName, int totalAmount, PayMethod payMethod,
+						   Long placeId, String placeName, int totalAmount, String staffMemberName, int staffFreeAmount,
+						   PayMethod payMethod,
 						   PayMethod remainderMethod, Long couponId, int couponAmount,
 						   int freeAmount, String freeItemName,
 						   int cashAmount, int transferAmount, String memo) {}
 
 	/** unitPrice 는 옵션 가격을 더한 값. options 는 스냅샷으로 함께 저장한다. */
 	public record LineRow(Long menuItemId, Long variantId, String menuName, String variantLabel,
-						  int unitPrice, int quantity, List<LineOptionView> options) {}
+						  int unitPrice, int quantity, int staffFreeQty, List<LineOptionView> options) {}
 
 	private final JdbcClient jdbc;
 
@@ -58,16 +59,18 @@ public class OrderRepository {
 		KeyHolder keys = new GeneratedKeyHolder();
 		jdbc.sql("""
 						INSERT INTO orders (order_date, order_no, customer_name, receive_type, place_id, place_name,
-						                    total_amount, pay_method, remainder_method, coupon_id, coupon_amount,
+						                    total_amount, staff_member_name, staff_free_amount,
+						                    pay_method, remainder_method, coupon_id, coupon_amount,
 						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at)
 						VALUES (:date, :no, :name, :receive, :placeId, :placeName,
-						        :total, :pay, :remainder, :couponId, :couponAmount,
+						        :total, :staffName, :staffFree, :pay, :remainder, :couponId, :couponAmount,
 						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now)
 						""")
 				.param("date", row.orderDate()).param("no", row.orderNo())
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
 				.param("placeId", row.placeId()).param("placeName", row.placeName())
 				.param("total", row.totalAmount()).param("pay", row.payMethod().name())
+				.param("staffName", row.staffMemberName()).param("staffFree", row.staffFreeAmount())
 				.param("remainder", row.remainderMethod() == null ? null : row.remainderMethod().name())
 				.param("couponId", row.couponId()).param("couponAmount", row.couponAmount())
 				.param("freeAmount", row.freeAmount()).param("freeItemName", row.freeItemName())
@@ -82,7 +85,7 @@ public class OrderRepository {
 		jdbc.sql("""
 						UPDATE orders SET customer_name = :name, receive_type = :receive,
 						                  place_id = :placeId, place_name = :placeName,
-						                  total_amount = :total, remainder_method = :remainder,
+						                  total_amount = :total, staff_free_amount = :staffFree, remainder_method = :remainder,
 						                  coupon_amount = :couponAmount, free_amount = :freeAmount,
 						                  free_item_name = :freeItemName, cash_amount = :cash,
 						                  transfer_amount = :transfer, memo = :memo
@@ -90,7 +93,7 @@ public class OrderRepository {
 						""")
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
 				.param("placeId", row.placeId()).param("placeName", row.placeName())
-				.param("total", row.totalAmount())
+				.param("total", row.totalAmount()).param("staffFree", row.staffFreeAmount())
 				.param("remainder", row.remainderMethod() == null ? null : row.remainderMethod().name())
 				.param("couponAmount", row.couponAmount())
 				.param("freeAmount", row.freeAmount()).param("freeItemName", row.freeItemName())
@@ -104,13 +107,13 @@ public class OrderRepository {
 			KeyHolder keys = new GeneratedKeyHolder();
 			jdbc.sql("""
 							INSERT INTO order_line (order_id, menu_item_id, variant_id, menu_name, variant_label,
-							                        unit_price, quantity)
-							VALUES (:orderId, :itemId, :variantId, :menuName, :label, :price, :qty)
+							                        unit_price, quantity, staff_free_qty)
+							VALUES (:orderId, :itemId, :variantId, :menuName, :label, :price, :qty, :staffFree)
 							""")
 					.param("orderId", orderId).param("itemId", line.menuItemId())
 					.param("variantId", line.variantId()).param("menuName", line.menuName())
 					.param("label", line.variantLabel()).param("price", line.unitPrice())
-					.param("qty", line.quantity())
+					.param("qty", line.quantity()).param("staffFree", line.staffFreeQty())
 					.update(keys);
 			long lineId = keys.getKey().longValue();
 			for (LineOptionView opt : line.options()) {
@@ -173,12 +176,13 @@ public class OrderRepository {
 						       COALESCE(SUM(cash_amount), 0)     AS cash,
 						       COALESCE(SUM(transfer_amount), 0) AS transfer,
 						       COALESCE(SUM(coupon_amount), 0)   AS coupon,
-						       COALESCE(SUM(free_amount), 0)     AS free
+						       COALESCE(SUM(free_amount), 0)     AS free,
+						       COALESCE(SUM(staff_free_amount), 0) AS staff_free
 						FROM orders WHERE order_date = :date AND status <> 'CANCELED'
 						""")
 				.param("date", orderDate)
 				.query((rs, n) -> new DailySummary(orderDate, rs.getInt("cnt"), rs.getInt("total"),
-						rs.getInt("cash"), rs.getInt("transfer"), rs.getInt("coupon"), rs.getInt("free")))
+						rs.getInt("cash"), rs.getInt("transfer"), rs.getInt("coupon"), rs.getInt("free"), rs.getInt("staff_free")))
 				.single();
 	}
 
@@ -193,7 +197,7 @@ public class OrderRepository {
 			byOrder.put(o.id(), new ArrayList<>());
 		}
 		List<LineWithOrder> rows = jdbc.sql("""
-						SELECT id, order_id, variant_id, menu_name, variant_label, unit_price, quantity
+						SELECT id, order_id, variant_id, menu_name, variant_label, unit_price, quantity, staff_free_qty
 						FROM order_line WHERE order_id IN (:ids) ORDER BY id
 						""")
 				.param("ids", new ArrayList<>(byOrder.keySet()))
@@ -203,7 +207,7 @@ public class OrderRepository {
 					return new LineWithOrder(rs.getLong("order_id"), new LineView(
 							rs.getLong("id"), variantIdOrNull,
 							rs.getString("menu_name"), rs.getString("variant_label"),
-							rs.getInt("unit_price"), rs.getInt("quantity"), new ArrayList<>()));
+							rs.getInt("unit_price"), rs.getInt("quantity"), rs.getInt("staff_free_qty"), new ArrayList<>()));
 				})
 				.list();
 		Map<Long, LineView> byLine = new LinkedHashMap<>();
@@ -232,7 +236,8 @@ public class OrderRepository {
 
 	private static OrderView withLines(OrderView o, List<LineView> lines) {
 		return new OrderView(o.id(), o.orderDate(), o.orderNo(), o.customerName(), o.receiveType(),
-				o.placeId(), o.placeName(), o.totalAmount(), o.payMethod(), o.remainderMethod(),
+				o.placeId(), o.placeName(), o.totalAmount(), o.staffMemberName(), o.staffFreeAmount(),
+				o.payMethod(), o.remainderMethod(),
 				o.couponId(), o.couponAmount(), o.freeAmount(), o.freeItemName(),
 				o.cashAmount(), o.transferAmount(), o.status(),
 				o.memo(), o.createdAt(), o.completedAt(), lines);
@@ -248,6 +253,7 @@ public class OrderRepository {
 				rs.getLong("id"), rs.getString("order_date"), rs.getInt("order_no"),
 				rs.getString("customer_name"), ReceiveType.valueOf(rs.getString("receive_type")),
 				placeIdOrNull, rs.getString("place_name"), rs.getInt("total_amount"),
+				rs.getString("staff_member_name"), rs.getInt("staff_free_amount"),
 				PayMethod.valueOf(rs.getString("pay_method")),
 				remainder == null ? null : PayMethod.valueOf(remainder),
 				couponIdOrNull, rs.getInt("coupon_amount"), rs.getInt("free_amount"), rs.getString("free_item_name"),
