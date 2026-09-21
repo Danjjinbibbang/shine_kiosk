@@ -1,6 +1,5 @@
 package church.kiosk.coupon;
 
-import church.kiosk.config.KioskProperties;
 import church.kiosk.coupon.CouponService.LookupResult;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -16,11 +15,9 @@ import java.util.Map;
 public class CouponController {
 
 	private final CouponService couponService;
-	private final KioskProperties props;
 
-	public CouponController(CouponService couponService, KioskProperties props) {
+	public CouponController(CouponService couponService) {
 		this.couponService = couponService;
-		this.props = props;
 	}
 
 	public record LookupRequest(@NotBlank(message = "이름을 입력해 주세요.") String name, String phoneLast4) {}
@@ -101,8 +98,9 @@ public class CouponController {
 		couponService.delete(id);
 	}
 
+	/** 충전 버튼 금액과 각각의 무료잔, 한 번 충전 상한 */
 	@GetMapping("/api/staff/coupons/preset")
-	public Map<String, Integer> preset() {
-		return Map.of("amount", props.getCouponPresetAmount());
+	public Map<String, Object> preset() {
+		return Map.of("tiers", ChargePolicy.TIERS, "max", ChargePolicy.MAX);
 	}
 }

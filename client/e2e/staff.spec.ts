@@ -158,17 +158,22 @@ test.describe('쿠폰 관리', () => {
     await page.getByRole('button', { name: '저장' }).click()
     await expect(couponCard(page)).toContainText(name + 'A')
 
-    // 100만원 넘으면 충전 버튼이 잠긴다
-    await page.getByPlaceholder(/다른 금액/).fill('1000001')
+    // 30,000원 넘으면 충전 버튼이 잠긴다
+    await page.getByPlaceholder(/다른 금액/).fill('30001')
     await expect(page.getByRole('button', { name: /충전$/ }).last()).toBeDisabled()
-    await expect(couponCard(page)).toContainText('1,000,000원까지')
+    await expect(couponCard(page)).toContainText('30,000원까지')
     // 다른 금액 충전 5,000 → 25,000, 무료잔 그대로, 이력 2줄
     await page.getByPlaceholder(/다른 금액/).fill('5000')
+    await expect(couponCard(page)).toContainText('무료잔 적립 없음')
     await page.getByRole('button', { name: '5,000원 충전' }).click()
     await expect(couponCard(page)).toContainText('25,000원')
     await expect(page.getByText('1잔 남음')).toBeVisible()
     await expect(couponCard(page).locator('.history-row')).toHaveCount(2)
     await expect(couponCard(page).locator('.history-row').first()).toContainText('+5,000원')
+    // 30,000원 버튼 → 무료 2잔 추가
+    await page.getByRole('button', { name: '30,000원 충전' }).click()
+    await expect(couponCard(page)).toContainText('55,000원')
+    await expect(page.getByText('3잔 남음')).toBeVisible()
 
     // 정정: 잔액 20,000 / 무료 3잔
     await page.getByRole('button', { name: '잔액 정정' }).click()

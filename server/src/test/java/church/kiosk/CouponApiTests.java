@@ -25,20 +25,33 @@ class CouponApiTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("충전 금액 / 20,000 만큼 무료잔: 10,000 → 0잔, 40,000 → 2잔, 누적")
-	void chargeGrantsFreeDrinksPerPreset() throws Exception {
-		long id = registerCoupon("이영희", 20000);
+	@DisplayName("충전 금액 기준 무료잔: 10,000 → 0잔, 20,000 → 1잔, 25,000 → 1잔, 30,000 → 2잔, 30,000 초과는 거부, 누적")
+	void chargeGrantsFreeDrinksByTier() throws Exception {
+		long id = registerCoupon("이영희", 20000);   // 무료 1잔
 
 		Response r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 10000));
 		assertThat(r.<Integer>read("$.balance")).isEqualTo(30000);
-		assertThat(r.<Integer>read("$.freeDrinks")).isEqualTo(1);
+		assertThat(r.<Integer>read("$.freeDrinks")).as("10,000 은 무료잔 없음").isEqualTo(1);
 
-		r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 40000));
-		assertThat(r.<Integer>read("$.balance")).isEqualTo(70000);
-		assertThat(r.<Integer>read("$.freeDrinks")).isEqualTo(3);
+		r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 30000));
+		assertThat(r.<Integer>read("$.balance")).isEqualTo(60000);
+		assertThat(r.<Integer>read("$.freeDrinks")).as("30,000 은 2잔").isEqualTo(3);
+
+		r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 25000));
+		assertThat(r.<Integer>read("$.freeDrinks")).as("25,000 은 1잔").isEqualTo(4);
 
 		r = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 19000));
-		assertThat(r.<Integer>read("$.freeDrinks")).as("19,000 은 무료잔 없음").isEqualTo(3);
+		assertThat(r.<Integer>read("$.freeDrinks")).as("19,000 은 무료잔 없음").isEqualTo(4);
+
+		Response over = staffPost("/api/staff/coupons/" + id + "/charge", Map.of("amount", 40000));
+		assertThat(over.status()).isEqualTo(400);
+		assertThat(over.message()).contains("30,000원까지");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "박민수", "amount", 30000, "phone", "01099998888")).<Integer>read("$.freeDrinks")).isEqualTo(2);
+
+		Response preset = staffGet("/api/staff/coupons/preset");
+		assertThat(preset.<Integer>read("$.max")).isEqualTo(30000);
+		assertThat(preset.<Integer>read("$.tiers[1].amount")).isEqualTo(30000);
+		assertThat(preset.<Integer>read("$.tiers[1].freeDrinks")).isEqualTo(2);
 	}
 
 	@Test
@@ -54,7 +67,7 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "02-123-4567")).message()).contains("휴대폰 번호 형식");
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "010-1234-56789")).message()).contains("휴대폰 번호 형식");
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 0, "phone", "01011112222")).status()).isEqualTo(400);
-		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 2000000, "phone", "01011112222")).message()).contains("1,000,000원까지");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 30001, "phone", "01011112222")).message()).contains("30,000원까지");
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이십일자가넘어가는아주긴이름을가진사람입니다요", "amount", 20000, "phone", "01011112222")).message()).contains("20자까지");
 		// 이름은 앞뒤 공백·겹친 공백을 정리해서 저장
 		Response spaced = staffPost("/api/staff/coupons", Map.of("name", "  김  철수 ", "amount", 20000, "phone", "01011112222"));
@@ -201,7 +214,7 @@ class CouponApiTests extends ApiTestSupport {
 	@Test
 	@DisplayName("정정: 잔액과 무료잔을 바꾸고 차액이 ADJUST 이력으로 남는다")
 	void adjust() throws Exception {
-		long id = registerCoupon("이영희", 200000); // 실수로 0 하나 더
+		long id = registerCoupon("이영희", 30000); // 실수로 20,000 을 30,000 으로 (무료 2잔)
 
 		Response r = staffPost("/api/staff/coupons/" + id + "/adjust", Map.of("balance", 20000, "freeDrinks", 1));
 		assertThat(r.<Integer>read("$.balance")).isEqualTo(20000);
@@ -210,7 +223,7 @@ class CouponApiTests extends ApiTestSupport {
 		List<Map<String, Object>> tx = jdbc.sql("SELECT delta, free_delta, reason FROM coupon_tx WHERE coupon_id = :id ORDER BY id")
 				.param("id", id).query().listOfRows();
 		assertThat(tx).hasSize(2);
-		assertThat(tx.get(1)).containsEntry("delta", -180000).containsEntry("free_delta", -9).containsEntry("reason", "ADJUST");
+		assertThat(tx.get(1)).containsEntry("delta", -10000).containsEntry("free_delta", -1).containsEntry("reason", "ADJUST");
 
 		assertThat(staffPost("/api/staff/coupons/" + id + "/adjust", Map.of("balance", -1, "freeDrinks", 0)).status()).isEqualTo(400);
 		assertThat(staffPost("/api/staff/coupons/" + id + "/adjust", Map.of("balance", 0, "freeDrinks", -1)).status()).isEqualTo(400);

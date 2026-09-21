@@ -1,7 +1,4 @@
-import type {
-  AdminItem, AdminOption, AdminPlace, Category, Coupon, CouponTx, DayReport, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
-  LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest,
-} from './types'
+import type { AdminItem, AdminOption, AdminPlace, Category, ChargePreset, Coupon, CouponPreview, CouponTx, CreateOrderRequest, DailySummary, DayReport, FloorGroup, LineRequest, LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest } from './types'
 
 const STAFF_TOKEN_KEY = 'shine-kiosk.staffToken'
 
@@ -100,7 +97,7 @@ export const api = {
   adjustCoupon: (id: number, balance: number, freeDrinks: number) =>
     post<Coupon>(`/api/staff/coupons/${id}/adjust`, { balance, freeDrinks }),
   deleteCoupon: (id: number) => del<void>(`/api/staff/coupons/${id}`),
-  couponPreset: () => request<{ amount: number }>('/api/staff/coupons/preset'),
+  couponPreset: () => request<ChargePreset>('/api/staff/coupons/preset'),
 
   // ── 스태프 설정 (메뉴 / 장소) ────────────────────────
   categories: () => request<Category[]>('/api/staff/categories'),

@@ -254,3 +254,9 @@ export function lineTitle(menuName: string, label: string | null, optionNames: s
 export function won(n: number): string {
   return n.toLocaleString('ko-KR') + '원'
 }
+
+/** 충전 버튼 금액과 무료잔, 한 번 충전 상한 (/api/staff/coupons/preset) */
+export interface ChargePreset {
+  tiers: { amount: number; freeDrinks: number }[]
+  max: number
+}

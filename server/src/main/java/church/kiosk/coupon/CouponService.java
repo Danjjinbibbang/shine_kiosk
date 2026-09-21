@@ -1,6 +1,5 @@
 package church.kiosk.coupon;
 
-import church.kiosk.config.KioskProperties;
 import church.kiosk.support.BusinessException;
 import church.kiosk.support.Validation;
 import org.springframework.stereotype.Service;
@@ -10,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 선불 쿠폰. 주문 금액 전액이 잔액에서 빠지고, 20,000원(설정값) 충전마다 무료 1잔이 적립된다.
+ * 선불 쿠폰. 주문 금액 전액이 잔액에서 빠지고, 충전 금액에 따라 무료 1잔이 적립된다 ({@link ChargePolicy}).
  * 무료 1잔은 고객이 원하는 주문에서 체크해 쓰며, 그 주문에서 가장 비싼 한 잔 값이 빠진다.
  */
 @Service
@@ -26,17 +25,13 @@ public class CouponService {
 	}
 
 	private final CouponRepository couponRepository;
-	private final KioskProperties props;
 
-	public CouponService(CouponRepository couponRepository, KioskProperties props) {
+	public CouponService(CouponRepository couponRepository) {
 		this.couponRepository = couponRepository;
-		this.props = props;
 	}
 
-	/** 충전 금액으로 적립되는 무료 1잔 개수. 20,000원마다 1잔. */
 	int freeDrinksFor(int amount) {
-		int unit = props.getCouponPresetAmount();
-		return unit > 0 ? amount / unit : 0;
+		return ChargePolicy.freeDrinksFor(amount);
 	}
 
 	public List<Coupon> findByName(String name) {

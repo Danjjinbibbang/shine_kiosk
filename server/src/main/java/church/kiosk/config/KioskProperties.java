@@ -8,7 +8,6 @@ public class KioskProperties {
 	private String dbPath = "./data/kiosk.db";
 	private String staffPin = "1234";
 	private String bankAccount = "";
-	private int couponPresetAmount = 20000;
 	private int regularCustomerDays = 21;
 	private String backupDir = "./backups";
 
@@ -20,9 +19,6 @@ public class KioskProperties {
 
 	public String getBankAccount() { return bankAccount; }
 	public void setBankAccount(String bankAccount) { this.bankAccount = bankAccount; }
-
-	public int getCouponPresetAmount() { return couponPresetAmount; }
-	public void setCouponPresetAmount(int couponPresetAmount) { this.couponPresetAmount = couponPresetAmount; }
 
 	public String getBackupDir() { return backupDir; }
 	public void setBackupDir(String backupDir) { this.backupDir = backupDir; }

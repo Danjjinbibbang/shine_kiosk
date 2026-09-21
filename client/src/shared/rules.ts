@@ -8,7 +8,8 @@ export const RULES = {
   memoMax: 200,
   priceMax: 100_000,
   priceUnit: 100,
-  chargeMax: 1_000_000,
+  chargeMax: 30_000,      // 한 번 충전 상한 (서버 ChargePolicy.MAX). 실제 값은 /preset 에서 받는다
+  balanceMax: 1_000_000,  // 정정으로 넣을 수 있는 잔액
   freeDrinksMax: 100,
   qtyMax: 99,
   floorMax: 99,
@@ -28,8 +29,8 @@ export function formatPhoneInput(raw: string): string {
   return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`
 }
 
-export function isChargeAmount(n: number): boolean {
-  return n > 0 && n <= RULES.chargeMax
+export function isChargeAmount(n: number, max = RULES.chargeMax): boolean {
+  return n > 0 && n <= max
 }
 
 export function isPrice(n: number): boolean {

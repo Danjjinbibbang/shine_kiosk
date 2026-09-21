@@ -18,7 +18,8 @@ public final class Validation {
 	public static final int MEMO_MAX = 200;
 	public static final int PRICE_MAX = 100_000;
 	public static final int PRICE_UNIT = 100;
-	public static final int CHARGE_MAX = 1_000_000;
+	public static final int CHARGE_MAX = church.kiosk.coupon.ChargePolicy.MAX;   // 한 번 충전 상한
+	public static final int BALANCE_MAX = 1_000_000;                                // 정정으로 넣을 수 있는 잔액 상한
 	public static final int FREE_DRINKS_MAX = 100;   // 정정 화면에서 잔액 숫자를 무료잔 칸에 잘못 넣는 실수 방지용
 	public static final int QTY_MAX = 99;
 	public static final int LINES_MAX = 50;
@@ -64,7 +65,7 @@ public final class Validation {
 
 	public static int balance(int balance) {
 		if (balance < 0) throw new BusinessException("잔액은 0원 이상이어야 합니다.");
-		if (balance > CHARGE_MAX) throw new BusinessException("잔액은 " + String.format("%,d", CHARGE_MAX) + "원까지입니다.");
+		if (balance > BALANCE_MAX) throw new BusinessException("잔액은 " + String.format("%,d", BALANCE_MAX) + "원까지입니다.");
 		return balance;
 	}
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
 import { RULES, formatPhoneInput, isChargeAmount, isMobile } from '../shared/rules'
-import type { Coupon, CouponTx } from '../shared/types'
+import type { ChargePreset, Coupon, CouponTx } from '../shared/types'
 import { won } from '../shared/types'
 
 /**
@@ -14,7 +14,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   const [candidates, setCandidates] = useState<Coupon[] | null>(null)
   const [coupon, setCoupon] = useState<Coupon | null>(null)
   const [history, setHistory] = useState<CouponTx[] | null>(null)
-  const [preset, setPreset] = useState(20000)
+  const [preset, setPreset] = useState<ChargePreset>({ tiers: [{ amount: 20000, freeDrinks: 1 }, { amount: 30000, freeDrinks: 2 }], max: RULES.chargeMax })
   const [amount, setAmount] = useState('')
   const [adjusting, setAdjusting] = useState(false)
   const [newBalance, setNewBalance] = useState('')
@@ -27,7 +27,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    api.couponPreset().then((r) => setPreset(r.amount)).catch(() => {})
+    api.couponPreset().then(setPreset).catch(() => {})
   }, [])
 
   const wrap = async (fn: () => Promise<void>) => {
@@ -197,7 +197,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
 
           {coupon.phone ? (
             <>
-              <div className="muted" style={{ fontSize: 14 }}>충전 ({won(preset)}마다 무료 1잔 적립)</div>
+              <div className="muted" style={{ fontSize: 14 }}>충전 ({tierHint(preset)})</div>
               <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy}
                 label={(n) => `${won(n)} 충전`} onSubmit={(n) => void charge(coupon, n)} custom={customAmount} />
             </>
@@ -253,6 +253,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
           {!phoneValid && (
             <div className="error" style={{ fontSize: 14 }}>위 전화번호 칸에 휴대폰 번호(010-1234-5678)를 넣어야 등록할 수 있어요.</div>
           )}
+          <div className="muted" style={{ fontSize: 14 }}>{tierHint(preset)}</div>
           <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy || !phoneValid}
             label={(n) => `${won(n)} 등록`} onSubmit={(n) => void register(n)} custom={customAmount} />
         </div>
@@ -269,8 +270,20 @@ function formatPhone(digits: string): string {
   return digits
 }
 
+/** "20,000원 → 무료 1잔 · 30,000원 → 무료 2잔" */
+function tierHint(p: ChargePreset): string {
+  return p.tiers.map((t) => `${won(t.amount)} → 무료 ${t.freeDrinks}잔`).join(' · ')
+}
+
+/** 이 금액을 충전하면 적립되는 무료잔 (서버 ChargePolicy 와 같은 규칙) */
+function freeDrinksFor(p: ChargePreset, amount: number): number {
+  let free = 0
+  for (const t of p.tiers) if (amount >= t.amount) free = t.freeDrinks
+  return free
+}
+
 interface PickerProps {
-  preset: number
+  preset: ChargePreset
   amount: string
   custom: number
   busy: boolean
@@ -280,16 +293,22 @@ interface PickerProps {
 }
 
 function AmountPicker({ preset, amount, custom, busy, label, onAmount, onSubmit }: PickerProps) {
-  const ok = isChargeAmount(custom)
+  const ok = isChargeAmount(custom, preset.max)
+  const customFree = freeDrinksFor(preset, custom)
   return (
     <div className="stack">
-      <button className="btn big primary" disabled={busy} onClick={() => onSubmit(preset)}>{label(preset)}</button>
       <div className="row">
-        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액" value={amount} maxLength={7}
+        {preset.tiers.map((t) => (
+          <button key={t.amount} className="btn big primary grow" disabled={busy} onClick={() => onSubmit(t.amount)}>{label(t.amount)}</button>
+        ))}
+      </div>
+      <div className="row">
+        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액" value={amount} maxLength={6}
           onChange={(e) => onAmount(e.target.value.replace(/[^0-9]/g, ''))} />
         <button className="btn" disabled={busy || !ok} onClick={() => onSubmit(custom)}>{custom > 0 ? label(custom) : '확인'}</button>
       </div>
-      {custom > 0 && !ok && <div className="error" style={{ fontSize: 13 }}>한 번에 {won(RULES.chargeMax)}까지 충전할 수 있어요.</div>}
+      {custom > 0 && !ok && <div className="error" style={{ fontSize: 13 }}>한 번에 {won(preset.max)}까지 충전할 수 있어요.</div>}
+      {custom > 0 && ok && <div className="muted" style={{ fontSize: 13 }}>{customFree > 0 ? `무료 ${customFree}잔 적립` : '무료잔 적립 없음'}</div>}
     </div>
   )
 }
