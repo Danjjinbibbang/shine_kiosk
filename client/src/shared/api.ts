@@ -1,6 +1,6 @@
 import type {
-  AdminItem, AdminPlace, Coupon, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
-  LookupResult, MenuItem, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest,
+  AdminItem, AdminOption, AdminPlace, Coupon, CouponPreview, CreateOrderRequest, DailySummary, FloorGroup, LineRequest,
+  LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest,
 } from './types'
 
 const STAFF_TOKEN_KEY = 'shine-kiosk.staffToken'
@@ -66,6 +66,7 @@ const del = <T>(path: string) => request<T>(path, { method: 'DELETE' })
 // ── 공개 (고객 키오스크) ──────────────────────────────────
 export const api = {
   menu: () => request<MenuItem[]>('/api/menu'),
+  menuOptions: () => request<MenuOption[]>('/api/menu/options'),
   places: () => request<FloorGroup[]>('/api/places'),
   regulars: () => request<string[]>('/api/customers/regulars'),
   paymentInfo: () => request<{ bankAccount: string }>('/api/orders/payment-info'),
@@ -100,6 +101,10 @@ export const api = {
   setMenuAvailable: (id: number, available: boolean) => put<AdminItem>(`/api/staff/menu/${id}/available`, { available }),
   deleteMenuItem: (id: number) => del<void>(`/api/staff/menu/${id}`),
   reorderMenu: (ids: number[]) => put<AdminItem[]>('/api/staff/menu/order', { ids }),
+  adminOptions: () => request<AdminOption[]>('/api/staff/menu/options'),
+  createOption: (body: { name: string; price: number; category: string; available: boolean }) => post<AdminOption>('/api/staff/menu/options', body),
+  updateOption: (id: number, body: { name: string; price: number; category: string; available: boolean }) => put<AdminOption>(`/api/staff/menu/options/${id}`, body),
+  deleteOption: (id: number) => del<void>(`/api/staff/menu/options/${id}`),
   adminPlaces: () => request<AdminPlace[]>('/api/staff/places'),
   createPlace: (body: { floor: number; name: string; active: boolean }) => post<AdminPlace>('/api/staff/places', body),
   updatePlace: (id: number, body: { floor: number; name: string; active: boolean }) => put<AdminPlace>(`/api/staff/places/${id}`, body),

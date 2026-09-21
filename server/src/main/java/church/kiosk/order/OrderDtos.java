@@ -19,7 +19,11 @@ public final class OrderDtos {
 	public enum Status { PENDING, DONE, CANCELED }
 
 	public record LineRequest(@NotNull(message = "메뉴를 확인해 주세요.") Long variantId,
-							  @Min(value = 1, message = "수량을 확인해 주세요.") int quantity) {}
+							  @Min(value = 1, message = "수량을 확인해 주세요.") int quantity,
+							  /** 샷 추가/연하게 같은 옵션 id. 없으면 null 또는 빈 목록. */
+							  List<Long> optionIds) {
+		public List<Long> optionIdsOrEmpty() { return optionIds == null ? List.of() : optionIds; }
+	}
 
 	/** 고객 키오스크의 주문 생성. 가격은 보내지 않는다 — 서버가 메뉴표에서 직접 읽는다. */
 	public record CreateRequest(
@@ -59,8 +63,12 @@ public final class OrderDtos {
 			@NotEmpty(message = "메뉴가 하나는 있어야 합니다.") @Valid List<LineRequest> lines,
 			String memo) {}
 
+	/** 주문 시점에 붙인 옵션 스냅샷. */
+	public record LineOptionView(Long optionId, String name, int price) {}
+
+	/** unitPrice 는 옵션 가격까지 더한 한 잔 값. */
 	public record LineView(long id, Long variantId, String menuName, String variantLabel,
-						   int unitPrice, int quantity) {}
+						   int unitPrice, int quantity, List<LineOptionView> options) {}
 
 	public record OrderView(long id, String orderDate, int orderNo, String customerName,
 							ReceiveType receiveType, Long placeId, String placeName,

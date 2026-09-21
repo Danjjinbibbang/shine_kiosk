@@ -64,7 +64,7 @@ public abstract class ApiTestSupport {
 	@BeforeEach
 	void cleanTables() throws Exception {
 		for (String table : List.of("order_line", "orders", "coupon_tx", "coupon", "customer",
-				"menu_variant", "menu_item", "delivery_place")) {
+				"order_line_option", "menu_variant", "menu_item", "menu_option", "delivery_place")) {
 			jdbc.sql("DELETE FROM " + table).update();
 		}
 		seedData.seedIfEmpty(); // 메뉴/장소는 매번 기본 시드로

@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../shared/api'
-import type { FloorGroup, MenuItem, Order, ReceiveType } from '../shared/types'
+import type { FloorGroup, MenuItem, MenuOption, Order, ReceiveType } from '../shared/types'
 import { won } from '../shared/types'
 
 interface Line {
   variantId: number
   name: string
+  category: string
+  /** 기본가 */
   price: number
   qty: number
+  options: MenuOption[]
 }
+
+const unitPrice = (l: Line) => l.price + l.options.reduce((s, o) => s + o.price, 0)
+const keyOf = (variantId: number, optionIds: number[]) => variantId + ':' + [...optionIds].sort((a, b) => a - b).join(',')
 
 interface Props {
   order: Order
@@ -19,37 +25,62 @@ interface Props {
 /** 항목 수량, 이름, 받는 방법/장소를 고친다. 결제 수단은 서버가 유지하고 금액만 다시 계산한다. */
 export function EditOrderModal({ order, onClose, onSaved }: Props) {
   const [menu, setMenu] = useState<MenuItem[]>([])
+  const [allOptions, setAllOptions] = useState<MenuOption[]>([])
   const [floors, setFloors] = useState<FloorGroup[]>([])
   const [name, setName] = useState(order.customerName)
   const [receiveType, setReceiveType] = useState<ReceiveType>(order.receiveType)
   const [placeId, setPlaceId] = useState<number | null>(order.placeId)
   const [memo, setMemo] = useState(order.memo ?? '')
+  // 기존 줄은 메뉴표를 받은 뒤 category/기본가를 채운다 (아래 useEffect)
   const [lines, setLines] = useState<Line[]>(() => order.lines
     .filter((l) => l.variantId !== null)
     .map((l) => ({
       variantId: l.variantId!,
       name: l.variantLabel ? `${l.menuName} ${l.variantLabel}` : l.menuName,
-      price: l.unitPrice,
+      category: '',
+      price: l.unitPrice - l.options.reduce((s, o) => s + o.price, 0),
       qty: l.quantity,
+      options: l.options.filter((o) => o.optionId !== null).map((o) => ({ id: o.optionId!, name: o.name, price: o.price, category: '' })),
     })))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    api.menu().then(setMenu).catch(() => {})
+    api.menu().then((m) => {
+      setMenu(m)
+      // 기존 줄에 카테고리를 채워 옵션 칩이 뜨게 한다
+      const catOf = new Map<number, string>()
+      m.forEach((item) => item.variants.forEach((v) => catOf.set(v.id, item.category)))
+      setLines((ls) => ls.map((l) => ({ ...l, category: catOf.get(l.variantId) ?? l.category })))
+    }).catch(() => {})
+    api.menuOptions().then(setAllOptions).catch(() => {})
     api.places().then(setFloors).catch(() => {})
   }, [])
 
-  const total = useMemo(() => lines.reduce((s, l) => s + l.price * l.qty, 0), [lines])
+  const total = useMemo(() => lines.reduce((s, l) => s + unitPrice(l) * l.qty, 0), [lines])
+  const keyOfLine = (l: Line) => keyOf(l.variantId, l.options.map((o) => o.id))
 
-  const setQty = (variantId: number, qty: number) =>
-    setLines((ls) => qty <= 0 ? ls.filter((l) => l.variantId !== variantId) : ls.map((l) => l.variantId === variantId ? { ...l, qty } : l))
+  const setQty = (index: number, qty: number) =>
+    setLines((ls) => qty <= 0 ? ls.filter((_, i) => i !== index) : ls.map((l, i) => i === index ? { ...l, qty } : l))
 
   const addVariant = (item: MenuItem, variantId: number, label: string | null, price: number) => {
     setLines((ls) => {
-      const found = ls.find((l) => l.variantId === variantId)
-      if (found) return ls.map((l) => l.variantId === variantId ? { ...l, qty: l.qty + 1 } : l)
-      return [...ls, { variantId, name: label ? `${item.name} ${label}` : item.name, price, qty: 1 }]
+      const idx = ls.findIndex((l) => keyOfLine(l) === keyOf(variantId, []))
+      if (idx >= 0) return ls.map((l, i) => i === idx ? { ...l, qty: l.qty + 1 } : l)
+      return [...ls, { variantId, name: label ? `${item.name} ${label}` : item.name, category: item.category, price, qty: 1, options: [] }]
+    })
+  }
+
+  const toggleOption = (index: number, opt: MenuOption) => {
+    setLines((ls) => {
+      const line = ls[index]
+      const has = line.options.some((o) => o.id === opt.id)
+      const changed: Line = { ...line, options: has ? line.options.filter((o) => o.id !== opt.id) : [...line.options, opt] }
+      const mergeIdx = ls.findIndex((l, i) => i !== index && keyOfLine(l) === keyOfLine(changed))
+      if (mergeIdx >= 0) {
+        return ls.map((l, i) => i === mergeIdx ? { ...l, qty: l.qty + line.qty } : l).filter((_, i) => i !== index)
+      }
+      return ls.map((l, i) => i === index ? changed : l)
     })
   }
 
@@ -61,7 +92,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
         customerName: name,
         receiveType,
         placeId: receiveType === 'DELIVERY' ? placeId : null,
-        lines: lines.map((l) => ({ variantId: l.variantId, quantity: l.qty })),
+        lines: lines.map((l) => ({ variantId: l.variantId, quantity: l.qty, optionIds: l.options.map((o) => o.id) })),
         memo: memo || null,
       })
       onSaved()
@@ -110,16 +141,36 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
         <div className="field">
           <label>메뉴</label>
           <div className="stack">
-            {lines.map((l) => (
-              <div key={l.variantId} className="cart-line" style={{ padding: '8px 12px' }}>
-                <div className="name" style={{ fontSize: 18 }}>{l.name}</div>
-                <div className="qty">
-                  <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(l.variantId, l.qty - 1)}>−</button>
-                  <span className="n" style={{ fontSize: 20 }}>{l.qty}</span>
-                  <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(l.variantId, l.qty + 1)}>+</button>
+            {lines.map((l, index) => {
+              const applicable = allOptions.filter((o) => o.category === l.category)
+              return (
+                <div key={keyOfLine(l)} className="cart-line-wrap">
+                  <div className="cart-line" style={{ padding: '8px 12px' }}>
+                    <div className="name" style={{ fontSize: 18 }}>
+                      {l.name}
+                      {l.options.length > 0 && <div className="line-options" style={{ fontSize: 14 }}>{l.options.map((o) => o.name).join(' · ')}</div>}
+                    </div>
+                    <div className="qty">
+                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(index, l.qty - 1)}>−</button>
+                      <span className="n" style={{ fontSize: 20 }}>{l.qty}</span>
+                      <button className="btn" style={{ minHeight: 44, minWidth: 44 }} onClick={() => setQty(index, l.qty + 1)}>+</button>
+                    </div>
+                  </div>
+                  {applicable.length > 0 && (
+                    <div className="chips" style={{ padding: '0 8px' }}>
+                      {applicable.map((o) => {
+                        const on = l.options.some((x) => x.id === o.id)
+                        return (
+                          <button key={o.id} className={'btn' + (on ? ' selected' : '')} onClick={() => toggleOption(index, o)}>
+                            {on ? '☑' : '☐'} {o.name}{o.price > 0 && ` +${won(o.price)}`}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 

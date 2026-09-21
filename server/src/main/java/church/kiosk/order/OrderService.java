@@ -3,8 +3,11 @@ package church.kiosk.order;
 import church.kiosk.coupon.Coupon;
 import church.kiosk.coupon.CouponService;
 import church.kiosk.customer.CustomerRepository;
+import church.kiosk.menu.MenuDtos.AdminOption;
 import church.kiosk.menu.MenuDtos.VariantDetail;
+import church.kiosk.menu.MenuOptionRepository;
 import church.kiosk.menu.MenuRepository;
+import church.kiosk.order.OrderDtos.LineOptionView;
 import church.kiosk.order.OrderDtos.CouponPreview;
 import church.kiosk.order.OrderDtos.CreateRequest;
 import church.kiosk.order.OrderDtos.LineRequest;
@@ -31,16 +34,18 @@ public class OrderService {
 
 	private final OrderRepository orderRepository;
 	private final MenuRepository menuRepository;
+	private final MenuOptionRepository optionRepository;
 	private final PlaceRepository placeRepository;
 	private final CouponService couponService;
 	private final CustomerRepository customerRepository;
 	private final KioskEventHandler events;
 
 	public OrderService(OrderRepository orderRepository, MenuRepository menuRepository,
-						PlaceRepository placeRepository, CouponService couponService,
-						CustomerRepository customerRepository, KioskEventHandler events) {
+						MenuOptionRepository optionRepository, PlaceRepository placeRepository,
+						CouponService couponService, CustomerRepository customerRepository, KioskEventHandler events) {
 		this.orderRepository = orderRepository;
 		this.menuRepository = menuRepository;
+		this.optionRepository = optionRepository;
 		this.placeRepository = placeRepository;
 		this.couponService = couponService;
 		this.customerRepository = customerRepository;
@@ -213,7 +218,10 @@ public class OrderService {
 
 	// ── 내부 도우미 ──────────────────────────────────────────
 
-	/** 클라이언트가 보낸 variantId 로 서버의 메뉴표를 읽어 가격을 확정한다. */
+	/**
+	 * 클라이언트가 보낸 variantId/optionIds 로 서버의 메뉴표를 읽어 가격을 확정한다.
+	 * 한 잔 값 = 기본가 + 옵션 합. 무료 1잔 후보(가장 비싼 한 잔)도 이 값으로 고른다.
+	 */
 	private PricedLines price(List<LineRequest> requests) {
 		List<LineRow> lines = new ArrayList<>();
 		int total = 0;
@@ -225,11 +233,27 @@ public class OrderService {
 			if (!v.available()) {
 				throw new BusinessException(v.menuName() + "은(는) 지금 주문할 수 없습니다.");
 			}
-			lines.add(new LineRow(v.menuItemId(), v.variantId(), v.menuName(), v.label(), v.price(), r.quantity()));
-			total += v.price() * r.quantity();
-			if (v.price() > max) {
-				max = v.price();
-				maxName = v.label() == null ? v.menuName() : v.menuName() + " " + v.label();
+			List<LineOptionView> options = new ArrayList<>();
+			int unit = v.price();
+			for (Long optionId : new java.util.LinkedHashSet<>(r.optionIdsOrEmpty())) {
+				AdminOption opt = optionRepository.findById(optionId)
+						.orElseThrow(() -> new BusinessException("없는 옵션이 담겨 있습니다. 다시 담아 주세요."));
+				if (!opt.available()) {
+					throw new BusinessException(opt.name() + " 옵션은 지금 고를 수 없습니다.");
+				}
+				if (!opt.category().equals(v.category())) {
+					throw new BusinessException(v.menuName() + "에는 " + opt.name() + " 옵션을 넣을 수 없습니다.");
+				}
+				options.add(new LineOptionView(opt.id(), opt.name(), opt.price()));
+				unit += opt.price();
+			}
+			lines.add(new LineRow(v.menuItemId(), v.variantId(), v.menuName(), v.label(), unit, r.quantity(), options));
+			total += unit * r.quantity();
+			if (unit > max) {
+				max = unit;
+				String base = v.label() == null ? v.menuName() : v.menuName() + " " + v.label();
+				maxName = options.isEmpty() ? base
+						: base + " (" + String.join(", ", options.stream().map(LineOptionView::name).toList()) + ")";
 			}
 		}
 		return new PricedLines(lines, total, max, maxName);

@@ -269,3 +269,54 @@ test.describe('네비게이션', () => {
     await expect(page.getByRole('button', { name: known, exact: true })).toBeVisible()
   })
 })
+
+test.describe('옵션 (샷 추가 / 연하게)', () => {
+  test('커피에만 칩이 뜨고, 샷 추가는 +500, 옵션 다른 줄은 따로, 주문에 반영', async ({ page, request }) => {
+    const name = uniq('샷')
+    await gotoKiosk(page)
+    await addToCart(page, '아메리카노', 'ICE', 2)
+    await addToCart(page, '복숭아 아이스티', null)
+    await page.getByRole('button', { name: /주문 확인/ }).click()
+
+    const lines = page.locator('.cart-line-wrap')
+    await expect(lines).toHaveCount(2)
+    await expect(lines.nth(0).locator('.btn.chip')).toHaveCount(2)          // 커피: 샷 추가, 연하게
+    await expect(lines.nth(1).locator('.btn.chip')).toHaveCount(0)          // 아이스티: 없음
+    await expect(page.locator('.total-box .amount')).toHaveText('4,000원')
+
+    await lines.nth(0).getByRole('button', { name: /샷 추가/ }).click()
+    await expect(lines.nth(0).locator('.line-options')).toHaveText('샷 추가')
+    await expect(page.locator('.total-box .amount')).toHaveText('5,000원')  // 1,500 × 2 + 2,000
+
+    // 옵션 없는 아메리카노를 하나 더 담으면 별도 줄
+    await page.getByRole('button', { name: '더 담기' }).click()
+    await expect(menuCard(page, '아메리카노').locator('.stepper .n')).toHaveText('2')
+    await addToCart(page, '아메리카노', 'ICE')
+    await expect(menuCard(page, '아메리카노').locator('.stepper .n')).toHaveText('3')
+    await page.getByRole('button', { name: /주문 확인/ }).click()
+    await expect(page.locator('.cart-line-wrap')).toHaveCount(3)
+    await expect(page.locator('.total-box .amount')).toHaveText('6,000원')
+
+    // 새 줄에도 샷 추가를 켜면 기존 샷 추가 줄에 합쳐진다
+    const plain = page.locator('.cart-line-wrap').filter({ hasText: '아메리카노' }).filter({ hasNot: page.locator('.line-options') })
+    await plain.getByRole('button', { name: /샷 추가/ }).click()
+    await expect(page.locator('.cart-line-wrap')).toHaveCount(2)
+    await expect(page.locator('.cart-line-wrap').nth(0).locator('.qty .n')).toHaveText('3')
+    await expect(page.locator('.total-box .amount')).toHaveText('6,500원')
+
+    await page.getByRole('button', { name: /주문하기/ }).click()
+    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await page.getByRole('button', { name: /현금/ }).click()
+    await page.getByRole('button', { name: '딱 맞게' }).click()
+    await page.getByRole('button', { name: /다음/ }).click()
+    await pickNameByTyping(page, name, '주문 완료')
+    await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
+
+    const order = await orderOf(request, name)
+    expect(order.totalAmount).toBe(6500)
+    const shot = order.lines.find((l: any) => l.options.length > 0)
+    expect(shot.unitPrice).toBe(1500)
+    expect(shot.quantity).toBe(3)
+    expect(shot.options[0].name).toBe('샷 추가')
+  })
+})

@@ -1,6 +1,8 @@
 package church.kiosk.menu;
 
 import church.kiosk.menu.MenuDtos.AdminItem;
+import church.kiosk.menu.MenuDtos.AdminOption;
+import church.kiosk.menu.MenuDtos.SaveOptionRequest;
 import church.kiosk.menu.MenuDtos.SaveItemRequest;
 import church.kiosk.menu.MenuDtos.SaveVariantRequest;
 import church.kiosk.support.BusinessException;
@@ -25,10 +27,40 @@ import java.util.Map;
 public class MenuAdminController {
 
 	private final MenuRepository menuRepository;
+	private final MenuOptionRepository optionRepository;
 
-	public MenuAdminController(MenuRepository menuRepository) {
+	public MenuAdminController(MenuRepository menuRepository, MenuOptionRepository optionRepository) {
 		this.menuRepository = menuRepository;
+		this.optionRepository = optionRepository;
 	}
+
+	// ── 옵션 (샷 추가 / 연하게) ─────────────────────────────
+
+	@GetMapping("/options")
+	public List<AdminOption> options() {
+		return optionRepository.findAllForAdmin();
+	}
+
+	@PostMapping("/options")
+	public AdminOption createOption(@RequestBody @Valid SaveOptionRequest req) {
+		long id = optionRepository.insert(req.name().trim(), req.price(), req.category().trim(), req.available());
+		return optionRepository.findById(id).orElseThrow();
+	}
+
+	@PutMapping("/options/{id}")
+	public AdminOption updateOption(@PathVariable long id, @RequestBody @Valid SaveOptionRequest req) {
+		optionRepository.findById(id).orElseThrow(() -> new BusinessException("옵션을 찾을 수 없습니다."));
+		optionRepository.update(id, req.name().trim(), req.price(), req.category().trim(), req.available());
+		return optionRepository.findById(id).orElseThrow();
+	}
+
+	@DeleteMapping("/options/{id}")
+	public void deleteOption(@PathVariable long id) {
+		optionRepository.findById(id).orElseThrow(() -> new BusinessException("옵션을 찾을 수 없습니다."));
+		optionRepository.delete(id);
+	}
+
+	// ── 메뉴 ────────────────────────────────────────────────
 
 	@GetMapping
 	public List<AdminItem> list() {

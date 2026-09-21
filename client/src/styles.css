@@ -97,6 +97,12 @@ input { font: inherit; }
 .cart-line .qty .btn { min-height: 56px; min-width: 56px; padding: 0; font-size: 28px; }
 .cart-line .qty .n { min-width: 44px; text-align: center; font-size: 26px; font-weight: 800; }
 .cart-line .sum { min-width: 110px; text-align: right; font-size: 22px; }
+.cart-line .line-options { font-size: 18px; font-weight: 600; color: var(--primary); }
+.cart-line-wrap { display: flex; flex-direction: column; gap: 6px; }
+.option-chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 8px; }
+.btn.chip { min-height: 52px; font-size: 20px; padding: 6px 16px; border-radius: 999px; box-shadow: none; }
+.btn.chip small { font-size: 16px; color: var(--muted); }
+.btn.chip.selected small { color: var(--primary); }
 
 .total-box {
   padding: 22px; background: var(--panel); border-radius: var(--radius); border: 2px solid var(--line);
@@ -172,6 +178,7 @@ input { font: inherit; }
 .order-card .where.store { background: #e8efe9; }
 .order-card .lines { display: flex; flex-direction: column; gap: 4px; font-size: 20px; }
 .order-card .lines .q { font-weight: 900; margin-left: 6px; }
+.order-card .lines .opt { color: var(--primary); font-weight: 700; font-size: 17px; }
 .order-card .pay { font-size: 15px; color: var(--muted); }
 .order-card .memo { font-size: 15px; color: var(--danger); font-weight: 700; }
 .order-card .actions { display: flex; gap: 8px; }

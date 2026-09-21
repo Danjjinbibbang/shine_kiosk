@@ -113,6 +113,7 @@ function OrderCard({ order: o, busy, onDone, onReopen, onCancel, onEdit }: CardP
           <div key={l.id}>
             {l.menuName}{l.variantLabel && <span className="muted"> {l.variantLabel}</span>}
             <span className="q">×{l.quantity}</span>
+            {l.options.length > 0 && <span className="opt"> · {l.options.map((o) => o.name).join(', ')}</span>}
           </div>
         ))}
       </div>

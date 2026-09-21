@@ -21,6 +21,16 @@ CREATE TABLE IF NOT EXISTS menu_variant (
 );
 CREATE INDEX IF NOT EXISTS idx_menu_variant_item ON menu_variant(menu_item_id);
 
+-- 잔 단위 옵션 (샷 추가 +500, 연하게 0원). category 가 같은 메뉴에만 붙는다.
+CREATE TABLE IF NOT EXISTS menu_option (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL,
+    price      INTEGER NOT NULL DEFAULT 0,
+    category   TEXT    NOT NULL,              -- 이 카테고리 메뉴에만 표시
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    available  INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS delivery_place (
     id         INTEGER PRIMARY KEY,
     floor      INTEGER NOT NULL,
@@ -101,3 +111,13 @@ CREATE TABLE IF NOT EXISTS order_line (
     quantity      INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_order_line_order ON order_line(order_id);
+
+-- 주문 항목에 붙은 옵션 스냅샷. unit_price 에는 이미 옵션 가격이 더해져 있다.
+CREATE TABLE IF NOT EXISTS order_line_option (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_line_id INTEGER NOT NULL REFERENCES order_line(id) ON DELETE CASCADE,
+    option_id     INTEGER,
+    name          TEXT    NOT NULL,
+    price         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_order_line_option_line ON order_line_option(order_line_id);

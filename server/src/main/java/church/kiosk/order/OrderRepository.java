@@ -1,6 +1,7 @@
 package church.kiosk.order;
 
 import church.kiosk.order.OrderDtos.DailySummary;
+import church.kiosk.order.OrderDtos.LineOptionView;
 import church.kiosk.order.OrderDtos.LineView;
 import church.kiosk.order.OrderDtos.OrderView;
 import church.kiosk.order.OrderDtos.PayMethod;
@@ -36,8 +37,9 @@ public class OrderRepository {
 						   int freeAmount, String freeItemName,
 						   int cashAmount, int transferAmount, String memo) {}
 
+	/** unitPrice 는 옵션 가격을 더한 값. options 는 스냅샷으로 함께 저장한다. */
 	public record LineRow(Long menuItemId, Long variantId, String menuName, String variantLabel,
-						  int unitPrice, int quantity) {}
+						  int unitPrice, int quantity, List<LineOptionView> options) {}
 
 	private final JdbcClient jdbc;
 
@@ -99,6 +101,7 @@ public class OrderRepository {
 
 	public void insertLines(long orderId, List<LineRow> lines) {
 		for (LineRow line : lines) {
+			KeyHolder keys = new GeneratedKeyHolder();
 			jdbc.sql("""
 							INSERT INTO order_line (order_id, menu_item_id, variant_id, menu_name, variant_label,
 							                        unit_price, quantity)
@@ -108,11 +111,20 @@ public class OrderRepository {
 					.param("variantId", line.variantId()).param("menuName", line.menuName())
 					.param("label", line.variantLabel()).param("price", line.unitPrice())
 					.param("qty", line.quantity())
-					.update();
+					.update(keys);
+			long lineId = keys.getKey().longValue();
+			for (LineOptionView opt : line.options()) {
+				jdbc.sql("INSERT INTO order_line_option (order_line_id, option_id, name, price) VALUES (:lineId, :optionId, :name, :price)")
+						.param("lineId", lineId).param("optionId", opt.optionId())
+						.param("name", opt.name()).param("price", opt.price())
+						.update();
+			}
 		}
 	}
 
 	public void deleteLines(long orderId) {
+		jdbc.sql("DELETE FROM order_line_option WHERE order_line_id IN (SELECT id FROM order_line WHERE order_id = :id)")
+				.param("id", orderId).update();
 		jdbc.sql("DELETE FROM order_line WHERE order_id = :id").param("id", orderId).update();
 	}
 
@@ -191,11 +203,25 @@ public class OrderRepository {
 					return new LineWithOrder(rs.getLong("order_id"), new LineView(
 							rs.getLong("id"), variantIdOrNull,
 							rs.getString("menu_name"), rs.getString("variant_label"),
-							rs.getInt("unit_price"), rs.getInt("quantity")));
+							rs.getInt("unit_price"), rs.getInt("quantity"), new ArrayList<>()));
 				})
 				.list();
+		Map<Long, LineView> byLine = new LinkedHashMap<>();
 		for (LineWithOrder row : rows) {
 			byOrder.get(row.orderId()).add(row.line());
+			byLine.put(row.line().id(), row.line());
+		}
+		if (!byLine.isEmpty()) {
+			jdbc.sql("SELECT order_line_id, option_id, name, price FROM order_line_option WHERE order_line_id IN (:ids) ORDER BY id")
+					.param("ids", new ArrayList<>(byLine.keySet()))
+					.query((rs, n) -> {
+						long optionId = rs.getLong("option_id");
+						Long optionIdOrNull = rs.wasNull() ? null : optionId;
+						byLine.get(rs.getLong("order_line_id")).options()
+								.add(new LineOptionView(optionIdOrNull, rs.getString("name"), rs.getInt("price")));
+						return Boolean.TRUE;
+					})
+					.list();
 		}
 		List<OrderView> result = new ArrayList<>(orders.size());
 		for (OrderView o : orders) {

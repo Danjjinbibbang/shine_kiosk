@@ -310,3 +310,51 @@ test.describe('설정 · 배달 장소', () => {
     await expect(card).toHaveCount(0)
   })
 })
+
+test.describe('옵션', () => {
+  test('주문 카드에 옵션 표시, 수정 모달에서 옵션 켜고 끄기', async ({ page, request }) => {
+    const name = uniq('옵션')
+    await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 1, optionIds: [1] }] })
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await expect(card.locator('.lines')).toContainText('샷 추가')
+    await expect(card.locator('.pay')).toHaveText('현금 1,500원')
+
+    await card.getByRole('button', { name: '수정' }).click()
+    const modal = page.locator('.modal')
+    const line = modal.locator('.cart-line-wrap').first()
+    await expect(line.locator('.line-options')).toHaveText('샷 추가')
+    await line.getByRole('button', { name: /연하게/ }).click()
+    await line.getByRole('button', { name: /샷 추가/ }).click()
+    await expect(line.locator('.line-options')).toHaveText('연하게')
+    await expect(modal.locator('.total-box .amount')).toHaveText('1,000원')
+    await modal.getByRole('button', { name: '저장' }).click()
+    await expect(card.locator('.lines')).toContainText('연하게')
+    await expect(card.locator('.lines')).not.toContainText('샷 추가')
+    await expect(card.locator('.pay')).toHaveText('현금 1,000원')
+  })
+
+  test('설정 > 옵션: 추가 → 고객 옵션에 등장 → 숨김 → 삭제', async ({ page, request }) => {
+    const name = uniq('휘핑')
+    await staffLogin(page)
+    await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('button', { name: '옵션', exact: true }).click()
+    await page.getByPlaceholder('이름 (예: 샷 추가)').fill(name)
+    await page.getByLabel('추가 금액').fill('300')
+    await page.locator('.card .chips').first().getByRole('button', { name: '논커피' }).click()
+    await page.getByRole('button', { name: '추가' }).click()
+    const card = page.locator('.admin-item').filter({ hasText: name })
+    await expect(card).toBeVisible()
+    await expect(card).toContainText('+300원')
+    const options = async () => (await (await request.get('/api/menu/options')).json()) as Array<{ name: string; category: string }>
+    expect((await options()).find((o) => o.name === name)?.category).toBe('논커피')
+
+    await card.getByRole('button', { name: '사용중' }).click()
+    await expect(card.getByRole('button', { name: '숨김' })).toBeVisible()
+    expect((await options()).some((o) => o.name === name)).toBe(false)
+
+    page.once('dialog', (d) => d.accept())
+    await card.getByRole('button', { name: '삭제' }).click()
+    await expect(card).toHaveCount(0)
+  })
+})

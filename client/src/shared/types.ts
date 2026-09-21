@@ -17,6 +17,19 @@ export interface MenuItem {
   variants: MenuVariant[]
 }
 
+/** 잔 단위 옵션 (샷 추가 / 연하게). category 가 같은 메뉴에만 붙는다. */
+export interface MenuOption {
+  id: number
+  name: string
+  price: number
+  category: string
+}
+
+export interface AdminOption extends MenuOption {
+  sortOrder: number
+  available: boolean
+}
+
 export interface Place {
   id: number
   floor: number
@@ -81,6 +94,7 @@ export interface LookupResult {
 export interface LineRequest {
   variantId: number
   quantity: number
+  optionIds?: number[]
 }
 
 export interface CouponPreview {
@@ -116,13 +130,21 @@ export interface UpdateOrderRequest {
   memo?: string | null
 }
 
+export interface OrderLineOption {
+  optionId: number | null
+  name: string
+  price: number
+}
+
 export interface OrderLine {
   id: number
   variantId: number | null
   menuName: string
   variantLabel: string | null
+  /** 옵션 가격까지 더한 한 잔 값 */
   unitPrice: number
   quantity: number
+  options: OrderLineOption[]
 }
 
 export interface Order {
@@ -163,6 +185,12 @@ export const PAY_LABEL: Record<PayMethod, string> = {
   TRANSFER: '계좌이체',
   COUPON: '쿠폰',
   CASH: '현금',
+}
+
+/** "아메리카노 ICE · 샷 추가" 처럼 한 줄 이름. */
+export function lineTitle(menuName: string, label: string | null, optionNames: string[]): string {
+  const base = label ? `${menuName} ${label}` : menuName
+  return optionNames.length ? `${base} · ${optionNames.join(', ')}` : base
 }
 
 export function won(n: number): string {

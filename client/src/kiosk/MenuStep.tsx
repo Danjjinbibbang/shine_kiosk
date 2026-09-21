@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../shared/api'
 import type { MenuItem, MenuVariant } from '../shared/types'
 import { won } from '../shared/types'
-import type { CartLine } from './KioskApp'
+import { lineKey, type CartLine } from './KioskApp'
 
 interface Props {
   cart: CartLine[]
@@ -23,20 +23,26 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
     api.menu().then(setMenu).catch((e) => setError(e.message))
   }, [])
 
-  const qtyOf = (variantId: number) => cart.find((l) => l.variantId === variantId)?.qty ?? 0
+  // 옵션이 다른 줄까지 합친 수량. (샷 추가 같은 옵션은 장바구니 화면에서 붙인다)
+  const qtyOf = (variantId: number) => cart.filter((l) => l.variantId === variantId).reduce((s, l) => s + l.qty, 0)
 
+  /** + 는 옵션 없는 줄에 더하고, − 는 그 메뉴의 마지막 줄에서 뺀다. */
   const setQty = (item: MenuItem, v: MenuVariant, qty: number) => {
-    const rest = cart.filter((l) => l.variantId !== v.id)
-    if (qty <= 0) {
-      onChange(rest)
+    const current = qtyOf(v.id)
+    if (qty > current) {
+      const plainKey = lineKey(v.id, [])
+      const existing = cart.find((l) => lineKey(l.variantId, l.options.map((o) => o.id)) === plainKey)
+      if (existing) {
+        onChange(cart.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l)))
+      } else {
+        onChange([...cart, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price, qty: 1, options: [] }])
+      }
       return
     }
-    const existing = cart.find((l) => l.variantId === v.id)
-    const line: CartLine = existing
-      ? { ...existing, qty }
-      : { variantId: v.id, itemName: item.name, label: v.label, price: v.price, qty }
-    // 처음 담는 건 뒤에 붙이고, 이미 있던 건 자리를 유지한다.
-    onChange(existing ? cart.map((l) => (l.variantId === v.id ? line : l)) : [...rest, line])
+    const idx = cart.map((l) => l.variantId).lastIndexOf(v.id)
+    if (idx < 0) return
+    const target = cart[idx]
+    onChange(target.qty <= 1 ? cart.filter((_, i) => i !== idx) : cart.map((l, i) => (i === idx ? { ...l, qty: l.qty - 1 } : l)))
   }
 
   const count = cart.reduce((s, l) => s + l.qty, 0)

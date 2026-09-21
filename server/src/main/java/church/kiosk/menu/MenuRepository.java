@@ -161,7 +161,7 @@ public class MenuRepository {
 
 	public Optional<VariantDetail> findVariantDetail(long variantId) {
 		return jdbc.sql("""
-						SELECT v.id, v.menu_item_id, i.name, v.label, v.price,
+						SELECT v.id, v.menu_item_id, i.name, i.category, v.label, v.price,
 						       (v.available = 1 AND i.available = 1) AS available
 						FROM menu_variant v
 						JOIN menu_item i ON i.id = v.menu_item_id
@@ -169,7 +169,7 @@ public class MenuRepository {
 						""")
 				.param("id", variantId)
 				.query((rs, n) -> new VariantDetail(
-						rs.getLong("id"), rs.getLong("menu_item_id"), rs.getString("name"),
+						rs.getLong("id"), rs.getLong("menu_item_id"), rs.getString("name"), rs.getString("category"),
 						rs.getString("label"), rs.getInt("price"), rs.getBoolean("available")))
 				.optional();
 	}
