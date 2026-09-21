@@ -38,6 +38,10 @@ public class CouponService {
 		return unit > 0 ? amount / unit : 0;
 	}
 
+	public List<Coupon> findByName(String name) {
+		return couponRepository.findByName(name.trim());
+	}
+
 	public LookupResult lookup(String name, String phoneLast4) {
 		List<Coupon> candidates = couponRepository.findByName(name.trim());
 		if (candidates.isEmpty()) {

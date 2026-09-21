@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,6 +50,12 @@ public class CouponController {
 	@PostMapping("/api/staff/coupons/lookup")
 	public LookupResult staffLookup(@RequestBody @jakarta.validation.Valid LookupRequest request) {
 		return couponService.lookup(request.name(), request.phoneLast4());
+	}
+
+	/** 이름으로 후보 전부 (동명이인 포함). 현금 주문의 차액을 쿠폰에 넣을 때 누구 쿠폰인지 고르는 용도. */
+	@GetMapping("/api/staff/coupons")
+	public List<Coupon> byName(@RequestParam String name) {
+		return couponService.findByName(name);
 	}
 
 	@GetMapping("/api/staff/coupons/{id}")

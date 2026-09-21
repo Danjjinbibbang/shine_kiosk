@@ -64,7 +64,8 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
     <>
       {orders.map((o) => (
         <OrderCard key={o.id} order={o} busy={busyId === o.id}
-          onSettle={(toCoupon) => run(o.id, () => api.settleOrder(o.id, toCoupon), toCoupon ? '쿠폰 잔액에 넣었습니다' : '정산 표시했습니다')}
+          onSettle={(couponId) => run(o.id, () => api.settleOrder(o.id, couponId), couponId != null ? '쿠폰 잔액에 넣었습니다' : '정산 표시했습니다')}
+          findCoupons={(customerName) => api.couponsByName(customerName)}
           canSms={o.couponId != null && !!coupons[o.couponId]?.phone}
           onSms={() => { if (!sendBalanceSms(o)) onToast('쿠폰에 전화번호가 없어 문자를 못 보냅니다') }}
           onDone={() => {
@@ -95,7 +96,8 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
 interface CardProps {
   order: Order
   busy: boolean
-  onSettle: (toCoupon: boolean) => void
+  onSettle: (couponId: number | null) => void
+  findCoupons: (customerName: string) => Promise<Coupon[]>
   canSms: boolean
   onSms: () => void
   onDone: () => void
@@ -144,11 +146,24 @@ function settlement(o: Order): { refund: number; extra: string[] } {
   return { refund: (cash < 0 ? -cash : 0) + (transfer < 0 ? -transfer : 0), extra }
 }
 
-function OrderCard({ order: o, busy, onSettle, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
+function OrderCard({ order: o, busy, onSettle, findCoupons, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
   const delivery = o.receiveType === 'DELIVERY'
   const time = o.createdAt.slice(11, 16)
   const stale = o.orderDate !== localToday()
   const { refund, extra } = o.status === 'CANCELED' ? { refund: 0, extra: [] } : settlement(o)
+  // 현금 주문의 돌려줄 돈을 쿠폰에 넣을 때: 주문자 이름으로 찾은 후보. 하나면 바로, 여럿이면 고르게, 없으면 안내
+  const [candidates, setCandidates] = useState<Coupon[] | 'none' | null>(null)
+
+  const refundToCoupon = async () => {
+    if (o.couponId != null) {
+      onSettle(o.couponId)
+      return
+    }
+    const found = await findCoupons(o.customerName).catch(() => [])
+    if (found.length === 0) setCandidates('none')
+    else if (found.length === 1) onSettle(found[0].id)
+    else setCandidates(found)
+  }
   return (
     <div className={'order-card' + (delivery ? ' delivery' : '') + (stale ? ' stale' : '')}>
       <div className="top">
@@ -178,14 +193,25 @@ function OrderCard({ order: o, busy, onSettle, canSms, onSms, onDone, onReopen, 
       {refund > 0 && (
         <div className="settle">
           <span className="grow">💸 {won(refund)} 돌려주기</span>
-          <button className="btn" disabled={busy} onClick={() => onSettle(false)}>현금으로 줬어요</button>
-          {o.couponId != null && <button className="btn" disabled={busy} onClick={() => onSettle(true)}>쿠폰에 넣기</button>}
+          <button className="btn" disabled={busy} onClick={() => onSettle(null)}>현금으로 줬어요</button>
+          <button className="btn" disabled={busy} onClick={() => void refundToCoupon()}>쿠폰에 넣기</button>
+          {candidates === 'none' && <span className="settle-note">{o.customerName}님 쿠폰이 없어요. 스태프 &gt; 쿠폰에서 먼저 등록하거나 현금으로 주세요.</span>}
+          {Array.isArray(candidates) && (
+            <div className="settle-pick">
+              <span className="settle-note">같은 이름이 {candidates.length}명 — 누구 쿠폰인가요?</span>
+              {candidates.map((c) => (
+                <button key={c.id} className="btn" disabled={busy} onClick={() => onSettle(c.id)}>
+                  {c.name}{c.phoneLast4 && ` (${c.phoneLast4})`} · 잔액 {won(c.balance)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {refund === 0 && extra.length > 0 && (
         <div className="settle">
           <span className="grow">💰 {extra.join(' · ')}</span>
-          <button className="btn" disabled={busy} onClick={() => onSettle(false)}>받았어요</button>
+          <button className="btn" disabled={busy} onClick={() => onSettle(null)}>받았어요</button>
         </div>
       )}
       <div className="actions">

@@ -509,7 +509,9 @@ test.describe('수정과 정산', () => {
     await expect(card.locator('.edited')).toContainText('이전: 아메리카노 ICE(샷 추가) ×2 · 3,000원')
     await expect(card.locator('.pay')).toHaveText('현금 2,500원')
     await expect(card.locator('.settle')).toContainText('500원 돌려주기')
-    await expect(card.getByRole('button', { name: '쿠폰에 넣기' })).toHaveCount(0)   // 현금 주문
+    // 현금 주문이라도 쿠폰에 넣기는 있다. 이 이름은 쿠폰이 없으니 안내만
+    await card.getByRole('button', { name: '쿠폰에 넣기' }).click()
+    await expect(card.locator('.settle-note')).toContainText('쿠폰이 없어요')
 
     await card.getByRole('button', { name: '현금으로 줬어요' }).click()
     await expect(card.locator('.settle')).toHaveCount(0)
@@ -535,6 +537,27 @@ test.describe('수정과 정산', () => {
     await card.getByRole('button', { name: '취소' }).click()
     expect(message).toContain('받은 1,000원을 현금으로 돌려주세요')
     await expect(card).toBeVisible()
+  })
+
+  test('현금 주문의 돌려줄 돈도 주문자 이름의 쿠폰에 넣을 수 있다 (동명이인이면 고른다)', async ({ page, request }) => {
+    const name = uniq('현금쿠폰')
+    await registerCoupon(request, name, 20000, '010-0000-1111')
+    await registerCoupon(request, name, 5000, '010-0000-2222')
+    await createOrder(request, { customerName: name, lines: [{ variantId: 3002, quantity: 1 }] })   // 현금 3,000
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await card.getByRole('button', { name: '수정' }).click()
+    const modal = page.locator('.modal')
+    await modal.locator('.chips').last().getByRole('button', { name: /^아메리카노 ICE/ }).click()
+    await modal.locator('.cart-line-wrap').first().getByRole('button', { name: '−' }).click()
+    await modal.getByRole('button', { name: '저장' }).click()
+    await expect(card.locator('.settle')).toContainText('2,000원 돌려주기')
+    await card.getByRole('button', { name: '쿠폰에 넣기' }).click()
+    await expect(card.locator('.settle-note')).toContainText('같은 이름이 2명')
+    await card.getByRole('button', { name: /\(2222\)/ }).click()
+    await expect(card.locator('.settle')).toHaveCount(0)
+    expect((await lookupCoupon(request, name, '2222')).coupon.balance).toBe(7000)
+    expect((await lookupCoupon(request, name, '1111')).coupon.balance).toBe(20000)
   })
 
   test('쿠폰 주문의 돌려줄 돈은 쿠폰 잔액에 넣을 수 있다', async ({ page, request }) => {
