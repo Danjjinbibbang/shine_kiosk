@@ -51,6 +51,16 @@ public class SchemaMigration {
 		renumberMenuOrderIfNeeded();
 		groupSeedOptionsIfNeeded();
 		jdbc.sql("CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_client_request ON orders(client_request_id)").update();
+		dropColumnIfExists("coupon", "phone_last4"); // phone 에서 계산하므로 더 이상 저장하지 않는다
+	}
+
+	private void dropColumnIfExists(String table, String column) {
+		Set<String> existing = Set.copyOf(jdbc.sql("SELECT name FROM pragma_table_info('" + table + "')")
+				.query(String.class).list());
+		if (existing.contains(column)) {
+			log.info("컬럼 제거: {}.{}", table, column);
+			jdbc.sql("ALTER TABLE " + table + " DROP COLUMN " + column).update();
+		}
 	}
 
 	/** 예전 시드로 만들어진 '샷 추가'/'연하게' 에 그룹이 없으면 '농도' 로 묶어 한 잔에 하나만 고르게 한다. */

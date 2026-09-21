@@ -20,18 +20,18 @@ public class CouponRepository {
 
 	private static Coupon map(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
 		return new Coupon(rs.getLong("id"), rs.getString("name"), rs.getString("phone"),
-				rs.getString("phone_last4"), rs.getInt("balance"), rs.getInt("free_drinks"));
+				rs.getInt("balance"), rs.getInt("free_drinks"));
 	}
 
 	public List<Coupon> findByName(String name) {
-		return jdbc.sql("SELECT id, name, phone, phone_last4, balance, free_drinks FROM coupon WHERE name = :name ORDER BY id")
+		return jdbc.sql("SELECT id, name, phone, balance, free_drinks FROM coupon WHERE name = :name ORDER BY id")
 				.param("name", name)
 				.query(CouponRepository::map)
 				.list();
 	}
 
 	public Optional<Coupon> findById(long id) {
-		return jdbc.sql("SELECT id, name, phone, phone_last4, balance, free_drinks FROM coupon WHERE id = :id")
+		return jdbc.sql("SELECT id, name, phone, balance, free_drinks FROM coupon WHERE id = :id")
 				.param("id", id)
 				.query(CouponRepository::map)
 				.optional();
@@ -41,18 +41,18 @@ public class CouponRepository {
 		String now = LocalDateTime.now().toString();
 		KeyHolder keys = new GeneratedKeyHolder();
 		jdbc.sql("""
-						INSERT INTO coupon (name, phone, phone_last4, balance, free_drinks, created_at, updated_at)
-						VALUES (:name, :phone, :last4, :balance, :free, :now, :now)
+						INSERT INTO coupon (name, phone, balance, free_drinks, created_at, updated_at)
+						VALUES (:name, :phone, :balance, :free, :now, :now)
 						""")
-				.param("name", name).param("phone", phone).param("last4", Coupon.last4Of(phone))
+				.param("name", name).param("phone", phone)
 				.param("balance", balance).param("free", freeDrinks).param("now", now)
 				.update(keys);
 		return keys.getKey().longValue();
 	}
 
 	public void updatePhone(long couponId, String phone) {
-		jdbc.sql("UPDATE coupon SET phone = :phone, phone_last4 = :last4, updated_at = :now WHERE id = :id")
-				.param("phone", phone).param("last4", Coupon.last4Of(phone))
+		jdbc.sql("UPDATE coupon SET phone = :phone, updated_at = :now WHERE id = :id")
+				.param("phone", phone)
 				.param("now", LocalDateTime.now().toString()).param("id", couponId)
 				.update();
 	}

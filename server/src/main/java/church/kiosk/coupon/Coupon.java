@@ -2,15 +2,21 @@ package church.kiosk.coupon;
 
 /**
  * balance = 선불 잔액, freeDrinks = 남은 무료 1잔 개수.
- * phone 은 전체 번호(잔액 문자용) — 스태프 화면에만 보여주고 고객 화면엔 phoneLast4 만 내려간다.
+ * phone 은 전체 번호(잔액 문자용) — 스태프 화면에만 보여주고 고객 화면엔 뒤 4자리(phoneLast4)만 내려간다.
+ * phoneLast4 는 저장하지 않고 phone 에서 계산한다.
  */
-public record Coupon(long id, String name, String phone, String phoneLast4, int balance, int freeDrinks) {
+public record Coupon(long id, String name, String phone, int balance, int freeDrinks) {
+
+	@com.fasterxml.jackson.annotation.JsonProperty("phoneLast4")
+	public String phoneLast4() {
+		return last4Of(phone);
+	}
 
 	/** 고객 키오스크 조회용. 전체 번호는 뺀다. */
 	public record PublicView(long id, String name, String phoneLast4, int balance, int freeDrinks) {}
 
 	public PublicView toPublic() {
-		return new PublicView(id, name, phoneLast4, balance, freeDrinks);
+		return new PublicView(id, name, phoneLast4(), balance, freeDrinks);
 	}
 
 	/** 숫자만 남긴다. 비어 있으면 null. */
