@@ -150,7 +150,7 @@ test.describe('결제 흐름', () => {
     await expect(page.getByRole('heading', { name: '이름을 골라 주세요' })).toBeVisible({ timeout: 15_000 })
   })
 
-  test('쿠폰: 이름+뒤 4자리 → 틀리면 오류 → 무료 1잔 토글 → 결제 (이름 화면 건너뜀)', async ({ page, request }) => {
+  test('쿠폰: 이름으로 조회, 동명이인만 뒤 4자리 → 무료 1잔 토글 → 결제 (이름 화면 건너뜀)', async ({ page, request }) => {
     const name = uniq('쿠폰')
     await registerCoupon(request, name, 20000, '01000001111')  // 잔액 20,000 / 무료 1잔
     await registerCoupon(request, name, 500, '01000004321')    // 동명이인
@@ -160,10 +160,9 @@ test.describe('결제 흐름', () => {
     await page.getByRole('button', { name: /쿠폰/ }).click()
     await expect(page.getByRole('heading', { name: '쿠폰' })).toBeVisible()
 
-    // 이름을 고르면 항상 번호 뒤 4자리를 묻는다
-    await kioskCouponLookup(page, '없는사람', '1234')
-    await expect(page.locator('.error')).toContainText('맞는 쿠폰이 없습니다')
-    await page.getByRole('button', { name: /다른 이름/ }).click()
+    // 없는 이름은 바로 오류, 동명이인일 때만 번호를 묻는다
+    await kioskCouponLookup(page, '없는사람')
+    await expect(page.locator('.error')).toContainText('쿠폰이 없습니다')
     await kioskCouponLookup(page, name, '9999')
     await expect(page.locator('.error')).toContainText('9999')
     await page.getByRole('button', { name: '⌫' }).click({ clickCount: 4 })
@@ -208,7 +207,7 @@ test.describe('결제 흐름', () => {
     await toReceiveStep(page, [['아이스크림', '컵', 1]]) // 3,000원
     await page.getByRole('button', { name: /카페에서 받기/ }).click()
     await page.getByRole('button', { name: /쿠폰/ }).click()
-    await kioskCouponLookup(page, name, '7777')
+    await kioskCouponLookup(page, name)   // 한 명이면 번호를 묻지 않는다
     await expect(page.getByText('나머지 1,500원은 어떻게')).toBeVisible()
     await expect(page.locator('.hero .account')).toHaveText('테스트은행 123-45-678901')
     await page.getByRole('button', { name: /현금/ }).click()

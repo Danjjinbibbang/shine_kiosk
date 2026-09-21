@@ -96,12 +96,18 @@ export async function pickNameByTyping(page: Page, name: string, confirm: RegExp
   await page.getByRole('button', { name: confirm }).click()
 }
 
-/** 키오스크 쿠폰 화면: 이름 직접 입력 → 뒤 4자리 키패드 → 확인 */
-export async function kioskCouponLookup(page: Page, name: string, last4: string) {
-  await pickNameByTyping(page, name, '다음')
-  await expect(page.getByText('전화번호 뒤 4자리를 눌러 주세요')).toBeVisible()
-  for (const k of last4) await page.getByRole('button', { name: k, exact: true }).click()
-  await page.getByRole('button', { name: '확인' }).click()
+/** 키오스크 쿠폰 화면: 이름 직접 입력 → 조회. 동명이인이면 뒤 4자리 키패드 → 확인 */
+export async function kioskCouponLookup(page: Page, name: string, last4?: string) {
+  // 직전 조회가 실패했으면 이미 입력 상태라 '직접 입력' 버튼이 없다
+  const typingBtn = page.getByRole('button', { name: /직접 입력/ })
+  if (await typingBtn.count() > 0) await typingBtn.click()
+  await page.getByPlaceholder('이름').fill(name)
+  await page.getByRole('button', { name: '쿠폰 조회' }).click()
+  if (last4) {
+    await expect(page.getByText('전화번호 뒤 4자리를 눌러 주세요')).toBeVisible()
+    for (const k of last4) await page.getByRole('button', { name: k, exact: true }).click()
+    await page.getByRole('button', { name: '확인' }).click()
+  }
 }
 
 // ── 스태프 화면 조작 ──────────────────────────────────────
