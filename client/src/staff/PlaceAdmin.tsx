@@ -8,6 +8,8 @@ export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
   const [floor, setFloor] = useState('1')
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [draft, setDraft] = useState('')
 
   const load = useCallback(() => {
     api.adminPlaces().then(setPlaces).catch((e) => onToast(e.message))
@@ -33,11 +35,10 @@ export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
     setName('')
   }, `${floor}층 ${name.trim()} 추가됨`)
 
-  const rename = (p: AdminPlace) => {
-    const next = window.prompt(`${p.floor}층 장소 이름`, p.name)
-    if (next === null || !next.trim() || next.trim() === p.name) return
-    void run(() => api.updatePlace(p.id, { floor: p.floor, name: next.trim(), active: p.active }), '이름 변경됨')
-  }
+  const saveName = (p: AdminPlace) => run(async () => {
+    await api.updatePlace(p.id, { floor: p.floor, name: draft.trim(), active: p.active })
+    setEditingId(null)
+  }, '이름 변경됨')
 
   if (!places) return <div className="empty">불러오는 중…</div>
 
@@ -59,7 +60,17 @@ export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
       {places.map((p) => (
         <div key={p.id} className={'card admin-item' + (p.active ? '' : ' off')}>
           <div className="row between">
-            <div className="admin-name">{p.floor}층 {p.name}</div>
+            {editingId === p.id ? (
+              <div className="row grow">
+                <span className="admin-name">{p.floor}층</span>
+                <input className="text-input grow" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim()) void saveName(p) }} aria-label="장소 이름" style={{ minHeight: 44, fontSize: 17 }} />
+                <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || !draft.trim() || draft.trim() === p.name} onClick={() => void saveName(p)}>저장</button>
+                <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setEditingId(null)}>취소</button>
+              </div>
+            ) : (
+              <div className="admin-name">{p.floor}층 {p.name}</div>
+            )}
             <button className={'btn toggle' + (p.active ? ' on' : '')} disabled={busy}
               onClick={() => void run(() => api.updatePlace(p.id, { floor: p.floor, name: p.name, active: !p.active }), p.active ? `${p.name} 숨김` : `${p.name} 표시`)}>
               {p.active ? '표시중' : '숨김'}
@@ -67,7 +78,7 @@ export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
           </div>
           <div className="row admin-actions">
             <span className="grow" />
-            <button className="btn" disabled={busy} onClick={() => rename(p)}>이름 변경</button>
+            <button className="btn" disabled={busy || editingId === p.id} onClick={() => { setEditingId(p.id); setDraft(p.name) }}>이름 변경</button>
             <button className="btn danger" disabled={busy} onClick={() => {
               if (window.confirm(`"${p.floor}층 ${p.name}" 을 삭제할까요?`)) void run(() => api.deletePlace(p.id), `${p.name} 삭제됨`)
             }}>삭제</button>

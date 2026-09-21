@@ -17,6 +17,8 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   const [adjusting, setAdjusting] = useState(false)
   const [newBalance, setNewBalance] = useState('')
   const [newFree, setNewFree] = useState('')
+  const [phoneEditing, setPhoneEditing] = useState(false)
+  const [phoneDraft, setPhoneDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -39,21 +41,23 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   // 조회는 뒤 4자리로 구분한다 (전체 번호를 넣어도 뒤 4자리만 씀)
   const last4 = phone.replace(/[^0-9]/g, '').slice(-4)
   const lookup = () => wrap(async () => {
-    setResult(await api.staffLookupCoupon(name.trim(), last4.length === 4 ? last4 : undefined))
+    const r = await api.staffLookupCoupon(name.trim(), last4.length === 4 ? last4 : undefined)
+    setResult(r)
+    setPhoneEditing(false)
+    setPhoneDraft(r.coupon?.phone ?? '')
   })
 
-  const changePhone = (c: Coupon) => {
-    const next = window.prompt(`${c.name}님 전화번호 (잔액 문자 발송용)`, c.phone ?? '')
-    if (next === null) return
-    void wrap(async () => {
-      const updated = await api.updateCouponPhone(c.id, next.trim())
-      showCoupon(updated, updated.phone ? '전화번호 저장됨' : '전화번호 지움')
-    })
-  }
+  const savePhone = (c: Coupon) => wrap(async () => {
+    const updated = await api.updateCouponPhone(c.id, phoneDraft.trim())
+    setPhoneEditing(false)
+    showCoupon(updated, updated.phone ? '전화번호 저장됨' : '전화번호 지움')
+  })
 
   const showCoupon = (c: Coupon, msg: string) => {
     setResult({ status: 'FOUND', coupon: c, candidateCount: 1 })
     setAmount('')
+    setPhoneEditing(false)
+    setPhoneDraft(c.phone ?? '')
     onToast(msg)
   }
 
@@ -120,11 +124,23 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
             <b style={{ fontSize: 20 }}>{result.coupon.name}</b>
             <b style={{ fontSize: 26, color: 'var(--primary)' }}>{won(result.coupon.balance)}</b>
           </div>
-          <div className="row between" style={{ fontSize: 15 }}>
-            <span className="muted">📱 {result.coupon.phone ? formatPhone(result.coupon.phone) : '전화번호 없음 (잔액 문자 불가)'}</span>
-            <button className="btn ghost" style={{ minHeight: 32, fontSize: 14 }} onClick={() => changePhone(result.coupon!)}>
-              {result.coupon.phone ? '번호 변경' : '번호 넣기'}
-            </button>
+          {/* 번호가 있으면 잠겨 있고 '번호 변경' 을 눌러야 고칠 수 있다. 없으면 바로 입력. */}
+          <div className="row" style={{ fontSize: 15 }}>
+            <span className="muted">📱</span>
+            <input className="text-input grow" inputMode="tel" placeholder="전화번호 없음 — 잔액 문자를 받으려면 입력"
+              value={phoneEditing || !result.coupon.phone ? phoneDraft : formatPhone(result.coupon.phone)}
+              disabled={!!result.coupon.phone && !phoneEditing}
+              onChange={(e) => setPhoneDraft(e.target.value.replace(/[^0-9-]/g, ''))}
+              aria-label="쿠폰 전화번호" style={{ minHeight: 44, fontSize: 16 }} />
+            {result.coupon.phone && !phoneEditing ? (
+              <button className="btn" style={{ minHeight: 44, fontSize: 14 }} onClick={() => { setPhoneEditing(true); setPhoneDraft(result.coupon!.phone ?? '') }}>번호 변경</button>
+            ) : (
+              <>
+                <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || phoneDraft.trim() === (result.coupon.phone ?? '')}
+                  onClick={() => void savePhone(result.coupon!)}>저장</button>
+                {result.coupon.phone && <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setPhoneEditing(false)}>취소</button>}
+              </>
+            )}
           </div>
           <div className="row between" style={{ fontSize: 16 }}>
             <span className="muted">무료 1잔</span>

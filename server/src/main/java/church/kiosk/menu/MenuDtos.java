@@ -11,17 +11,21 @@ public final class MenuDtos {
 
 	public record ItemView(long id, String name, String category, List<VariantView> variants) {}
 
-	/** 고객 화면용 옵션. category 가 같은 메뉴 줄에만 붙일 수 있다. */
-	public record OptionView(long id, String name, int price, String category) {}
+	/** 고객 화면용 옵션. category 가 같은 메뉴 줄에만 붙일 수 있고, group 이 같은 옵션은 한 잔에 하나만. */
+	public record OptionView(long id, String name, int price, String category, String group) {}
 
 	/** 설정 화면용 옵션. */
-	public record AdminOption(long id, String name, int price, String category, int sortOrder, boolean available) {}
+	public record AdminOption(long id, String name, int price, String category, String group, int sortOrder, boolean available) {}
 
 	public record SaveOptionRequest(
 			@jakarta.validation.constraints.NotBlank(message = "옵션 이름을 입력해 주세요.") String name,
 			@jakarta.validation.constraints.Min(value = 0, message = "가격은 0원 이상이어야 합니다.") int price,
 			@jakarta.validation.constraints.NotBlank(message = "카테고리를 입력해 주세요.") String category,
-			boolean available) {}
+			/** 같은 그룹은 한 잔에 하나만. 비우면 다른 옵션과 자유롭게 조합 */
+			String group,
+			boolean available) {
+		public String groupOrNull() { return (group == null || group.isBlank()) ? null : group.trim(); }
+	}
 
 	// ── 스태프 설정 화면용 ─────────────────────────────────
 

@@ -26,6 +26,7 @@ public class SchemaMigration {
 	private static final List<Column> COLUMNS = List.of(
 			new Column("coupon", "free_drinks", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("coupon", "phone", "TEXT"),
+			new Column("menu_option", "option_group", "TEXT"),
 			new Column("coupon_tx", "free_delta", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_amount", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_item_name", "TEXT"),
@@ -43,6 +44,16 @@ public class SchemaMigration {
 	public void migrate() {
 		addMissingColumns();
 		renumberMenuOrderIfNeeded();
+		groupSeedOptionsIfNeeded();
+	}
+
+	/** 예전 시드로 만들어진 '샷 추가'/'연하게' 에 그룹이 없으면 '농도' 로 묶어 한 잔에 하나만 고르게 한다. */
+	private void groupSeedOptionsIfNeeded() {
+		int updated = jdbc.sql("UPDATE menu_option SET option_group = '농도' WHERE option_group IS NULL AND name IN ('샷 추가', '연하게')")
+				.update();
+		if (updated > 0) {
+			log.info("옵션 그룹 지정: 샷 추가/연하게 → 농도 ({}개)", updated);
+		}
 	}
 
 	/**

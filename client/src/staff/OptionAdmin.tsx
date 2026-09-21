@@ -9,7 +9,9 @@ export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) =>
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
   const [category, setCategory] = useState(categories[0] ?? '커피')
+  const [group, setGroup] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState<{ id: number; name: string; price: string; group: string } | null>(null)
 
   const load = useCallback(() => {
     api.adminOptions().then(setOptions).catch((e) => onToast(e.message))
@@ -31,18 +33,18 @@ export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) =>
   }
 
   const add = () => run(async () => {
-    await api.createOption({ name: name.trim(), price: Number(price) || 0, category: category.trim(), available: true })
+    await api.createOption({ name: name.trim(), price: Number(price) || 0, category: category.trim(), group: group.trim() || null, available: true })
     setName('')
     setPrice('')
+    setGroup('')
   }, `${name.trim()} 옵션 추가됨`)
 
-  const editPrice = (o: AdminOption) => {
-    const next = window.prompt(`"${o.name}" 추가 금액 (원)`, String(o.price))
-    if (next === null) return
-    const p = Number(next.replace(/[^0-9]/g, ''))
-    if (Number.isNaN(p)) return
-    void run(() => api.updateOption(o.id, { name: o.name, price: p, category: o.category, available: o.available }), '금액 변경됨')
-  }
+  const saveEdit = (o: AdminOption) => run(async () => {
+    if (!editing) return
+    await api.updateOption(o.id, { name: editing.name.trim(), price: Number(editing.price) || 0, category: o.category,
+      group: editing.group.trim() || null, available: o.available })
+    setEditing(null)
+  }, '옵션 수정됨')
 
   if (!options) return <div className="empty">불러오는 중…</div>
 
@@ -55,6 +57,8 @@ export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) =>
           <input className="text-input" style={{ width: 110 }} inputMode="numeric" placeholder="+원" value={price}
             onChange={(e) => setPrice(e.target.value.replace(/[^0-9]/g, ''))} aria-label="추가 금액" />
         </div>
+        <input className="text-input" placeholder="그룹 (예: 농도 — 같은 그룹은 한 잔에 하나만, 비워도 됨)" value={group}
+          onChange={(e) => setGroup(e.target.value)} aria-label="그룹" style={{ fontSize: 15, minHeight: 46 }} />
         <div className="chips">
           {categories.map((c) => (
             <button key={c} className={'btn' + (category === c ? ' selected' : '')} onClick={() => setCategory(c)}>{c}</button>
@@ -67,18 +71,35 @@ export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) =>
       {options.map((o) => (
         <div key={o.id} className={'card admin-item' + (o.available ? '' : ' off')}>
           <div className="row between">
-            <div>
-              <div className="admin-name">{o.name} <span className="muted admin-cat">{o.category}</span></div>
-              <div className="muted admin-variants">{o.price > 0 ? `+${won(o.price)}` : '추가 금액 없음'}</div>
-            </div>
+            {editing?.id === o.id ? (
+              <div className="stack grow" style={{ gap: 6 }}>
+                <div className="row">
+                  <input className="text-input grow" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} aria-label="옵션 이름" style={{ minHeight: 44, fontSize: 16 }} />
+                  <input className="text-input" style={{ width: 100, minHeight: 44, fontSize: 16 }} inputMode="numeric" value={editing.price}
+                    onChange={(e) => setEditing({ ...editing, price: e.target.value.replace(/[^0-9]/g, '') })} aria-label="옵션 금액" placeholder="+원" />
+                </div>
+                <div className="row">
+                  <input className="text-input grow" value={editing.group} placeholder="그룹 (비우면 자유 조합)"
+                    onChange={(e) => setEditing({ ...editing, group: e.target.value })} aria-label="옵션 그룹" style={{ minHeight: 44, fontSize: 15 }} />
+                  <button className="btn primary" style={{ minHeight: 44, fontSize: 14 }} disabled={busy || !editing.name.trim()} onClick={() => void saveEdit(o)}>저장</button>
+                  <button className="btn ghost" style={{ minHeight: 44, fontSize: 14 }} onClick={() => setEditing(null)}>취소</button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="admin-name">{o.name} <span className="muted admin-cat">{o.category}</span></div>
+                <div className="muted admin-variants">{o.price > 0 ? `+${won(o.price)}` : '추가 금액 없음'}{o.group && ` · 그룹 ${o.group}`}</div>
+              </div>
+            )}
             <button className={'btn toggle' + (o.available ? ' on' : '')} disabled={busy}
-              onClick={() => void run(() => api.updateOption(o.id, { ...o, available: !o.available }), o.available ? `${o.name} 숨김` : `${o.name} 사용`)}>
+              onClick={() => void run(() => api.updateOption(o.id, { name: o.name, price: o.price, category: o.category, group: o.group, available: !o.available }), o.available ? `${o.name} 숨김` : `${o.name} 사용`)}>
               {o.available ? '사용중' : '숨김'}
             </button>
           </div>
           <div className="row admin-actions">
             <span className="grow" />
-            <button className="btn" disabled={busy} onClick={() => editPrice(o)}>금액 변경</button>
+            <button className="btn" disabled={busy || editing?.id === o.id}
+              onClick={() => setEditing({ id: o.id, name: o.name, price: o.price ? String(o.price) : '', group: o.group ?? '' })}>수정</button>
             <button className="btn danger" disabled={busy} onClick={() => {
               if (window.confirm(`"${o.name}" 옵션을 삭제할까요?`)) void run(() => api.deleteOption(o.id), `${o.name} 삭제됨`)
             }}>삭제</button>

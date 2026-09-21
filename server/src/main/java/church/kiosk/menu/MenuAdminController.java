@@ -43,14 +43,14 @@ public class MenuAdminController {
 
 	@PostMapping("/options")
 	public AdminOption createOption(@RequestBody @Valid SaveOptionRequest req) {
-		long id = optionRepository.insert(req.name().trim(), req.price(), req.category().trim(), req.available());
+		long id = optionRepository.insert(req.name().trim(), req.price(), req.category().trim(), req.groupOrNull(), req.available());
 		return optionRepository.findById(id).orElseThrow();
 	}
 
 	@PutMapping("/options/{id}")
 	public AdminOption updateOption(@PathVariable long id, @RequestBody @Valid SaveOptionRequest req) {
 		optionRepository.findById(id).orElseThrow(() -> new BusinessException("옵션을 찾을 수 없습니다."));
-		optionRepository.update(id, req.name().trim(), req.price(), req.category().trim(), req.available());
+		optionRepository.update(id, req.name().trim(), req.price(), req.category().trim(), req.groupOrNull(), req.available());
 		return optionRepository.findById(id).orElseThrow();
 	}
 

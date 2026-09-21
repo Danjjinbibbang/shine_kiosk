@@ -46,11 +46,23 @@ class MenuOptionApiTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("같은 옵션 두 번 보내면 한 번만, 샷 추가 + 연하게 동시 가능")
-	void dedupAndCombine() throws Exception {
-		Response r = createOrder(cashOrder("a", lineOpt(AMERICANO_ICE, 1, SHOT, SHOT, MILD)));
+	@DisplayName("같은 옵션 두 번 보내면 한 번만, 같은 그룹(샷 추가 + 연하게)은 한 잔에 하나만")
+	void dedupAndGroup() throws Exception {
+		Response r = createOrder(cashOrder("a", lineOpt(AMERICANO_ICE, 1, SHOT, SHOT)));
 		assertThat(r.<Integer>read("$.lines[0].unitPrice")).isEqualTo(1500);
-		assertThat(r.<List<String>>read("$.lines[0].options[*].name")).containsExactly("샷 추가", "연하게");
+		assertThat(r.<List<String>>read("$.lines[0].options[*].name")).containsExactly("샷 추가");
+
+		Response both = createOrder(cashOrder("a", lineOpt(AMERICANO_ICE, 1, SHOT, MILD)));
+		assertThat(both.status()).isEqualTo(400);
+		assertThat(both.message()).contains("농도").contains("하나만");
+
+		assertThat(getJson("/api/menu/options").<List<String>>read("$[*].group")).containsExactly("농도", "농도");
+
+		// 그룹이 없는 옵션은 샷 추가와 같이 고를 수 있다
+		long whip = ((Number) staffPost("/api/staff/menu/options", Map.of("name", "휘핑", "price", 300, "category", "커피", "available", true)).read("$.id")).longValue();
+		Response combo = createOrder(cashOrder("a", lineOpt(AMERICANO_ICE, 1, SHOT, whip)));
+		assertThat(combo.status()).as(combo.body()).isEqualTo(200);
+		assertThat(combo.<Integer>read("$.lines[0].unitPrice")).isEqualTo(1800);
 	}
 
 	@Test
@@ -65,7 +77,7 @@ class MenuOptionApiTests extends ApiTestSupport {
 	@Test
 	@DisplayName("품절 옵션은 고객 목록에서 빠지고 주문에도 못 쓴다")
 	void unavailableOption() throws Exception {
-		staffPut("/api/staff/menu/options/" + SHOT, Map.of("name", "샷 추가", "price", 500, "category", "커피", "available", false));
+		staffPut("/api/staff/menu/options/" + SHOT, Map.of("name", "샷 추가", "price", 500, "category", "커피", "group", "농도", "available", false));
 		assertThat(getJson("/api/menu/options").<List<String>>read("$[*].name")).containsExactly("연하게");
 		assertThat(createOrder(cashOrder("a", lineOpt(AMERICANO_ICE, 1, SHOT))).message()).contains("지금 고를 수 없습니다");
 	}
@@ -110,14 +122,16 @@ class MenuOptionApiTests extends ApiTestSupport {
 	@Test
 	@DisplayName("옵션 관리: 추가/수정/삭제, 삭제해도 지난 주문 스냅샷은 남는다")
 	void adminCrud() throws Exception {
-		Response created = staffPost("/api/staff/menu/options", Map.of("name", "휘핑", "price", 300, "category", "논커피", "available", true));
+		Response created = staffPost("/api/staff/menu/options", Map.of("name", "휘핑", "price", 300, "category", "논커피", "group", " ", "available", true));
 		assertThat(created.status()).as(created.body()).isEqualTo(200);
+		assertThat(created.body()).as("빈 그룹은 null").doesNotContain("\"group\"");
 		long id = ((Number) created.read("$.id")).longValue();
 		assertThat(getJson("/api/menu/options").<List<String>>read("$[*].name")).containsExactly("샷 추가", "연하게", "휘핑");
 		assertThat(createOrder(cashOrder("a", lineOpt(PEACH_TEA, 1, id))).<Integer>read("$.lines[0].unitPrice")).isEqualTo(2300);
 
-		staffPut("/api/staff/menu/options/" + id, Map.of("name", "휘핑크림", "price", 400, "category", "논커피", "available", true));
+		staffPut("/api/staff/menu/options/" + id, Map.of("name", "휘핑크림", "price", 400, "category", "논커피", "group", "토핑", "available", true));
 		assertThat(getJson("/api/menu/options").<List<String>>read("$[?(@.id==" + id + ")].name")).containsExactly("휘핑크림");
+		assertThat(getJson("/api/menu/options").<List<String>>read("$[?(@.id==" + id + ")].group")).containsExactly("토핑");
 
 		long orderId = ((Number) createOrder(cashOrder("b", lineOpt(PEACH_TEA, 1, id))).read("$.id")).longValue();
 		assertThat(staffDelete("/api/staff/menu/options/" + id).status()).isEqualTo(200);

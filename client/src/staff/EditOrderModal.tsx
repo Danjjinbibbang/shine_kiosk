@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../shared/api'
 import type { FloorGroup, MenuItem, MenuOption, Order, ReceiveType } from '../shared/types'
-import { won } from '../shared/types'
+import { blockedByGroup, won } from '../shared/types'
 
 interface Line {
   variantId: number
@@ -42,7 +42,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
       category: '',
       price: l.unitPrice - l.options.reduce((s, o) => s + o.price, 0),
       qty: l.quantity,
-      options: l.options.filter((o) => o.optionId !== null).map((o) => ({ id: o.optionId!, name: o.name, price: o.price, category: '' })),
+      options: l.options.filter((o) => o.optionId !== null).map((o) => ({ id: o.optionId!, name: o.name, price: o.price, category: '', group: null })),
       staffFreeQty: l.staffFreeQty,
     })))
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +56,12 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
       m.forEach((item) => item.variants.forEach((v) => catOf.set(v.id, item.category)))
       setLines((ls) => ls.map((l) => ({ ...l, category: catOf.get(l.variantId) ?? l.category })))
     }).catch(() => {})
-    api.menuOptions().then(setAllOptions).catch(() => {})
+    api.menuOptions().then((opts) => {
+      setAllOptions(opts)
+      // 기존 줄의 옵션에 그룹 정보를 채워 배타 규칙이 먹게 한다
+      const byId = new Map(opts.map((o) => [o.id, o]))
+      setLines((ls) => ls.map((l) => ({ ...l, options: l.options.map((o) => byId.get(o.id) ?? o) })))
+    }).catch(() => {})
     api.places().then(setFloors).catch(() => {})
   }, [])
 
@@ -168,8 +173,9 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
                   <div className="chips" style={{ padding: '0 8px' }}>
                     {applicable.map((o) => {
                       const on = l.options.some((x) => x.id === o.id)
+                      const blocked = !on && blockedByGroup(o, l.options)
                       return (
-                        <button key={o.id} className={'btn' + (on ? ' selected' : '')} onClick={() => toggleOption(index, o)}>
+                        <button key={o.id} className={'btn' + (on ? ' selected' : '')} disabled={blocked} onClick={() => toggleOption(index, o)}>
                           {on ? '☑' : '☐'} {o.name}{o.price > 0 && ` +${won(o.price)}`}
                         </button>
                       )

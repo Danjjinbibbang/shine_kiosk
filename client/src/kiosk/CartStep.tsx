@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../shared/api'
 import type { MenuOption } from '../shared/types'
-import { won } from '../shared/types'
+import { blockedByGroup, won } from '../shared/types'
 import { lineKeyOf, lineUnitPrice, type CartLine } from './KioskApp'
 
 interface Props {
@@ -97,8 +97,10 @@ export function CartStep({ cart, total, onChange, onAddMore, onNext }: Props) {
             <div className="option-chips">
               {applicable.map((o) => {
                 const on = l.options.some((x) => x.id === o.id)
+                const blocked = !on && blockedByGroup(o, l.options)
                 return (
-                  <button key={o.id} className={'btn chip' + (on ? ' selected' : '')} onClick={() => toggleOption(index, o)}>
+                  <button key={o.id} className={'btn chip' + (on ? ' selected' : '')} disabled={blocked}
+                    onClick={() => toggleOption(index, o)}>
                     {on ? '☑' : '☐'} {o.name}{o.price > 0 && <small> +{won(o.price)}</small>}
                   </button>
                 )

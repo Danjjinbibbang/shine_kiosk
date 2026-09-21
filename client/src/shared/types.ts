@@ -24,6 +24,13 @@ export interface MenuOption {
   name: string
   price: number
   category: string
+  /** 같은 그룹은 한 잔에 하나만 (샷 추가/연하게 = '농도'). null 이면 자유 조합 */
+  group: string | null
+}
+
+/** 이 줄에 이미 같은 그룹의 다른 옵션이 있어서 못 고르는지 */
+export function blockedByGroup(opt: MenuOption, selected: MenuOption[]): boolean {
+  return opt.group !== null && selected.some((o) => o.id !== opt.id && o.group === opt.group)
 }
 
 export interface AdminOption extends MenuOption {

@@ -255,6 +255,7 @@ public class OrderService {
 				throw new BusinessException(v.menuName() + "은(는) 지금 주문할 수 없습니다.");
 			}
 			List<LineOptionView> options = new ArrayList<>();
+			java.util.Set<String> groupsUsed = new java.util.HashSet<>();
 			int unit = v.price();
 			for (Long optionId : new java.util.LinkedHashSet<>(r.optionIdsOrEmpty())) {
 				AdminOption opt = optionRepository.findById(optionId)
@@ -264,6 +265,9 @@ public class OrderService {
 				}
 				if (!opt.category().equals(v.category())) {
 					throw new BusinessException(v.menuName() + "에는 " + opt.name() + " 옵션을 넣을 수 없습니다.");
+				}
+				if (opt.group() != null && !groupsUsed.add(opt.group())) {
+					throw new BusinessException(opt.group() + " 옵션은 한 잔에 하나만 고를 수 있습니다.");
 				}
 				options.add(new LineOptionView(opt.id(), opt.name(), opt.price()));
 				unit += opt.price();

@@ -20,8 +20,9 @@ public class MenuOptionRepository {
 	}
 
 	public List<OptionView> findAvailable() {
-		return jdbc.sql("SELECT id, name, price, category FROM menu_option WHERE available = 1 ORDER BY sort_order, id")
-				.query((rs, n) -> new OptionView(rs.getLong("id"), rs.getString("name"), rs.getInt("price"), rs.getString("category")))
+		return jdbc.sql("SELECT id, name, price, category, option_group FROM menu_option WHERE available = 1 ORDER BY sort_order, id")
+				.query((rs, n) -> new OptionView(rs.getLong("id"), rs.getString("name"), rs.getInt("price"),
+						rs.getString("category"), rs.getString("option_group")))
 				.list();
 	}
 
@@ -31,25 +32,25 @@ public class MenuOptionRepository {
 	}
 
 	public List<AdminOption> findAllForAdmin() {
-		return jdbc.sql("SELECT id, name, price, category, sort_order, available FROM menu_option ORDER BY sort_order, id")
+		return jdbc.sql("SELECT id, name, price, category, option_group, sort_order, available FROM menu_option ORDER BY sort_order, id")
 				.query((rs, n) -> new AdminOption(rs.getLong("id"), rs.getString("name"), rs.getInt("price"),
-						rs.getString("category"), rs.getInt("sort_order"), rs.getBoolean("available")))
+						rs.getString("category"), rs.getString("option_group"), rs.getInt("sort_order"), rs.getBoolean("available")))
 				.list();
 	}
 
-	public long insert(String name, int price, String category, boolean available) {
+	public long insert(String name, int price, String category, String group, boolean available) {
 		int next = jdbc.sql("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM menu_option").query(Integer.class).single();
 		KeyHolder keys = new GeneratedKeyHolder();
-		jdbc.sql("INSERT INTO menu_option (name, price, category, sort_order, available) VALUES (:name, :price, :category, :sort, :available)")
-				.param("name", name).param("price", price).param("category", category)
+		jdbc.sql("INSERT INTO menu_option (name, price, category, option_group, sort_order, available) VALUES (:name, :price, :category, :grp, :sort, :available)")
+				.param("name", name).param("price", price).param("category", category).param("grp", group)
 				.param("sort", next).param("available", available ? 1 : 0)
 				.update(keys);
 		return keys.getKey().longValue();
 	}
 
-	public void update(long id, String name, int price, String category, boolean available) {
-		jdbc.sql("UPDATE menu_option SET name = :name, price = :price, category = :category, available = :available WHERE id = :id")
-				.param("name", name).param("price", price).param("category", category)
+	public void update(long id, String name, int price, String category, String group, boolean available) {
+		jdbc.sql("UPDATE menu_option SET name = :name, price = :price, category = :category, option_group = :grp, available = :available WHERE id = :id")
+				.param("name", name).param("price", price).param("category", category).param("grp", group)
 				.param("available", available ? 1 : 0).param("id", id)
 				.update();
 	}

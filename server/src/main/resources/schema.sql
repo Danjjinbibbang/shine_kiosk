@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS menu_option (
     name       TEXT    NOT NULL,
     price      INTEGER NOT NULL DEFAULT 0,
     category   TEXT    NOT NULL,              -- 이 카테고리 메뉴에만 표시
+    option_group TEXT,                         -- 같은 그룹은 한 잔에 하나만 (샷 추가 / 연하게 = '농도')
     sort_order INTEGER NOT NULL DEFAULT 0,
     available  INTEGER NOT NULL DEFAULT 1
 );

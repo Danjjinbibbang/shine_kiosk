@@ -183,7 +183,7 @@ test.describe('쿠폰 관리', () => {
     await page.getByPlaceholder('010-0000-0000').fill('4321')
     await page.getByRole('button', { name: '조회' }).click()
     await expect(page.locator('.card').nth(1)).toContainText('500원')
-    await expect(page.locator('.card').nth(1)).toContainText('010-0000-4321')
+    await expect(page.getByLabel('쿠폰 전화번호')).toHaveValue('010-0000-4321')
 
     // 주문에 쓰인 쿠폰은 삭제가 막힌다
     const used = (await lookupCoupon(request, name, '4321')).coupon
@@ -202,17 +202,33 @@ test.describe('쿠폰 관리', () => {
     await expect(page.getByText('새로 등록할까요?')).toBeVisible()
     await page.getByPlaceholder('010-0000-0000').fill('010-1234-1111')
     await page.getByRole('button', { name: '20,000원 등록' }).click()
-    await expect(page.locator('.card').nth(1)).toContainText('010-1234-1111')
+    await expect(page.getByLabel('쿠폰 전화번호')).toHaveValue('010-1234-1111')
     expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('1111')
 
-    page.once('dialog', (d) => d.accept('01099998888'))
+    // 번호가 있으면 잠겨 있다 → 번호 변경 → 입력 → 저장
+    const phoneInput = page.getByLabel('쿠폰 전화번호')
+    await expect(phoneInput).toBeDisabled()
     await page.getByRole('button', { name: '번호 변경' }).click()
-    await expect(page.locator('.card').nth(1)).toContainText('010-9999-8888')
+    await expect(phoneInput).toBeEnabled()
+    await phoneInput.fill('01099998888')
+    await page.getByRole('button', { name: '저장' }).click()
+    await expect(phoneInput).toHaveValue('010-9999-8888')
+    await expect(phoneInput).toBeDisabled()
 
-    page.once('dialog', (d) => d.accept(''))
+    // 지우기: 번호 변경 → 비우고 저장 → 없음 상태에선 바로 입력 가능
     await page.getByRole('button', { name: '번호 변경' }).click()
-    await expect(page.locator('.card').nth(1)).toContainText('전화번호 없음')
-    await expect(page.getByRole('button', { name: '번호 넣기' })).toBeVisible()
+    await phoneInput.fill('')
+    await page.getByRole('button', { name: '저장' }).click()
+    await expect(phoneInput).toHaveValue('')
+    await expect(phoneInput).toBeEnabled()
+    await expect(page.getByRole('button', { name: '번호 변경' })).toHaveCount(0)
+    expect((await lookupCoupon(request, name)).coupon.phoneLast4 ?? null).toBeNull()
+
+    // 없던 번호 새로 넣기
+    await phoneInput.fill('010-1234-5678')
+    await page.getByRole('button', { name: '저장' }).click()
+    await expect(phoneInput).toHaveValue('010-1234-5678')
+    expect((await lookupCoupon(request, name)).coupon.phoneLast4).toBe('5678')
   })
 
   test('완료 누르면 잔액 문자 앱이 열리고, 번호 없으면 안내만', async ({ page, request }) => {
@@ -364,8 +380,9 @@ test.describe('옵션', () => {
     const modal = page.locator('.modal')
     const line = modal.locator('.cart-line-wrap').first()
     await expect(line.locator('.line-options')).toHaveText('샷 추가')
-    await line.getByRole('button', { name: /연하게/ }).click()
+    await expect(line.getByRole('button', { name: /연하게/ })).toBeDisabled()   // 샷 추가와 같은 그룹
     await line.getByRole('button', { name: /샷 추가/ }).click()
+    await line.getByRole('button', { name: /연하게/ }).click()
     await expect(line.locator('.line-options')).toHaveText('연하게')
     await expect(modal.locator('.total-box .amount')).toHaveText('1,000원')
     await modal.getByRole('button', { name: '저장' }).click()
@@ -381,11 +398,13 @@ test.describe('옵션', () => {
     await page.getByRole('button', { name: '옵션', exact: true }).click()
     await page.getByPlaceholder('이름 (예: 샷 추가)').fill(name)
     await page.getByLabel('추가 금액').fill('300')
+    await page.getByLabel('그룹').fill('토핑')
     await page.locator('.card .chips').first().getByRole('button', { name: '논커피' }).click()
     await page.getByRole('button', { name: '추가' }).click()
     const card = page.locator('.admin-item').filter({ hasText: name })
     await expect(card).toBeVisible()
     await expect(card).toContainText('+300원')
+    await expect(card).toContainText('그룹 토핑')
     const options = async () => (await (await request.get('/api/menu/options')).json()) as Array<{ name: string; category: string }>
     expect((await options()).find((o) => o.name === name)?.category).toBe('논커피')
 

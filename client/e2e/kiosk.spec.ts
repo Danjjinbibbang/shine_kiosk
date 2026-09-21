@@ -300,10 +300,17 @@ test.describe('옵션 (샷 추가 / 연하게)', () => {
     await expect(lines.nth(0).locator('.qty .n')).toHaveText('2')
     await expect(page.locator('.total-box .amount')).toHaveText('5,000원')
 
-    // 샷 추가 줄에서 연하게도 → 1잔은 샷+연하게
-    await lines.nth(0).getByRole('button', { name: /연하게/ }).click()
+    // 샷 추가 줄에서는 연하게가 비활성 (같은 '농도' 그룹). 샷 추가를 빼면 다시 활성
+    await expect(lines.nth(0).getByRole('button', { name: /연하게/ })).toBeDisabled()
+    await lines.nth(0).getByRole('button', { name: /샷 추가/ }).click()   // 1잔 샷 해제
     await expect(lines).toHaveCount(3)
-    await expect(lines.nth(1).locator('.line-options')).toHaveText('샷 추가 · 연하게')
+    await expect(lines.nth(1).getByRole('button', { name: /연하게/ })).toBeEnabled()
+    await lines.nth(1).getByRole('button', { name: /연하게/ }).click()
+    await expect(lines.nth(1).locator('.line-options')).toHaveText('연하게')
+    await expect(page.locator('.total-box .amount')).toHaveText('4,500원')
+    await lines.nth(1).getByRole('button', { name: /연하게/ }).click()   // 되돌리기
+    await lines.nth(1).getByRole('button', { name: /샷 추가/ }).click()   // 다시 샷 추가 → 2잔 샷
+    await expect(lines).toHaveCount(2)
     await expect(page.locator('.total-box .amount')).toHaveText('5,000원')
 
     // 메뉴로 돌아가면 아메리카노 수량은 옵션 상관없이 합쳐서 2
@@ -321,9 +328,9 @@ test.describe('옵션 (샷 추가 / 연하게)', () => {
 
     const order = await orderOf(request, name)
     expect(order.totalAmount).toBe(5000)
-    const shots = order.lines.filter((l: any) => l.options.some((o: any) => o.name === '샷 추가'))
-    expect(shots).toHaveLength(2)
-    expect(shots.every((l: any) => l.unitPrice === 1500 && l.quantity === 1)).toBe(true)
+    const shot = order.lines.find((l: any) => l.options.some((o: any) => o.name === '샷 추가'))
+    expect(shot.unitPrice).toBe(1500)
+    expect(shot.quantity).toBe(2)
   })
 })
 
