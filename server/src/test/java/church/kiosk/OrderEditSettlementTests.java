@@ -125,7 +125,8 @@ class OrderEditSettlementTests extends ApiTestSupport {
 		Response r3 = edit(id, line(ICECREAM_CUP, 3));                          // 9,000 → 더 받을 3,000
 		staffPost("/api/staff/orders/" + id + "/settle", Map.of("method", "TRANSFER"));
 		o = staffGet("/api/staff/orders");
-		assertThat(o.<List<String>>read("$[?(@.id==" + id + ")].payNote")).containsExactly("현금 8,500원 받음 → 거스름돈 2,500원");
+		assertThat(o.<List<String>>read("$[?(@.id==" + id + ")].payNote")).as("섞인 결제면 현금 몫을 앞에")
+				.containsExactly("현금 몫 6,000원 · 8,500원 받음 → 거스름돈 2,500원");
 		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].transferAmount")).containsExactly(3000);
 	}
 

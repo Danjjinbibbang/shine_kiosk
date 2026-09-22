@@ -93,16 +93,22 @@ public final class OrderDtos {
 							Integer cashGiven,
 							List<LineView> lines) {
 
-		/** "현금 5,000원 받음 → 거스름돈 1,000원" — 지금 금액 기준이라 수정 뒤에도 맞는다. 현금을 안 냈으면 null */
+		/**
+		 * "현금 5,000원 받음 → 거스름돈 1,000원" — 지금 금액 기준이라 수정 뒤에도 맞는다. 현금을 안 냈으면 null.
+		 * 쿠폰/이체와 섞인 주문이면 "현금 몫 6,000원 · 8,000원 받음 → 거스름돈 2,000원" 처럼 현금 몫을 앞에 써서
+		 * 총액과 안 맞아 보이지 않게 한다.
+		 */
 		@com.fasterxml.jackson.annotation.JsonProperty
 		public String payNote() {
 			if (cashGiven == null) return null;
+			boolean mixed = cashAmount != totalAmount;
+			String head = mixed ? "현금 몫 " + won(cashAmount) + " · " : "현금 ";
 			int change = cashGiven - cashAmount;
-			if (change > 0) return "현금 " + won(cashGiven) + " 받음 → 거스름돈 " + won(change);
-			if (change == 0) return "현금 " + won(cashGiven) + " 딱 맞게";
+			if (change > 0) return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change);
+			if (change == 0) return head + won(cashGiven) + " 딱 맞게";
 			// 낸 돈보다 금액이 커진 경우: 이미 거슬러 준 돈은 빼고, 실제로 아직 못 받은 만큼만
 			int owed = cashAmount - settledCash;
-			return owed > 0 ? "현금 " + won(cashGiven) + " 받음 → " + won(owed) + " 더 받아야" : "현금 " + won(cashGiven) + " 받음";
+			return owed > 0 ? head + won(cashGiven) + " 받음 → " + won(owed) + " 더 받아야" : head + won(cashGiven) + " 받음";
 		}
 
 		private static String won(int n) { return String.format("%,d원", n); }

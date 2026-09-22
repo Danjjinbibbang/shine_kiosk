@@ -223,7 +223,7 @@ test.describe('결제 흐름', () => {
     const order = await orderOf(request, name)
     expect(order.couponAmount).toBe(1500)
     expect(order.cashAmount).toBe(1500)
-    expect(order.payNote).toBe('현금 5,000원 받음 → 거스름돈 3,500원')
+    expect(order.payNote).toBe('현금 몫 1,500원 · 5,000원 받음 → 거스름돈 3,500원')
     expect((await lookupCoupon(request, name)).coupon.balance).toBe(0)
   })
 })
