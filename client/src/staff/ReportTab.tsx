@@ -75,6 +75,7 @@ export function ReportTab({ onToast }: { onToast: (msg: string) => void }) {
                   {d.freeAmount > 0 && ` · 무료잔 ${won(d.freeAmount)}`}
                   {d.staffFreeAmount > 0 && ` · 사역자 ${won(d.staffFreeAmount)}`}
                   {d.couponChargeAmount > 0 && <span className="charge"> · 쿠폰 충전 입금 {won(d.couponChargeAmount)}</span>}
+                  {(d.refundCash > 0 || d.refundTransfer > 0) && <span> · 돌려준 돈{d.refundCash > 0 && ` 현금 ${won(d.refundCash)}`}{d.refundTransfer > 0 && ` 이체 ${won(d.refundTransfer)}`}</span>}
                 </div>
 
                 {open === d.date && (

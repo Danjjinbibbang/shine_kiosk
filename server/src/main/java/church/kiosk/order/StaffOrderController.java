@@ -49,7 +49,7 @@ public class StaffOrderController {
 	}
 
 	/**
-	 * 돌려줄 돈: couponId 가 있으면 그 쿠폰 잔액에 넣는다, 없으면 현금으로 준 것으로.
+	 * 돌려줄 돈: method = CASH(기본) | TRANSFER | COUPON(couponId 필요). couponId 만 줘도 COUPON.
 	 * 더 받을 돈: method = CASH | TRANSFER | COUPON (COUPON 이면 couponId 필요).
 	 */
 	public record SettleRequest(Long couponId, OrderDtos.PayMethod method) {}
@@ -76,11 +76,11 @@ public class StaffOrderController {
 		orderService.reopen(id);
 	}
 
-	/** refundToCouponId 가 있으면 받은 현금/이체를 그 쿠폰 잔액으로 돌려준다. 없으면 현금으로 돌려준 것으로. */
-	public record CancelRequest(Long refundToCouponId) {}
+	/** 받은 돈을 어떻게 돌려줬는지: refundToCouponId 가 있으면 그 쿠폰 잔액으로, 아니면 method (CASH 기본 | TRANSFER). */
+	public record CancelRequest(Long refundToCouponId, OrderDtos.PayMethod method) {}
 
 	@PostMapping("/{id}/cancel")
 	public void cancel(@PathVariable long id, @RequestBody(required = false) CancelRequest request) {
-		orderService.cancel(id, request == null ? null : request.refundToCouponId());
+		orderService.cancel(id, request == null ? null : request.refundToCouponId(), request == null ? null : request.method());
 	}
 }

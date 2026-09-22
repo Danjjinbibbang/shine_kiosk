@@ -219,8 +219,13 @@ export interface Order {
   cashGiven?: number | null
   /** 거스름돈 중 쿠폰에 넣은 금액 */
   changeCredited: number
+  /** 완료하면서 준 거스름돈 */
+  changePaid: number
   /** 아직 안 준 거스름돈 */
   changeDue: number
+  /** 수정/취소로 돌려준 돈 (현금 / 계좌이체) */
+  refundCash: number
+  refundTransfer: number
   /** "현금 5,000원 받음 → 거스름돈 1,000원" — 수정 뒤에도 지금 금액 기준 (없으면 생략) */
   payNote?: string | null
   lines: OrderLine[]
@@ -248,6 +253,9 @@ export interface DayReport {
   freeAmount: number
   staffFreeAmount: number
   couponChargeAmount: number
+  /** 수정/취소로 돌려준 돈 (취소 주문 포함) */
+  refundCash: number
+  refundTransfer: number
 }
 
 export const PAY_LABEL: Record<PayMethod, string> = {

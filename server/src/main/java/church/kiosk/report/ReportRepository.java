@@ -18,7 +18,9 @@ public class ReportRepository {
 	 * 쿠폰은 충전 때 돈이 들어오고 사용 때 매출로 잡히므로 둘 다 보여준다.
 	 */
 	public record DayReport(String date, int orderCount, int totalAmount, int cashAmount, int transferAmount,
-							int couponAmount, int freeAmount, int staffFreeAmount, int couponChargeAmount) {}
+							int couponAmount, int freeAmount, int staffFreeAmount, int couponChargeAmount,
+							/** 수정/취소로 돌려준 돈 (취소된 주문 포함). 쿠폰에 넣은 건 충전 입금에 잡히지 않고 잔액으로만 */
+							int refundCash, int refundTransfer) {}
 
 	private final JdbcClient jdbc;
 
@@ -42,9 +44,24 @@ public class ReportRepository {
 						""")
 				.query((rs, n) -> new DayReport(rs.getString("order_date"), rs.getInt("cnt"), rs.getInt("total"),
 						rs.getInt("cash"), rs.getInt("transfer"), rs.getInt("coupon"), rs.getInt("free"),
-						rs.getInt("staff_free"), 0))
+						rs.getInt("staff_free"), 0, 0, 0))
 				.list()
 				.forEach(d -> byDate.put(d.date(), d));
+
+		// 돌려준 돈 (취소된 주문 포함 — 실제로 나간 돈이므로)
+		jdbc.sql("""
+						SELECT order_date, COALESCE(SUM(refund_cash), 0) AS rc, COALESCE(SUM(refund_transfer), 0) AS rt
+						FROM orders WHERE refund_cash > 0 OR refund_transfer > 0
+						GROUP BY order_date
+						""")
+				.query((rs, n) -> Map.entry(rs.getString("order_date"), new int[] { rs.getInt("rc"), rs.getInt("rt") }))
+				.list()
+				.forEach(e -> {
+					DayReport d = byDate.getOrDefault(e.getKey(), new DayReport(e.getKey(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+					byDate.put(e.getKey(), new DayReport(d.date(), d.orderCount(), d.totalAmount(), d.cashAmount(),
+							d.transferAmount(), d.couponAmount(), d.freeAmount(), d.staffFreeAmount(), d.couponChargeAmount(),
+							e.getValue()[0], e.getValue()[1]));
+				});
 
 		// 쿠폰 충전 입금 (충전/등록 이력의 날짜 기준)
 		jdbc.sql("""
@@ -55,9 +72,10 @@ public class ReportRepository {
 				.query((rs, n) -> Map.entry(rs.getString("d"), rs.getInt("charged")))
 				.list()
 				.forEach(e -> {
-					DayReport d = byDate.getOrDefault(e.getKey(), new DayReport(e.getKey(), 0, 0, 0, 0, 0, 0, 0, 0));
+					DayReport d = byDate.getOrDefault(e.getKey(), new DayReport(e.getKey(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
 					byDate.put(e.getKey(), new DayReport(d.date(), d.orderCount(), d.totalAmount(), d.cashAmount(),
-							d.transferAmount(), d.couponAmount(), d.freeAmount(), d.staffFreeAmount(), e.getValue()));
+							d.transferAmount(), d.couponAmount(), d.freeAmount(), d.staffFreeAmount(), e.getValue(),
+							d.refundCash(), d.refundTransfer()));
 				});
 
 		List<DayReport> result = new ArrayList<>(byDate.values());

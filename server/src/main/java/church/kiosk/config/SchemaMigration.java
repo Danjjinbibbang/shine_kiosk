@@ -37,6 +37,9 @@ public class SchemaMigration {
 			new Column("orders", "free_item_name", "TEXT"),
 			new Column("orders", "cash_given", "INTEGER"),
 			new Column("orders", "change_credited", "INTEGER NOT NULL DEFAULT 0"),
+			new Column("orders", "change_paid", "INTEGER NOT NULL DEFAULT 0"),
+			new Column("orders", "refund_cash", "INTEGER NOT NULL DEFAULT 0"),
+			new Column("orders", "refund_transfer", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "staff_free_amount", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("order_line", "staff_free_qty", "INTEGER NOT NULL DEFAULT 0")
 	);

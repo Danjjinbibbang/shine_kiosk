@@ -136,17 +136,18 @@ public class ReportController {
 
 	private String daysCsvText() {
 		StringBuilder sb = new StringBuilder();
-		sb.append("날짜,주문수,주문금액,현금,계좌이체,쿠폰사용,무료1잔,사역자무료,쿠폰충전입금\n");
+		sb.append("날짜,주문수,주문금액,현금,계좌이체,쿠폰사용,무료1잔,사역자무료,쿠폰충전입금,돌려준현금,돌려준이체\n");
 		for (ReportRepository.DayReport d : reportRepository.findDays()) {
 			sb.append(String.join(",", d.date(), String.valueOf(d.orderCount()), String.valueOf(d.totalAmount()),
 					String.valueOf(d.cashAmount()), String.valueOf(d.transferAmount()), String.valueOf(d.couponAmount()),
-					String.valueOf(d.freeAmount()), String.valueOf(d.staffFreeAmount()), String.valueOf(d.couponChargeAmount())))
+					String.valueOf(d.freeAmount()), String.valueOf(d.staffFreeAmount()), String.valueOf(d.couponChargeAmount()),
+					String.valueOf(d.refundCash()), String.valueOf(d.refundTransfer())))
 					.append('\n');
 		}
 		return sb.toString();
 	}
 
-	private static final String ORDERS_HEADER = "날짜,번호,시각,이름,받는방법,장소,상태,메뉴,주문금액,현금,계좌이체,쿠폰,무료1잔,사역자무료,결제수단,메모\n";
+	private static final String ORDERS_HEADER = "날짜,번호,시각,이름,받는방법,장소,상태,메뉴,주문금액,현금,계좌이체,쿠폰,무료1잔,사역자무료,결제수단,낸현금,돌려준현금,돌려준이체,메모\n";
 
 	@GetMapping(value = "/orders.csv", produces = "text/csv")
 	public ResponseEntity<byte[]> ordersCsv(@RequestParam String date) {
@@ -172,7 +173,8 @@ public class ReportController {
 					q(o.customerName()), o.receiveType().name().equals("DELIVERY") ? "배달" : "카페", q(o.placeName()),
 					statusLabel(o.status().name()), q(menu), String.valueOf(o.totalAmount()),
 					String.valueOf(o.cashAmount()), String.valueOf(o.transferAmount()), String.valueOf(o.couponAmount()),
-					String.valueOf(o.freeAmount()), String.valueOf(o.staffFreeAmount()), o.payMethod().name(), q(o.memo())))
+					String.valueOf(o.freeAmount()), String.valueOf(o.staffFreeAmount()), o.payMethod().name(),
+					o.cashGiven() == null ? "" : String.valueOf(o.cashGiven()), String.valueOf(o.refundCash()), String.valueOf(o.refundTransfer()), q(o.memo())))
 					.append('\n');
 		}
 	}

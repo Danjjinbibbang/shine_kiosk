@@ -93,12 +93,16 @@ public final class OrderDtos {
 							Integer cashGiven,
 							/** 거스름돈 중 쿠폰에 넣은 금액 */
 							int changeCredited,
+							/** 완료하면서 손에 쥐어 준 거스름돈 */
+							int changePaid,
+							/** 수정/취소로 돌려준 돈 (현금 / 계좌이체). 쿠폰에 넣은 건 쿠폰 이력에 */
+							int refundCash, int refundTransfer,
 							List<LineView> lines) {
 
-		/** 아직 안 준 거스름돈 (낸 현금 − 현금 몫 − 쿠폰에 넣은 잔돈). 낸 현금 기록이 없으면 0 */
+		/** 아직 안 준 거스름돈 (낸 현금 − 현금 몫 − 쿠폰에 넣은 잔돈 − 이미 준 거스름돈). 낸 현금 기록이 없으면 0 */
 		@com.fasterxml.jackson.annotation.JsonProperty
 		public int changeDue() {
-			return cashGiven == null ? 0 : Math.max(0, cashGiven - cashAmount - changeCredited);
+			return cashGiven == null ? 0 : Math.max(0, cashGiven - cashAmount - changeCredited - changePaid);
 		}
 
 		/**
@@ -111,19 +115,23 @@ public final class OrderDtos {
 			if (cashGiven == null) return null;
 			boolean mixed = cashAmount != totalAmount;
 			String head = mixed ? "현금 몫 " + won(cashAmount) + " · " : "현금 ";
-			String creditedNote = changeCredited > 0 ? " (" + won(changeCredited) + "은 쿠폰 충전)" : "";
-			// 아직 못 받은 현금이 있으면 (낸 돈 − 쿠폰에 넣은 잔돈 을 넘게 늘어난 경우) 그것부터
+			int change = cashGiven - cashAmount;                       // 전체 거스름돈 (준 것·쿠폰에 넣은 것 포함)
+			int remaining = change - changeCredited - changePaid;       // 아직 손에 쥐어 줄 거스름돈
+			java.util.List<String> parts = new java.util.ArrayList<>();
+			if (changePaid > 0) parts.add(won(changePaid) + " 드림");
+			if (changeCredited > 0) parts.add(won(changeCredited) + "은 쿠폰 충전");
+			// 아직 못 받은 현금이 있으면 (손에 있는 돈을 넘게 늘어난 경우) 그것부터
 			int owed = cashAmount - settledCash;
-			if (owed > 0) return head + won(cashGiven) + " 받음" + creditedNote + " → " + won(owed) + " 더 받아야";
-			int change = cashGiven - cashAmount;            // 전체 거스름돈 (쿠폰에 넣은 것 포함)
-			int remaining = change - changeCredited;       // 아직 손에 쥐어 줄 거스름돈
-			if (changeCredited > 0) {
-				String credited = won(changeCredited) + "은 쿠폰 충전";
-				return remaining <= 0
-						? head + won(cashGiven) + " 받음 → 거스름돈 " + credited
-						: head + won(cashGiven) + " 받음 → 거스름돈 " + won(change) + " (" + credited + ", " + won(remaining) + " 드리기)";
+			if (owed > 0) {
+				String detail = parts.isEmpty() ? "" : " (" + String.join(", ", parts) + ")";
+				return head + won(cashGiven) + " 받음" + detail + " → " + won(owed) + " 더 받아야";
 			}
-			if (change > 0) return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change);
+			if (change > 0) {
+				if (parts.isEmpty()) return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change);
+				if (remaining > 0) parts.add(won(remaining) + " 드리기");
+				if (parts.size() == 1) return head + won(cashGiven) + " 받음 → 거스름돈 " + parts.get(0);
+				return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change) + " (" + String.join(", ", parts) + ")";
+			}
 			if (change == 0) return head + won(cashGiven) + " 딱 맞게";
 			return head + won(cashGiven) + " 받음";
 		}

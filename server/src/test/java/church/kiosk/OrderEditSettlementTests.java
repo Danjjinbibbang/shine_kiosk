@@ -149,7 +149,14 @@ class OrderEditSettlementTests extends ApiTestSupport {
 		staffPost("/api/staff/orders/" + id + "/reopen", null);
 		Response r2 = edit(id, line(AMERICANO_ICE, 1));                              // 1,000
 		assertThat(r2.<Integer>read("$.settledCash")).isEqualTo(1000);
-		assertThat(r2.<String>read("$.payNote")).isEqualTo("현금 10,000원 받음 → 거스름돈 9,000원");
+		assertThat(r2.<String>read("$.payNote")).as("완료 때 준 3,000 은 확정, 줄어든 6,000 만 다시").isEqualTo("현금 10,000원 받음 → 거스름돈 9,000원 (3,000원 드림, 6,000원 드리기)");
+		assertThat(r2.<Integer>read("$.changePaid")).isEqualTo(3000);
+		assertThat(r2.<Integer>read("$.changeDue")).isEqualTo(6000);
+		// 완료 뒤 되돌려서 늘리면 손에 있는 7,000 을 넘는 만큼만 더 받는다
+		Response r3 = edit(id, line(PEACH_TEA, 4));                                  // 8,000
+		assertThat(r3.<Integer>read("$.settledCash")).isEqualTo(7000);
+		assertThat(r3.<String>read("$.payNote")).isEqualTo("현금 10,000원 받음 (3,000원 드림) → 1,000원 더 받아야");
+		edit(id, line(AMERICANO_ICE, 1));                                             // 다시 1,000
 		assertThat(staffPost("/api/staff/orders/" + id + "/done", null).status()).isEqualTo(200);
 	}
 
@@ -196,6 +203,39 @@ class OrderEditSettlementTests extends ApiTestSupport {
 		// 낸 현금 기록이 없는 주문은 불가
 		long plain = id(createOrder(cashOrder("손님", line(AMERICANO_ICE, 1))));
 		assertThat(staffPost("/api/staff/orders/" + plain + "/change-to-coupon", Map.of("couponId", coupon)).message()).contains("기록되지 않은");
+	}
+
+	@Test
+	@DisplayName("돌려줄 돈은 현금/계좌이체/쿠폰 중 골라서 돌려주고, 현금/이체는 주문과 매출에 남는다")
+	void refundMethodRecorded() throws Exception {
+		Map<String, Object> t = new HashMap<>(cashOrder("손님", line(ICECREAM_CUP, 1)));   // 이체 3,000
+		t.put("payMethod", "TRANSFER");
+		long id = id(createOrder(t));
+		edit(id, line(VANILLA_ICE, 1));                                                  // 2,500 → 돌려줄 500
+		Response r = staffPost("/api/staff/orders/" + id + "/settle", Map.of("method", "TRANSFER"));
+		assertThat(r.status()).as(r.body()).isEqualTo(200);
+		Response o = staffGet("/api/staff/orders");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].refundTransfer")).containsExactly(500);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].refundCash")).containsExactly(0);
+
+		long cash = id(createOrder(cashOrder("손님", line(ICECREAM_CUP, 1))));           // 현금 3,000 (낸 돈 기록 없음)
+		edit(cash, line(AMERICANO_ICE, 1));                                              // 1,000 → 돌려줄 2,000
+		assertThat(staffPost("/api/staff/orders/" + cash + "/settle", null).status()).as("기본은 현금").isEqualTo(200);
+		o = staffGet("/api/staff/orders");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + cash + ")].refundCash")).containsExactly(2000);
+
+		// 취소: 계좌이체로 돌려주고 취소
+		long c = id(createOrder(cashOrder("손님", line(ICECREAM_CUP, 1))));
+		assertThat(staffPost("/api/staff/orders/" + c + "/cancel", Map.of("method", "TRANSFER")).status()).isEqualTo(200);
+		Response canceled = staffGet("/api/staff/orders?status=CANCELED");
+		assertThat(canceled.<List<Integer>>read("$[?(@.id==" + c + ")].refundTransfer")).containsExactly(3000);
+
+		// 매출: 돌려준 돈은 취소 주문 것까지 합쳐서
+		Response days = staffGet("/api/staff/reports/days");
+		assertThat(days.<Integer>read("$[0].refundCash")).isEqualTo(2000);
+		assertThat(days.<Integer>read("$[0].refundTransfer")).isEqualTo(3500);
+		Response csv = staffGet("/api/staff/reports/days.csv");
+		assertThat(csv.body()).contains("돌려준현금,돌려준이체").contains(",2000,3500");
 	}
 
 	@Test

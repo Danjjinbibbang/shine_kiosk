@@ -309,11 +309,30 @@ with Case('E 정산', '낸 현금이 있으면 늘어난 몫은 거스름돈에�
     c.eq(s, 200, msg(o)); c.eq(o['payNote'], '현금 5,000원 받음 → 거스름돈 4,000원', 'note')
     s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO), line(AME_ICE)], 'memo': None})   # 4,000
     c.eq(s, 200, msg(u)); c.eq(u['settledCash'], 4000, 'absorbed'); c.eq(u['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원', 'note2')
-    s, d = act(o['id'], 'done'); c.eq(s, 200, 'done without settle'); act(o['id'], 'reopen')
     s, x = staff('POST', f"/api/staff/orders/{o['id']}/change-to-coupon", {'couponId': cp['id']}); c.eq(s, 200, msg(x))
     c.eq(get_coupon(cp['id'])['balance'], 21000, 'coupon +1000'); c.eq(get_order(o['id'])['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원은 쿠폰 충전', 'note3')
     s, u2 = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO, 2)], 'memo': None})   # 6,000
     c.eq(u2['cashAmount'] - u2['settledCash'], 2000, 'extra 2000'); c.eq(u2['payNote'], '현금 5,000원 받음 (1,000원은 쿠폰 충전) → 2,000원 더 받아야', 'note4')
+    s, st = act(o['id'], 'settle', {'method': 'CASH'}); c.eq(s, 200, msg(st))
+    s, d = act(o['id'], 'done'); c.eq(s, 200, 'done'); c.eq(d['payNote'], '현금 7,000원 받음 → 거스름돈 1,000원은 쿠폰 충전', 'note5')
+
+with Case('E 정산', '완료하면 거스름돈이 확정된다: 되돌려 늘리면 넘는 만큼만 더 받고, 줄이면 그만큼만 다시 거슬러 준다') as c:
+    s, o = order('김확정', [line(AFFO)], 'CASH', cash_given=5000)     # 3,000, 거스름돈 2,000
+    s, d = act(o['id'], 'done'); c.eq(s, 200, 'done'); c.eq(d['changePaid'], 2000, 'change paid at done'); c.eq(d['changeDue'], 0, 'nothing due')
+    act(o['id'], 'reopen')
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김확정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO), line(AME_ICE)], 'memo': None})   # 4,000
+    c.eq(u['cashAmount'] - u['settledCash'], 1000, 'only 1000 more'); c.eq(u['payNote'], '현금 5,000원 받음 (2,000원 드림) → 1,000원 더 받아야', 'note')
+    s, u2 = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김확정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(LATTE_ICE)], 'memo': None})   # 2,000
+    c.eq(u2['changeDue'], 1000, 'give back 1000 more'); c.eq(u2['payNote'], '현금 5,000원 받음 → 거스름돈 3,000원 (2,000원 드림, 1,000원 드리기)', 'note2')
+
+with Case('E 정산', '돌려주는 수단 기록: 이체 주문 차액을 이체로, 취소 환불을 현금으로 → 카드/매출에 남는다') as c:
+    s, o = order('김돌려줌', [line(AFFO)], 'TRANSFER')
+    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김돌려줌', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(VAN_ICE)], 'memo': None})
+    s, st = act(o['id'], 'settle', {'method': 'TRANSFER'}); c.eq(s, 200, msg(st)); c.eq(st['refundTransfer'], 500, 'refund transfer')
+    s, o2 = order('김취소환불', [line(AFFO)], 'TRANSFER')
+    s, x = act(o2['id'], 'cancel', {'method': 'CASH'}); c.eq(s, 200, msg(x)); c.eq(x['refundCash'], 3000, 'refund cash on cancel')
+    s, days = staff('GET', '/api/staff/reports/days'); today = days[0]
+    c.check(today['refundCash'] >= 3000 and today['refundTransfer'] >= 500, f'day report refunds {today.get("refundCash")}/{today.get("refundTransfer")}')
 
 # ── F. 메뉴/옵션/카테고리/장소 관리가 키오스크에 반영 ─────────────
 with Case('F 설정', '카테고리 추가 → 메뉴 추가 → 키오스크 메뉴에 등장 → 주문 가능 → 삭제 후 주문 거부, 지난 주문 유지') as c:

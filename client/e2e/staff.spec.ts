@@ -607,6 +607,7 @@ test.describe('수정과 정산', () => {
     await card.getByRole('button', { name: '취소', exact: true }).click()
     await expect(card.locator('.cancel-panel')).toContainText('받은 1,000원은?')
     await expect(card.getByRole('button', { name: '현금으로 돌려주고 취소' })).toBeVisible()
+    await expect(card.getByRole('button', { name: '계좌이체로 돌려주고 취소' })).toBeVisible()
     await expect(card.getByRole('button', { name: '쿠폰에 넣고 취소' })).toBeVisible()
     await card.getByRole('button', { name: '취소 안 함' }).click()
     await expect(card).toBeVisible()

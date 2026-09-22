@@ -64,7 +64,8 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
     <>
       {orders.map((o) => (
         <OrderCard key={o.id} order={o} busy={busyId === o.id}
-          onSettle={(couponId) => run(o.id, () => api.settleOrder(o.id, { couponId }), couponId != null ? '쿠폰 잔액에 넣었습니다' : '정산 표시했습니다')}
+          onSettle={(method, couponId) => run(o.id, () => api.settleOrder(o.id, { method, couponId }),
+            method === 'COUPON' ? '쿠폰 잔액에 넣었습니다' : method === 'TRANSFER' ? '계좌이체로 돌려준 것으로 표시했습니다' : '현금으로 돌려준 것으로 표시했습니다')}
           onChangeToCoupon={(couponId) => run(o.id, () => api.changeToCoupon(o.id, couponId), '거스름돈을 쿠폰 잔액에 넣었습니다')}
           onReceive={(method, couponId) => run(o.id, () => api.settleOrder(o.id, { method, couponId }),
             method === 'COUPON' ? '쿠폰 잔액에서 뺐습니다' : method === 'TRANSFER' ? '계좌이체로 받은 것으로 표시했습니다' : '현금으로 받은 것으로 표시했습니다')}
@@ -78,7 +79,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
               `${orderLabel(o)} ${o.customerName}님 완료` + (o.couponId != null && !sent ? ' (번호 없어 문자 생략)' : ''))
           }}
           onReopen={() => run(o.id, () => api.reopenOrder(o.id), `${orderLabel(o)} 다시 만들 것으로 이동`)}
-          onCancel={(refundToCouponId) => run(o.id, () => api.cancelOrder(o.id, refundToCouponId),
+          onCancel={(method, refundToCouponId) => run(o.id, () => api.cancelOrder(o.id, { method: method === 'COUPON' ? undefined : method, refundToCouponId }),
             `${orderLabel(o)} 취소됨` + (refundToCouponId != null ? ' · 쿠폰 잔액에 넣음' : ''))}
           onEdit={() => setEditing(o)} />
       ))}
@@ -93,13 +94,15 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
 interface CardProps {
   order: Order
   busy: boolean
-  onSettle: (couponId: number | null) => void
+  /** 돌려줄 돈을 어떻게 돌려줬는지 */
+  onSettle: (method: 'CASH' | 'TRANSFER' | 'COUPON', couponId?: number) => void
   findCoupons: (customerName: string) => Promise<Coupon[]>
   canSms: boolean
   onSms: () => void
   onDone: () => void
   onReopen: () => void
-  onCancel: (refundToCouponId: number | null) => void
+  /** 취소하면서 받은 돈을 어떻게 돌려줬는지 (받은 돈이 없으면 CASH 로 보내도 무시된다) */
+  onCancel: (method: 'CASH' | 'TRANSFER' | 'COUPON', refundToCouponId?: number) => void
   onEdit: () => void
   /** 더 받을 돈을 어떻게 받았는지 */
   onReceive: (method: 'CASH' | 'TRANSFER' | 'COUPON', couponId?: number) => void
@@ -178,7 +181,7 @@ function OrderCard({ order: o, busy, onSettle, onReceive, onChangeToCoupon, find
   const change = o.status === 'CANCELED' ? 0 : o.changeDue
 
   const pickCoupon = async (purpose: 'settle' | 'receive' | 'cancel' | 'change') => {
-    const done = (id: number) => (purpose === 'settle' ? onSettle(id) : purpose === 'receive' ? onReceive('COUPON', id) : purpose === 'change' ? onChangeToCoupon(id) : onCancel(id))
+    const done = (id: number) => (purpose === 'settle' ? onSettle('COUPON', id) : purpose === 'receive' ? onReceive('COUPON', id) : purpose === 'change' ? onChangeToCoupon(id) : onCancel('COUPON', id))
     setPickFor(purpose)
     if (o.couponId != null) {
       done(o.couponId)
@@ -218,6 +221,9 @@ function OrderCard({ order: o, busy, onSettle, onReceive, onChangeToCoupon, find
         </div>
       )}
       {pickFor === 'change' && change > 0 && <CouponCandidates candidates={candidates} customerName={o.customerName} busy={busy} onPick={onChangeToCoupon} />}
+      {(o.refundCash > 0 || o.refundTransfer > 0) && (
+        <div className="memo pay-note">↩ 돌려줌{o.refundCash > 0 && ` · 현금 ${won(o.refundCash)}`}{o.refundTransfer > 0 && ` · 계좌이체 ${won(o.refundTransfer)}`}</div>
+      )}
       {o.memo && <div className="memo">📝 {o.memo}</div>}
       {o.editedAt && (
         <div className="edited">
@@ -227,10 +233,11 @@ function OrderCard({ order: o, busy, onSettle, onReceive, onChangeToCoupon, find
       )}
       {refund > 0 && (
         <div className="settle">
-          <span className="grow">💸 {won(refund)} 돌려주기</span>
-          <button className="btn" disabled={busy} onClick={() => onSettle(null)}>현금으로 줬어요</button>
+          <span className="grow">💸 {won(refund)} 돌려주기 — 어떻게 돌려줬나요?</span>
+          <button className="btn" disabled={busy} onClick={() => onSettle('CASH')}>현금으로 줬어요</button>
+          <button className="btn" disabled={busy} onClick={() => onSettle('TRANSFER')}>계좌이체로 보냈어요</button>
           <button className="btn" disabled={busy} onClick={() => void refundToCoupon()}>쿠폰에 넣기</button>
-          {pickFor === 'settle' && <CouponCandidates candidates={candidates} customerName={o.customerName} busy={busy} onPick={onSettle} />}
+          {pickFor === 'settle' && <CouponCandidates candidates={candidates} customerName={o.customerName} busy={busy} onPick={(id) => onSettle('COUPON', id)} />}
         </div>
       )}
       {cancelling && (
@@ -244,14 +251,15 @@ function OrderCard({ order: o, busy, onSettle, onReceive, onChangeToCoupon, find
           </span>
           {paid > 0 ? (
             <>
-              <button className="btn danger" disabled={busy} onClick={() => onCancel(null)}>현금으로 돌려주고 취소</button>
+              <button className="btn danger" disabled={busy} onClick={() => onCancel('CASH')}>현금으로 돌려주고 취소</button>
+              <button className="btn danger" disabled={busy} onClick={() => onCancel('TRANSFER')}>계좌이체로 돌려주고 취소</button>
               <button className="btn danger" disabled={busy} onClick={() => void pickCoupon('cancel')}>쿠폰에 넣고 취소</button>
             </>
           ) : (
-            <button className="btn danger" disabled={busy} onClick={() => onCancel(null)}>취소 확정</button>
+            <button className="btn danger" disabled={busy} onClick={() => onCancel('CASH')}>취소 확정</button>
           )}
           <button className="btn ghost" onClick={() => { setCancelling(false); setCandidates(null) }}>취소 안 함</button>
-          {pickFor === 'cancel' && <CouponCandidates candidates={candidates} customerName={o.customerName} busy={busy} onPick={onCancel} />}
+          {pickFor === 'cancel' && <CouponCandidates candidates={candidates} customerName={o.customerName} busy={busy} onPick={(id) => onCancel('COUPON', id)} />}
         </div>
       )}
       {refund === 0 && extra > 0 && (

@@ -214,7 +214,9 @@ public class OrderService {
 		if (existing.cashGiven() != null) {
 			// 손님 현금은 바구니에 있고 거스름돈은 완료 때 준다. 늘어난 몫은 (아직 쿠폰에 안 넣은) 거스름돈에서 먼저 제하고,
 			// 낸 돈을 넘는 만큼만 "더 받을 돈"이 된다. 줄어들면 거스름돈이 커질 뿐 돌려줄 돈은 없다.
-			orderRepository.setSettledCash(orderId, Math.min(cash, existing.cashGiven() - existing.changeCredited()));
+			// 손에 있는 현금 = 낸 돈 − 쿠폰에 넣은 잔돈 − 이미 준 거스름돈 (완료 때 거스름돈은 확정된다)
+			int inHand = existing.cashGiven() - existing.changeCredited() - existing.changePaid();
+			orderRepository.setSettledCash(orderId, Math.min(cash, inHand));
 		}
 
 		OrderView updated = orderRepository.findById(orderId).orElseThrow();
@@ -292,7 +294,8 @@ public class OrderService {
 
 	/**
 	 * 스태프가 차액을 처리한 뒤 누른다.
-	 * 돌려줄 돈: couponId 를 주면 현금 대신 그 쿠폰 잔액에 넣는다 (쿠폰 주문이면 그 쿠폰이어야 함).
+	 * 돌려줄 돈: method 로 현금/계좌이체/쿠폰 중 어떻게 돌려줬는지 고른다 (기본 현금). 쿠폰이면 couponId 의 잔액에 넣는다
+	 *   (쿠폰 주문이면 그 쿠폰이어야 함). 현금/이체는 주문에 돌려준 돈으로 남아 매출에서 볼 수 있다.
 	 * 더 받을 돈: method 로 현금/계좌이체/쿠폰 중 어떻게 받았는지 고른다. 쿠폰이면 couponId 의 잔액에서 빼고
 	 *   주문에 쿠폰 사용액으로 붙는다 (현금 주문이라도). method 가 없으면 원래 수단 칸 그대로 받은 것으로.
 	 */
@@ -302,13 +305,7 @@ public class OrderService {
 		int refund = refundDue(order);
 		int extra = extraDue(order);
 		if (refund > 0) {
-			if (couponId != null) {
-				if (order.couponId() != null && !order.couponId().equals(couponId)) {
-					throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
-				}
-				couponService.require(couponId);
-				couponService.refundForOrder(couponId, refund, false, orderId);
-			}
+			refundTo(order, refund, couponId != null ? PayMethod.COUPON : method, couponId);
 		}
 		else if (extra > 0 && method != null) {
 			int cash = order.settledCash();
@@ -347,12 +344,35 @@ public class OrderService {
 		events.broadcastOrdersChanged();
 	}
 
+	/** 돌려줄 돈을 어떻게 돌려줬는지 기록한다. 쿠폰이면 잔액에 넣고, 현금/이체면 주문에 남긴다. */
+	private void refundTo(OrderView order, int amount, PayMethod method, Long couponId) {
+		PayMethod how = method == null ? PayMethod.CASH : method;
+		switch (how) {
+			case COUPON -> {
+				if (couponId == null) {
+					throw new BusinessException("어느 쿠폰에 넣을지 골라 주세요.");
+				}
+				if (order.couponId() != null && !order.couponId().equals(couponId)) {
+					throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
+				}
+				couponService.require(couponId);
+				couponService.refundForOrder(couponId, amount, false, order.id());
+			}
+			case CASH, TRANSFER -> orderRepository.addRefund(order.id(), how, amount);
+			default -> throw new BusinessException("돌려주는 방법을 확인해 주세요.");
+		}
+	}
+
 	/** 수정으로 돌려줄 돈/더 받을 돈이 남아 있으면 먼저 정산해야 완료할 수 있다 (돈 계산이 틀어지지 않게). */
 	@Transactional
 	public void complete(long orderId) {
 		OrderView order = requirePending(orderId);
 		if (order.cashAmount() != order.settledCash() || order.transferAmount() != order.settledTransfer()) {
 			throw new BusinessException("돌려줄 돈이나 더 받을 돈이 남아 있습니다. 먼저 정산 버튼을 눌러 주세요.");
+		}
+		// 음료와 함께 거스름돈을 준다 — 이 시점의 거스름돈은 확정. 되돌려서 고치면 그 뒤 차액만 주고받는다
+		if (order.changeDue() > 0) {
+			orderRepository.addChangePaid(orderId, order.changeDue());
 		}
 		orderRepository.markDone(orderId);
 		events.broadcastOrdersChanged();
@@ -374,7 +394,7 @@ public class OrderService {
 	 * refundToCouponId 를 주면 그 쿠폰 잔액에 넣는다 (쿠폰 주문이면 그 쿠폰이어야 한다).
 	 */
 	@Transactional
-	public void cancel(long orderId, Long refundToCouponId) {
+	public void cancel(long orderId, Long refundToCouponId, PayMethod refundMethod) {
 		OrderView order = require(orderId);
 		if (order.status() == Status.CANCELED) {
 			return;
@@ -383,12 +403,8 @@ public class OrderService {
 			couponService.refundForOrder(order.couponId(), order.couponAmount(), order.freeAmount() > 0, orderId);
 		}
 		int received = order.settledCash() + order.settledTransfer();
-		if (refundToCouponId != null && received > 0) {
-			if (order.couponId() != null && !order.couponId().equals(refundToCouponId)) {
-				throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
-			}
-			couponService.require(refundToCouponId);
-			couponService.refundForOrder(refundToCouponId, received, false, orderId);
+		if (received > 0) {
+			refundTo(order, received, refundToCouponId != null ? PayMethod.COUPON : refundMethod, refundToCouponId);
 		}
 		orderRepository.markCanceled(orderId); // 받은 돈(settled)도 0 으로 — 돌려준 것으로 본다
 		events.broadcastOrdersChanged();
