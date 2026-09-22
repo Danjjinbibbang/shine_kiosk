@@ -45,9 +45,13 @@ DB 파일은 `./data/kiosk.db` 에 자동 생성된다. 스키마는 매 기동�
 E2E 는 태블릿(800×1333)과 폰(412×915) 뷰포트로 돈다. 실패하면 `client/test-results/` 에 스크린샷이 남는다.
 
 ```sh
-# 통합 시나리오 (34 케이스): 실제 jar 에 API 로 주문→처리→쿠폰→매출을 이어서 검사. 반드시 빈 DB 로 띄운 서버에
+# 통합 시나리오 (47 케이스): 실제 jar 에 API 로 주문→처리→쿠폰→매출을 이어서 검사. 반드시 빈 DB 로 띄운 서버에
 KIOSK_PORT=8092 KIOSK_DB=/tmp/it/kiosk.db KIOSK_STAFF_PIN=1234 java -jar server/build/libs/kiosk-server.jar &
 python tools/integration.py http://localhost:8092 1234
+
+# 업데이트 시나리오: 옛 릴리스 jar 로 데이터를 만든 DB 에 새 jar 를 올려 마이그레이션 검사 (태블릿 업데이트 전에)
+gh release download v0.1.1 -p kiosk-server.jar -D /tmp/old
+python tools/migration_test.py /tmp/old/kiosk-server.jar server/build/libs/kiosk-server.jar /tmp/migwork
 ```
 
 ## 설정 (PIN, 계좌)
