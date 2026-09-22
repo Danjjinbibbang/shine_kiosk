@@ -66,6 +66,7 @@ class CouponApiTests extends ApiTestSupport {
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "123")).message()).contains("휴대폰 번호 형식");
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "02-123-4567")).message()).contains("휴대폰 번호 형식");
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "010-1234-56789")).message()).contains("휴대폰 번호 형식");
+		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 20000, "phone", "010-123-4567")).message()).as("10자리는 거부").contains("휴대폰 번호 형식");
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 0, "phone", "01011112222")).status()).isEqualTo(400);
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이영희", "amount", 30001, "phone", "01011112222")).message()).contains("30,000원까지");
 		assertThat(staffPost("/api/staff/coupons", Map.of("name", "이십일자가넘어가는아주긴이름을가진사람입니다요", "amount", 20000, "phone", "01011112222")).message()).contains("20자까지");

@@ -121,7 +121,7 @@ test.describe('결제 흐름', () => {
   test('계좌이체 · 배달(식당): 계좌 표시 → 보냈어요 → 직접 입력 → 완료', async ({ page, request }) => {
     const name = uniq('이체')
     await toReceiveStep(page, [['바닐라라떼', 'HOT', 1]]) // 2,500원
-    await page.getByRole('button', { name: /갖다 주세요/ }).click()
+    await page.getByRole('button', { name: /배달/ }).click()
     await expect(page.getByText('배달은 1층만')).toBeVisible({ timeout: 1000 }).catch(() => {}) // 이미 넘어갔을 수 있음
     await expect(page.getByRole('heading', { name: '어디로 갖다 드릴까요?' })).toBeVisible()
     await expect(page.getByRole('button', { name: /^2층/ })).toHaveCount(0)
@@ -150,7 +150,7 @@ test.describe('결제 흐름', () => {
     await expect(page.getByRole('heading', { name: '이름을 골라 주세요' })).toBeVisible({ timeout: 15_000 })
   })
 
-  test('쿠폰: 이름으로 조회, 동명이인만 뒤 4자리 → 무료 1잔 토글 → 결제 (이름 화면 건너뜀)', async ({ page, request }) => {
+  test('쿠폰: 이름으로 조회, 동명이인이면 번호 목록에서 고르기 → 무료 1잔 토글 → 결제 (이름 화면 건너뜀)', async ({ page, request }) => {
     const name = uniq('쿠폰')
     await registerCoupon(request, name, 20000, '01000001111')  // 잔액 20,000 / 무료 1잔
     await registerCoupon(request, name, 500, '01000004321')    // 동명이인
@@ -160,14 +160,14 @@ test.describe('결제 흐름', () => {
     await page.getByRole('button', { name: /쿠폰/ }).click()
     await expect(page.getByRole('heading', { name: '쿠폰' })).toBeVisible()
 
-    // 없는 이름은 바로 오류, 동명이인일 때만 번호를 묻는다
+    // 없는 이름은 바로 오류, 동명이인일 때만 번호 목록이 뜬다 (키패드 없음)
     await kioskCouponLookup(page, '없는사람')
     await expect(page.locator('.error')).toContainText('쿠폰이 없습니다')
-    await kioskCouponLookup(page, name, '9999')
-    await expect(page.locator('.error')).toContainText('9999')
-    await page.getByRole('button', { name: '⌫' }).click({ clickCount: 4 })
-    for (const k of '4321') await page.getByRole('button', { name: k, exact: true }).click()
-    await page.getByRole('button', { name: '확인' }).click()
+    await kioskCouponLookup(page, name)
+    await expect(page.getByText('본인 전화번호를 골라 주세요')).toBeVisible()
+    await expect(page.getByRole('button', { name: /010-\*\*\*\*-/ })).toHaveCount(2)
+    await expect(page.getByRole('button', { name: '⌫' })).toHaveCount(0)
+    await page.getByRole('button', { name: '010-****-4321' }).click()
 
     // 동명이인 중 4321 쪽(잔액 500, 무료 없음) → 잔액 부족 화면
     await expect(page.locator('.total-box .amount')).toHaveText('500원')

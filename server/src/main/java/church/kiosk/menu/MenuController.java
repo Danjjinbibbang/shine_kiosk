@@ -15,7 +15,10 @@ public class MenuController {
 	private final MenuRepository menuRepository;
 	private final MenuOptionRepository optionRepository;
 
-	public MenuController(MenuRepository menuRepository, MenuOptionRepository optionRepository) {
+	private final MenuCategoryRepository categoryRepository;
+
+	public MenuController(MenuRepository menuRepository, MenuOptionRepository optionRepository, MenuCategoryRepository categoryRepository) {
+		this.categoryRepository = categoryRepository;
 		this.menuRepository = menuRepository;
 		this.optionRepository = optionRepository;
 	}
@@ -23,6 +26,12 @@ public class MenuController {
 	@GetMapping
 	public List<ItemView> menu() {
 		return menuRepository.findAvailableMenu();
+	}
+
+	/** 키오스크 상단 탭. 설정 > 카테고리 순서 그대로, 메뉴가 아직 없어도 뜬다. */
+	@GetMapping("/categories")
+	public List<String> categories() {
+		return categoryRepository.findAll().stream().map(MenuCategoryRepository.Category::name).toList();
 	}
 
 	/** 잔 단위 옵션(샷 추가, 연하게). 각 옵션의 category 와 같은 메뉴에만 붙는다. */

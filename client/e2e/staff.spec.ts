@@ -315,10 +315,10 @@ test.describe('설정 · 메뉴 관리', () => {
     expect(created.variants.map((v) => v.label)).toEqual(['ICE', 'HOT'])
 
     // 품절
-    await card.getByRole('button', { name: '판매중' }).click()
-    await expect(card.getByRole('button', { name: '품절' })).toBeVisible()
+    await card.getByRole('switch', { name: '판매중' }).click()
+    await expect(card.getByRole('switch', { name: '품절' })).toBeVisible()
     expect((await menu()).some((m) => m.name === name)).toBe(false)
-    await card.getByRole('button', { name: '품절' }).click()
+    await card.getByRole('switch', { name: '품절' }).click()
     expect((await menu()).some((m) => m.name === name)).toBe(true)
 
     // 가격 수정 + HOT 삭제
@@ -417,8 +417,8 @@ test.describe('설정 · 배달 장소', () => {
     const floors = async () => ((await (await request.get('/api/places')).json()) as Array<{ floor: number; places: Array<{ name: string }> }>)
     expect((await floors()).map((f) => f.floor)).toEqual([1, 2])
 
-    await card.getByRole('button', { name: '표시중' }).click()
-    await expect(card.getByRole('button', { name: '숨김' })).toBeVisible()
+    await card.getByRole('switch', { name: '표시중' }).click()
+    await expect(card.getByRole('switch', { name: '숨김' })).toBeVisible()
     expect((await floors()).map((f) => f.floor)).toEqual([1])
 
     page.once('dialog', (d) => d.accept())
@@ -468,8 +468,8 @@ test.describe('옵션', () => {
     const options = async () => (await (await request.get('/api/menu/options')).json()) as Array<{ name: string; category: string }>
     expect((await options()).find((o) => o.name === name)?.category).toBe('논커피')
 
-    await card.getByRole('button', { name: '사용중' }).click()
-    await expect(card.getByRole('button', { name: '숨김' })).toBeVisible()
+    await card.getByRole('switch', { name: '사용중' }).click()
+    await expect(card.getByRole('switch', { name: '숨김' })).toBeVisible()
     expect((await options()).some((o) => o.name === name)).toBe(false)
 
     page.once('dialog', (d) => d.accept())
@@ -540,7 +540,7 @@ test.describe('기록', () => {
       page.waitForEvent('download'),
       page.getByRole('button', { name: /백업 내려받기/ }).click(),
     ])
-    expect(backup.suggestedFilename()).toMatch(/^kiosk-backup-\d{4}-\d{2}-\d{2}\.db$/)
+    expect(backup.suggestedFilename()).toMatch(/^kiosk-backup-\d{4}-\d{2}-\d{2}\.zip$/)
 
     await today.locator('.day-head').click()
     await expect(today).not.toHaveClass(/open/)

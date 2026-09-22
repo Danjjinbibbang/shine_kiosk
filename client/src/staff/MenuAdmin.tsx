@@ -3,6 +3,7 @@ import { api, ApiError } from '../shared/api'
 import { RULES, isPrice } from '../shared/rules'
 import type { AdminItem, AdminVariant, SaveItemRequest } from '../shared/types'
 import { won } from '../shared/types'
+import { Switch } from '../shared/Switch'
 
 /**
  * 메뉴 관리. 자주 쓰는 건 품절 토글이라 목록에서 바로 되게 하고,
@@ -57,10 +58,8 @@ export function MenuAdmin({ onToast, categories }: { onToast: (msg: string) => v
                 {item.variants.map((v) => `${v.label ?? ''} ${won(v.price)}${v.available ? '' : ' (품절)'}`.trim()).join(' · ')}
               </div>
             </div>
-            <button className={'btn toggle' + (item.available ? ' on' : '')} disabled={busy}
-              onClick={() => void run(() => api.setMenuAvailable(item.id, !item.available), item.available ? `${item.name} 품절` : `${item.name} 판매중`)}>
-              {item.available ? '판매중' : '품절'}
-            </button>
+            <Switch on={item.available} onLabel="판매중" offLabel="품절" disabled={busy}
+              onChange={(next) => void run(() => api.setMenuAvailable(item.id, next), next ? `${item.name} 판매중` : `${item.name} 품절`)} />
           </div>
           <div className="row admin-actions">
             <button className="btn" disabled={busy || idx === 0} onClick={() => move(idx, -1)} aria-label="위로">↑</button>
@@ -166,9 +165,7 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
                   onChange={(e) => setVariant(i, { label: e.target.value })} />
                 <input className="text-input price" inputMode="numeric" placeholder="가격" value={v.price || ''} maxLength={6}
                   onChange={(e) => setVariant(i, { price: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })} />
-                <button className={'btn toggle small' + (v.available ? ' on' : '')} onClick={() => setVariant(i, { available: !v.available })}>
-                  {v.available ? '판매' : '품절'}
-                </button>
+                <Switch small on={v.available} onLabel="판매" offLabel="품절" onChange={(next) => setVariant(i, { available: next })} />
                 <button className="btn ghost" disabled={variants.length === 1} aria-label="선택지 삭제"
                   onClick={() => setVariants((vs) => vs.filter((_, k) => k !== i))}>✕</button>
               </div>
@@ -182,10 +179,7 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
         </div>
 
         <div className="field">
-          <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
-            <input type="checkbox" checked={available} onChange={(e) => setAvailable(e.target.checked)} style={{ width: 22, height: 22 }} />
-            <span style={{ color: 'var(--ink)', fontSize: 16 }}>판매중</span>
-          </label>
+          <Switch on={available} onLabel="판매중" offLabel="품절 (고객 메뉴에서 숨김)" onChange={setAvailable} />
         </div>
 
         <button className="btn big primary" disabled={busy || !valid} onClick={() => void save()}>

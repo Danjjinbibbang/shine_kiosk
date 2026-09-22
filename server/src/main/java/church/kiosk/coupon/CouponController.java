@@ -36,13 +36,17 @@ public class CouponController {
 	public record AdjustRequest(@Min(value = 0, message = "잔액은 0원 이상이어야 합니다.") int balance,
 								 @Min(value = 0, message = "무료잔 개수는 0 이상이어야 합니다.") int freeDrinks) {}
 
+	/** 동명이인 후보. 고객이 고르는 데 필요한 뒤 4자리만. */
+	public record Candidate(long id, String phoneLast4) {}
+
 	/** 고객 화면용 조회 결과. 전체 번호는 내려주지 않는다. */
-	public record PublicLookup(CouponService.LookupStatus status, Coupon.PublicView coupon, int candidateCount) {}
+	public record PublicLookup(CouponService.LookupStatus status, Coupon.PublicView coupon, int candidateCount, List<Candidate> candidates) {}
 
 	@PostMapping("/api/coupons/lookup")
 	public PublicLookup lookup(@RequestBody @jakarta.validation.Valid LookupRequest request) {
 		LookupResult r = couponService.lookup(request.name(), request.phoneLast4());
-		return new PublicLookup(r.status(), r.coupon() == null ? null : r.coupon().toPublic(), r.candidateCount());
+		return new PublicLookup(r.status(), r.coupon() == null ? null : r.coupon().toPublic(), r.candidateCount(),
+				r.candidates().stream().map(c -> new Candidate(c.id(), c.phoneLast4())).toList());
 	}
 
 	/** 스태프 화면용 조회. 전체 번호 포함. */

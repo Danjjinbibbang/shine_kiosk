@@ -23,6 +23,12 @@ public class CouponRepository {
 				rs.getInt("balance"), rs.getInt("free_drinks"));
 	}
 
+	public List<Coupon> findAll() {
+		return jdbc.sql("SELECT id, name, phone, balance, free_drinks FROM coupon ORDER BY name, id")
+				.query(CouponRepository::map)
+				.list();
+	}
+
 	public List<Coupon> findByName(String name) {
 		return jdbc.sql("SELECT id, name, phone, balance, free_drinks FROM coupon WHERE name = :name ORDER BY id")
 				.param("name", name)

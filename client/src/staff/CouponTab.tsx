@@ -120,7 +120,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
       <div className="card">
         <div className="field">
           <label>이름</label>
-          <input className="text-input" value={name} maxLength={RULES.nameMax} onChange={(e) => { setName(e.target.value); setCandidates(null); setCoupon(null) }}
+          <input className="text-input" value={name} maxLength={RULES.nameMax} onChange={(e) => { setName(e.target.value); setPhone(''); setCandidates(null); setCoupon(null) }}
             onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void lookup() }} placeholder="쿠폰 주인 이름" />
         </div>
         <div className="field">
@@ -128,7 +128,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
           <input className="text-input" inputMode="tel" placeholder="010-0000-0000" value={phone} maxLength={13}
             onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
             onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) void lookup() }} />
-          {phone && digits.length >= 10 && !phoneValid && <div className="error" style={{ fontSize: 13 }}>휴대폰 번호 형식이 아니에요 (010-1234-5678)</div>}
+          {digits.length > 4 && !phoneValid && <div className="error" style={{ fontSize: 13 }}>휴대폰 번호 13자리를 다 넣어 주세요 (010-1234-5678) · 지금 {digits.length}/11 숫자</div>}
         </div>
         <div className="row">
           <button className="btn primary grow" disabled={busy || !name.trim()} onClick={() => void lookup()}>조회</button>
@@ -251,7 +251,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
         <div className="card">
           <b style={{ fontSize: 18 }}>"{name.trim()}"{last4.length === 4 && ` (${last4})`} 쿠폰이 없습니다. 새로 등록할까요?</b>
           {!phoneValid && (
-            <div className="error" style={{ fontSize: 14 }}>위 전화번호 칸에 휴대폰 번호(010-1234-5678)를 넣어야 등록할 수 있어요.</div>
+            <div className="error" style={{ fontSize: 14 }}>위 전화번호 칸에 휴대폰 번호 13자리(010-1234-5678)를 다 넣어야 등록할 수 있어요. 문자를 보내려면 번호가 정확해야 해요.</div>
           )}
           <div className="muted" style={{ fontSize: 14 }}>{tierHint(preset)}</div>
           <AmountPicker preset={preset} amount={amount} onAmount={setAmount} busy={busy || !phoneValid}

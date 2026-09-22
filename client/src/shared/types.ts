@@ -118,6 +118,8 @@ export interface LookupResult {
   status: LookupStatus
   coupon: Coupon | null
   candidateCount: number
+  /** 동명이인일 때 고를 후보 (뒤 4자리만) */
+  candidates?: { id: number; phoneLast4: string | null }[]
 }
 
 export interface LineRequest {

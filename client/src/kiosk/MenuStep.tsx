@@ -18,11 +18,13 @@ interface Props {
  */
 export function MenuStep({ cart, total, onChange, onNext }: Props) {
   const [menu, setMenu] = useState<MenuItem[] | null>(null)
+  const [categoryList, setCategoryList] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<string | null>(null) // 선택한 카테고리. 서버가 준 순서의 첫 카테고리가 기본
 
   useEffect(() => {
     api.menu().then(setMenu).catch((e) => setError(e.message))
+    api.menuCategories().then(setCategoryList).catch(() => {})
   }, [])
 
   // 옵션이 다른 줄까지 합친 수량. (샷 추가 같은 옵션은 장바구니 화면에서 붙인다)
@@ -47,8 +49,8 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
   if (error) return <div className="error">{error}</div>
   if (!menu) return <div className="empty">메뉴를 불러오는 중…</div>
 
-  // 카테고리 탭은 서버(설정 > 카테고리) 순서를 그대로 따른다. 설정에서 늘리면 탭도 늘어난다.
-  const categories = [...new Set(menu.map((m) => m.category))]
+  // 카테고리 탭은 설정 > 카테고리 순서 그대로. 메뉴가 아직 없는 카테고리도 탭은 뜬다 (메뉴가 표에 없는 카테고리를 달고 있으면 뒤에 붙인다)
+  const categories = [...new Set([...categoryList, ...menu.map((m) => m.category)])]
   const active = tab && categories.includes(tab) ? tab : categories[0]
   const inCart = (cat: string) => cart.filter((l) => l.category === cat).reduce((s, l) => s + l.qty, 0)
 
@@ -63,6 +65,7 @@ export function MenuStep({ cart, total, onChange, onNext }: Props) {
       </div>
       {categories.filter((cat) => cat === active).map((cat) => (
         <section key={cat}>
+          {menu.every((m) => m.category !== cat) && <div className="empty">지금은 준비된 메뉴가 없어요</div>}
           <div className="menu-grid">
             {menu.filter((m) => m.category === cat).map((item) => (
               <div key={item.id} className="menu-card">

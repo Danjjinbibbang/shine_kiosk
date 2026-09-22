@@ -9,8 +9,8 @@ public final class Validation {
 
 	private Validation() {}
 
-	/** 한국 휴대폰: 010/011/016/017/018/019 + 7~8자리 (숫자만 남긴 상태) */
-	private static final Pattern MOBILE = Pattern.compile("^01[016789][0-9]{7,8}$");
+	/** 한국 휴대폰 11자리: 010/011/016/017/018/019 + 8자리 (숫자만 남긴 상태). 문자를 보내야 하므로 자릿수가 모자라면 거부 */
+	private static final Pattern MOBILE = Pattern.compile("^01[016789][0-9]{8}$");
 
 	public static final int NAME_MAX = 20;       // 손님/쿠폰/옵션/카테고리/장소 이름
 	public static final int MENU_NAME_MAX = 30;
@@ -45,7 +45,7 @@ public final class Validation {
 		String digits = raw == null ? "" : raw.replaceAll("[^0-9]", "");
 		if (digits.isEmpty()) throw new BusinessException("전화번호를 입력해 주세요.");
 		if (!MOBILE.matcher(digits).matches()) {
-			throw new BusinessException("휴대폰 번호 형식이 아닙니다. 예: 010-1234-5678");
+			throw new BusinessException("휴대폰 번호 형식이 아닙니다. 11자리 전부 넣어 주세요. 예: 010-1234-5678");
 		}
 		return digits;
 	}

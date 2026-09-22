@@ -63,6 +63,7 @@ const del = <T>(path: string) => request<T>(path, { method: 'DELETE' })
 // ── 공개 (고객 키오스크) ──────────────────────────────────
 export const api = {
   menu: () => request<MenuItem[]>('/api/menu'),
+  menuCategories: () => request<string[]>('/api/menu/categories'),
   menuOptions: () => request<MenuOption[]>('/api/menu/options'),
   places: () => request<FloorGroup[]>('/api/places'),
   regulars: () => request<string[]>('/api/customers/regulars'),

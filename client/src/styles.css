@@ -185,9 +185,17 @@ input { font: inherit; }
 .admin-cat { font-size: 13px; font-weight: 600; margin-left: 6px; }
 .admin-variants { font-size: 14px; margin-top: 2px; }
 .admin-actions .btn { min-height: 40px; font-size: 15px; padding: 4px 12px; box-shadow: none; }
-.btn.toggle { min-height: 40px; font-size: 14px; padding: 4px 12px; border-radius: 999px; box-shadow: none; color: var(--muted); }
-.btn.toggle.on { background: #e8efe9; color: var(--ok); border-color: var(--ok); }
-.btn.toggle.small { min-height: 46px; font-size: 13px; padding: 4px 8px; flex-shrink: 0; }
+.switch { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 6px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+.switch:disabled { opacity: .5; cursor: default; }
+.switch-track { position: relative; width: 50px; height: 30px; border-radius: 999px; background: #c9c4bb; transition: background .15s; flex-shrink: 0; }
+.switch-knob { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
+.switch.on { color: var(--ok); }
+.switch.on .switch-track { background: var(--ok); }
+.switch.on .switch-knob { left: 23px; }
+.switch.small .switch-track { width: 42px; height: 26px; }
+.switch.small .switch-knob { width: 20px; height: 20px; }
+.switch.small.on .switch-knob { left: 19px; }
+.switch.small { font-size: 13px; gap: 4px; }
 .variant-edit .text-input { min-height: 46px; font-size: 17px; padding: 6px 10px; }
 .variant-edit .text-input.price { width: 110px; flex-shrink: 0; }
 .variant-edit .btn.ghost { min-height: 46px; padding: 0 8px; }

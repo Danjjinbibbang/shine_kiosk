@@ -3,6 +3,7 @@ import { api, ApiError } from '../shared/api'
 import { RULES, isPrice } from '../shared/rules'
 import type { AdminOption } from '../shared/types'
 import { won } from '../shared/types'
+import { Switch } from '../shared/Switch'
 
 /** 잔 단위 옵션 관리 (샷 추가 +500, 연하게). 카테고리가 같은 메뉴에만 붙는다. */
 export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) => void; categories: string[] }) {
@@ -93,10 +94,8 @@ export function OptionAdmin({ onToast, categories }: { onToast: (msg: string) =>
                 <div className="muted admin-variants">{o.price > 0 ? `+${won(o.price)}` : '추가 금액 없음'}{o.group && ` · 그룹 ${o.group}`}</div>
               </div>
             )}
-            <button className={'btn toggle' + (o.available ? ' on' : '')} disabled={busy}
-              onClick={() => void run(() => api.updateOption(o.id, { name: o.name, price: o.price, category: o.category, group: o.group, available: !o.available }), o.available ? `${o.name} 숨김` : `${o.name} 사용`)}>
-              {o.available ? '사용중' : '숨김'}
-            </button>
+            <Switch on={o.available} onLabel="사용중" offLabel="숨김" disabled={busy}
+              onChange={(next) => void run(() => api.updateOption(o.id, { name: o.name, price: o.price, category: o.category, group: o.group, available: next }), next ? `${o.name} 사용` : `${o.name} 숨김`)} />
           </div>
           <div className="row admin-actions">
             <span className="grow" />

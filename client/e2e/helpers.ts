@@ -104,9 +104,8 @@ export async function kioskCouponLookup(page: Page, name: string, last4?: string
   await page.getByPlaceholder('이름').fill(name)
   await page.getByRole('button', { name: '쿠폰 조회' }).click()
   if (last4) {
-    await expect(page.getByText('전화번호 뒤 4자리를 눌러 주세요')).toBeVisible()
-    for (const k of last4) await page.getByRole('button', { name: k, exact: true }).click()
-    await page.getByRole('button', { name: '확인' }).click()
+    await expect(page.getByText('본인 전화번호를 골라 주세요')).toBeVisible()
+    await page.getByRole('button', { name: `010-****-${last4}` }).click()
   }
 }
 

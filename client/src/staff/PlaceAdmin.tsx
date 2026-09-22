@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
 import { RULES } from '../shared/rules'
 import type { AdminPlace } from '../shared/types'
+import { Switch } from '../shared/Switch'
 
 /** 배달 장소 관리. 층 + 이름. 지난 주문이 참조하는 장소는 삭제 대신 숨겨진다. */
 export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
@@ -72,10 +73,8 @@ export function PlaceAdmin({ onToast }: { onToast: (msg: string) => void }) {
             ) : (
               <div className="admin-name">{p.floor}층 {p.name}</div>
             )}
-            <button className={'btn toggle' + (p.active ? ' on' : '')} disabled={busy}
-              onClick={() => void run(() => api.updatePlace(p.id, { floor: p.floor, name: p.name, active: !p.active }), p.active ? `${p.name} 숨김` : `${p.name} 표시`)}>
-              {p.active ? '표시중' : '숨김'}
-            </button>
+            <Switch on={p.active} onLabel="표시중" offLabel="숨김" disabled={busy}
+              onChange={(next) => void run(() => api.updatePlace(p.id, { floor: p.floor, name: p.name, active: next }), next ? `${p.name} 표시` : `${p.name} 숨김`)} />
           </div>
           <div className="row admin-actions">
             <span className="grow" />

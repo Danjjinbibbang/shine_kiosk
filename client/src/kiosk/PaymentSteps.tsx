@@ -51,8 +51,7 @@ interface CouponProps {
  */
 export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
   const [name, setName] = useState<string | null>(null)
-  const [needPhone, setNeedPhone] = useState(false)
-  const [phone, setPhone] = useState('')
+  const [candidates, setCandidates] = useState<{ id: number; phoneLast4: string | null }[] | null>(null)
   const [coupon, setCoupon] = useState<Coupon | null>(null)
   const [preview, setPreview] = useState<CouponPreview | null>(null)
   const [useFree, setUseFree] = useState(false)
@@ -87,10 +86,9 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
     try {
       const r = await api.lookupCoupon(n, phoneLast4)
       if (r.status === 'NEED_PHONE') {
-        // 같은 이름이 여럿일 때만 번호 뒤 4자리로 구분한다
+        // 같은 이름이 여럿이면 번호를 치게 하지 않고, 뒤 4자리 목록에서 자기 것을 고른다
         setName(n)
-        setPhone('')
-        setNeedPhone(true)
+        setCandidates(r.candidates ?? [])
         return
       }
       if (r.status !== 'FOUND' || !r.coupon) {
@@ -168,19 +166,20 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
     )
   }
 
-  if (needPhone && name) {
+  if (candidates && name) {
     return (
       <div className="stack">
         {error && <div className="error">{error}</div>}
-        <div className="muted center">"{name}" 이름이 여러 분 계십니다. 전화번호 뒤 4자리를 눌러 주세요.</div>
-        <div className="center" style={{ fontSize: 40, fontWeight: 900, letterSpacing: 12, minHeight: 56 }}>
-          {phone.padEnd(4, '·')}
+        <div className="muted center">"{name}" 이름의 쿠폰이 {candidates.length}개 있어요. 본인 전화번호를 골라 주세요.</div>
+        <div className="stack">
+          {candidates.map((c) => (
+            <button key={c.id} className="btn huge" disabled={busy} onClick={() => void lookup(name, c.phoneLast4 ?? '')}>
+              📱 010-****-{c.phoneLast4 ?? '????'}
+            </button>
+          ))}
         </div>
-        <Keypad value={phone} maxLength={4} onChange={setPhone} />
         <div className="kiosk-foot">
-          <button className="btn big" onClick={() => { setNeedPhone(false); setError(null) }}>‹ 다른 이름</button>
-          <button className="btn big primary" disabled={busy || phone.length !== 4}
-            onClick={() => void lookup(name, phone)}>확인</button>
+          <button className="btn big" onClick={() => { setCandidates(null); setError(null) }}>‹ 다른 이름</button>
         </div>
       </div>
     )

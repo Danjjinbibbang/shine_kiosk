@@ -15,13 +15,13 @@ import java.util.Optional;
 @Service
 public class CouponService {
 
-	/** 이름으로 조회한 결과. 동명이인이면 전화번호 뒤 4자리를 되묻는다. */
+	/** 이름으로 조회한 결과. 동명이인이면 후보를 돌려주고 고객이 자기 번호(뒤 4자리)를 고른다. */
 	public enum LookupStatus { FOUND, NOT_FOUND, NEED_PHONE }
 
-	public record LookupResult(LookupStatus status, Coupon coupon, int candidateCount) {
-		static LookupResult found(Coupon c) { return new LookupResult(LookupStatus.FOUND, c, 1); }
-		static LookupResult notFound() { return new LookupResult(LookupStatus.NOT_FOUND, null, 0); }
-		static LookupResult needPhone(int count) { return new LookupResult(LookupStatus.NEED_PHONE, null, count); }
+	public record LookupResult(LookupStatus status, Coupon coupon, int candidateCount, List<Coupon> candidates) {
+		static LookupResult found(Coupon c) { return new LookupResult(LookupStatus.FOUND, c, 1, List.of()); }
+		static LookupResult notFound() { return new LookupResult(LookupStatus.NOT_FOUND, null, 0, List.of()); }
+		static LookupResult needPhone(List<Coupon> candidates) { return new LookupResult(LookupStatus.NEED_PHONE, null, candidates.size(), candidates); }
 	}
 
 	private final CouponRepository couponRepository;
@@ -47,7 +47,7 @@ public class CouponService {
 			return LookupResult.found(candidates.get(0));
 		}
 		if (phoneLast4 == null || phoneLast4.isBlank()) {
-			return LookupResult.needPhone(candidates.size());
+			return LookupResult.needPhone(candidates);
 		}
 		Optional<Coupon> matched = candidates.stream()
 				.filter(c -> phoneLast4.equals(c.phoneLast4()))

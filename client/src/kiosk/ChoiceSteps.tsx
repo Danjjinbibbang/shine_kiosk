@@ -8,8 +8,7 @@ export function ReceiveStep({ onSelect }: { onSelect: (t: ReceiveType) => void }
     <div className="stack">
       <button className="btn huge" onClick={() => onSelect('STORE')}>☕ 카페에서 받기</button>
       <button className="btn huge" onClick={() => onSelect('DELIVERY')}>
-        <span>🚶 1층으로 갖다 주세요</span>
-        <small className="btn-hint">배달은 1층만 가능합니다</small>
+        <span>🚶 배달</span>
       </button>
     </div>
   )

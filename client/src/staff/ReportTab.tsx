@@ -47,12 +47,12 @@ export function ReportTab({ onToast }: { onToast: (msg: string) => void }) {
         <button className="btn" style={{ minHeight: 40, fontSize: 14 }} onClick={() => void downloadCsv('/api/staff/reports/days.csv', '매출-일별.csv', onToast)}>
           ⬇ 일별 CSV
         </button>
-        <button className="btn" style={{ minHeight: 40, fontSize: 14 }} title="태블릿이 고장 나도 복구할 수 있게 이 폰에 DB 를 저장"
-          onClick={() => void downloadCsv('/api/staff/reports/backup.db', `kiosk-backup-${localDate()}.db`, onToast)}>
+        <button className="btn" style={{ minHeight: 40, fontSize: 14 }} title="태블릿이 고장 나도 복구할 수 있게 이 폰에 저장"
+          onClick={() => void downloadCsv('/api/staff/reports/backup.zip', `kiosk-backup-${localDate()}.zip`, onToast)}>
           💾 백업 내려받기
         </button>
       </div>
-      <div className="muted" style={{ fontSize: 13 }}>백업은 태블릿에 매일 자동으로도 남지만, 태블릿이 고장 나면 같이 사라집니다. 한 달에 한 번쯤 폰에 내려받아 두세요.</div>
+      <div className="muted" style={{ fontSize: 13 }}>백업은 zip 하나에 복구용 DB 와 바로 볼 수 있는 CSV(쿠폰 잔액 · 일별 매출 · 전체 주문)가 들어 있어요. 폰 파일 앱에서 열립니다. 태블릿에도 매일 자동으로 남지만 태블릿이 고장 나면 같이 사라지니 한 달에 한 번쯤 폰에 내려받아 두세요.</div>
 
       {months.map(([month, list]) => {
         const sum = (f: (d: DayReport) => number) => list.reduce((s, d) => s + f(d), 0)
