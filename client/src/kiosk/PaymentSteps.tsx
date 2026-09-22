@@ -211,8 +211,8 @@ export function cashOptions(total: number): number[] {
   return [...new Set(candidates)].filter((n) => n > total).sort((a, b) => a - b).slice(0, 4)
 }
 
-/** 총액을 보여주고, 낸 돈을 고르면 거스름돈을 계산해 스태프 메모로 남긴다. */
-export function CashStep({ total, onNext }: { total: number; onNext: (memo: string) => void }) {
+/** 총액을 보여주고, 낸 돈을 고른다. 거스름돈 안내는 서버가 낸 돈과 지금 금액으로 계산해 스태프 카드에 보여준다. */
+export function CashStep({ total, onNext }: { total: number; onNext: (cashGiven: number) => void }) {
   const [given, setGiven] = useState<number | null>(null)
   const change = given === null ? 0 : given - total
   const options = cashOptions(total)
@@ -239,7 +239,7 @@ export function CashStep({ total, onNext }: { total: number; onNext: (memo: stri
         </div>
       )}
       <button className="btn huge primary" disabled={given === null}
-        onClick={() => onNext(change > 0 ? `현금 ${won(given!)} 받음 → 거스름돈 ${won(change)}` : `현금 ${won(total)} 딱 맞게`)}>
+        onClick={() => onNext(given!)}>
         다음 ›
       </button>
     </div>

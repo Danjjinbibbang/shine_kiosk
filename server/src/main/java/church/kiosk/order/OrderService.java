@@ -146,7 +146,8 @@ public class OrderService {
 		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
 				place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
-				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), requestId);
+				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), requestId,
+				cashGiven(req.cashGiven(), cash));
 		long orderId = orderRepository.insert(row);
 		orderRepository.insertLines(orderId, priced.lines());
 		if (couponId != null) {
@@ -197,7 +198,7 @@ public class OrderService {
 				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(),
 				existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
-				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), null);
+				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), null, existing.cashGiven());
 		orderRepository.update(orderId, row, describe(existing));
 		orderRepository.deleteLines(orderId);
 		orderRepository.insertLines(orderId, priced.lines());
@@ -219,6 +220,14 @@ public class OrderService {
 			return name + " " + qty;
 		}).toList());
 		return lines + " · " + String.format("%,d", o.totalAmount()) + "원";
+	}
+
+	/** 손님이 낸 현금. 현금을 받는 주문이 아니면 무시하고, 낼 금액보다 적게 냈다고 오면 거부. */
+	private static Integer cashGiven(Integer given, int cashAmount) {
+		if (cashAmount <= 0 || given == null) return null;
+		if (given < cashAmount) throw new BusinessException("낸 현금이 낼 금액보다 적습니다.");
+		if (given > Validation.BALANCE_MAX) throw new BusinessException("낸 현금을 확인해 주세요.");
+		return given;
 	}
 
 	/** 수정으로 돌려줄 돈 (실제 받은 돈 − 지금 금액, 양수만). 돌려주는 건 수단과 상관없이 현금이나 쿠폰으로. */
@@ -277,6 +286,9 @@ public class OrderService {
 				default -> throw new BusinessException("받는 방법을 확인해 주세요.");
 			}
 			orderRepository.updatePayment(orderId, useCoupon, couponAmount, cash, transfer);
+			if (method == PayMethod.CASH) {
+				orderRepository.addCashGiven(orderId, extra); // 거스름돈 안내가 계속 맞도록
+			}
 		}
 		else if (couponId != null) {
 			throw new BusinessException("돌려줄 금액이 없습니다.");

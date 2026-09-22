@@ -35,6 +35,7 @@ public class SchemaMigration {
 			new Column("coupon_tx", "free_delta", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_amount", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("orders", "free_item_name", "TEXT"),
+			new Column("orders", "cash_given", "INTEGER"),
 			new Column("orders", "staff_free_amount", "INTEGER NOT NULL DEFAULT 0"),
 			new Column("order_line", "staff_free_qty", "INTEGER NOT NULL DEFAULT 0")
 	);
@@ -123,6 +124,27 @@ public class SchemaMigration {
 		if (c.table().equals("orders") && c.name().equals("settled_transfer")) {
 			jdbc.sql("UPDATE orders SET settled_transfer = transfer_amount").update();
 		}
+		if (c.table().equals("orders") && c.name().equals("cash_given")) {
+			migrateCashMemos();
+		}
+	}
+
+	/**
+	 * 예전엔 키오스크가 "현금 5,000원 받음 → 거스름돈 1,000원" 같은 글을 memo 에 넣었다.
+	 * 그 글에서 낸 돈을 뽑아 cash_given 에 넣고, 메모는 자유 텍스트만 남긴다.
+	 */
+	private void migrateCashMemos() {
+		java.util.regex.Pattern given = java.util.regex.Pattern.compile("^현금 ([0-9,]+)원 (받음 → 거스름돈 [0-9,]+원|딱 맞게)$");
+		List<java.util.Map<String, Object>> rows = jdbc.sql("SELECT id, memo FROM orders WHERE memo LIKE '현금 %'").query().listOfRows();
+		int n = 0;
+		for (java.util.Map<String, Object> r : rows) {
+			java.util.regex.Matcher m = given.matcher(String.valueOf(r.get("memo")).trim());
+			if (!m.matches()) continue;
+			int amount = Integer.parseInt(m.group(1).replace(",", ""));
+			jdbc.sql("UPDATE orders SET cash_given = :given, memo = NULL WHERE id = :id").param("given", amount).param("id", r.get("id")).update();
+			n++;
+		}
+		if (n > 0) log.info("현금 메모 {}건을 cash_given 으로 옮겼습니다", n);
 	}
 
 	private void addMissingColumns() {

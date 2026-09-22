@@ -60,7 +60,7 @@ s, c2 = call('POST', '/api/staff/coupons', {'name': '박철수', 'amount': 50000
 s, c3 = call('POST', '/api/staff/coupons', {'name': '이영희', 'phoneLast4': '2222', 'amount': 5000}, tok); check(s == 200, '옛 동명이인 쿠폰')
 call('POST', f"/api/staff/coupons/{c2['id']}/charge", {'amount': 15000}, tok)
 def line(v, q=1): return {'variantId': v, 'quantity': q}
-s, o1 = call('POST', '/api/orders', {'customerName': '김현금', 'receiveType': 'STORE', 'payMethod': 'CASH', 'lines': [line(1001, 2)], 'memo': '거스름돈 3,000원'}); check(s == 200, '옛 현금 주문')
+s, o1 = call('POST', '/api/orders', {'customerName': '김현금', 'receiveType': 'STORE', 'payMethod': 'CASH', 'lines': [line(1001, 2)], 'memo': '현금 5,000원 받음 → 거스름돈 3,000원'}); check(s == 200, '옛 현금 주문 (옛 방식 메모)')
 s, o2 = call('POST', '/api/orders', {'customerName': '이영희', 'receiveType': 'DELIVERY', 'placeId': 101, 'payMethod': 'COUPON', 'couponId': c1['id'], 'useFreeDrink': True, 'lines': [line(3002, 1), line(1101, 1)]}); check(s == 200, f'옛 쿠폰 주문(무료 1잔) {o2.get("message")}')
 s, o3 = call('POST', '/api/orders', {'customerName': '김이체', 'receiveType': 'STORE', 'payMethod': 'TRANSFER', 'lines': [line(2001, 1)]}); check(s == 200, '옛 이체 주문')
 call('POST', f"/api/staff/orders/{o3['id']}/done", None, tok)
@@ -121,6 +121,7 @@ s, h = call('GET', f"/api/staff/coupons/{c2['id']}/history", None, tok); check(l
 # 옛 주문 수정/정산/취소가 되는지
 s, u = call('PUT', f"/api/staff/orders/{o1['id']}", {'customerName': '김현금', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(1001, 1)], 'memo': None}, tok)
 check(s == 200 and u['settledCash'] == 2000 and u['cashAmount'] == 1000, f'옛 현금 주문 수정 → 돌려줄 1,000 {u.get("settledCash")}/{u.get("cashAmount")}')
+check(u.get('cashGiven') == 5000 and u.get('payNote') == '현금 5,000원 받음 → 거스름돈 4,000원' and u.get('memo') is None, f'옛 현금 메모가 낸 돈으로 옮겨지고 수정 뒤 거스름돈이 다시 계산됨: {u.get("cashGiven")} / {u.get("payNote")} / memo={u.get("memo")}')
 s, _ = call('POST', f"/api/staff/orders/{o1['id']}/done", None, tok); check(s == 400, '정산 전 완료 불가')
 s, _ = call('POST', f"/api/staff/orders/{o1['id']}/settle", {}, tok); check(s == 200, '현금 정산')
 s, _ = call('POST', f"/api/staff/orders/{o1['id']}/done", None, tok); check(s == 200, '완료')

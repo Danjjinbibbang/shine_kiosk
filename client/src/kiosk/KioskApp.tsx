@@ -22,7 +22,8 @@ export interface Draft {
   coupon?: Coupon
   preview?: CouponPreview
   remainderMethod?: 'CASH' | 'TRANSFER'
-  memo?: string
+  /** 현금으로 낸 돈 (거스름돈 안내용) */
+  cashGiven?: number
   customerName?: string
   /** 이 주문 시도의 요청 번호. 실패해서 다시 눌러도 같은 번호를 보내 중복 접수를 막는다 */
   requestId?: string
@@ -121,7 +122,7 @@ export function KioskApp() {
       useFreeDrink: d.preview?.useFreeDrink ?? false,
       remainderMethod: d.remainderMethod ?? null,
       lines,
-      memo: d.memo ?? null,
+      cashGiven: d.cashGiven ?? null,
     }
     try {
       const created = await api.createOrder(body)
@@ -138,14 +139,14 @@ export function KioskApp() {
 
   // 결제 수단별로 다음 화면이 갈린다.
   const afterPayment = (method: PayMethod) => {
-    update({ payMethod: method, coupon: undefined, preview: undefined, remainderMethod: undefined, memo: undefined })
+    update({ payMethod: method, coupon: undefined, preview: undefined, remainderMethod: undefined, cashGiven: undefined })
     go(method === 'TRANSFER' ? 'transfer' : method === 'COUPON' ? 'coupon' : 'cash')
   }
 
   // 받는 방법까지 정해진 뒤: 낼 돈이 없으면(전부 사역자 무료) 결제 없이 이름만 받는다
   const afterReceive = (extra: Partial<Draft>) => {
     if (total === 0) {
-      update({ ...extra, payMethod: 'NONE', coupon: undefined, preview: undefined, remainderMethod: undefined, memo: undefined })
+      update({ ...extra, payMethod: 'NONE', coupon: undefined, preview: undefined, remainderMethod: undefined, cashGiven: undefined })
       go('name')
     } else {
       update(extra)
@@ -224,7 +225,7 @@ export function KioskApp() {
             }} />
         )}
         {step === 'cash' && (
-          <CashStep total={draft.coupon ? (draft.preview?.remainder ?? total) : total} onNext={(memo) => afterPaid({ memo })} />
+          <CashStep total={draft.coupon ? (draft.preview?.remainder ?? total) : total} onNext={(cashGiven) => afterPaid({ cashGiven })} />
         )}
         {step === 'name' && (
           <NameStep submitting={submitting} onSelect={(name) => void submit(name)} />

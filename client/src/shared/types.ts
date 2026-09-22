@@ -153,6 +153,8 @@ export interface CreateOrderRequest {
   remainderMethod?: PayMethod | null
   lines: LineRequest[]
   memo?: string | null
+  /** 손님이 낸 현금. 거스름돈 안내(payNote)는 서버가 지금 금액 기준으로 계산한다 */
+  cashGiven?: number | null
   /** 키오스크가 만든 요청 번호. 와이파이가 끊겨 다시 보내도 한 번만 접수된다 */
   clientRequestId?: string
 }
@@ -213,6 +215,10 @@ export interface Order {
   /** 실제로 받은 현금/이체. cashAmount - settledCash 가 양수면 더 받을 돈, 음수면 돌려줄 돈 */
   settledCash: number
   settledTransfer: number
+  /** 손님이 낸 현금 (없으면 생략) */
+  cashGiven?: number | null
+  /** "현금 5,000원 받음 → 거스름돈 1,000원" — 수정 뒤에도 지금 금액 기준 (없으면 생략) */
+  payNote?: string | null
   lines: OrderLine[]
 }
 

@@ -28,7 +28,7 @@ test.describe('주문 처리', () => {
     await createOrder(request, {
       customerName: name, receiveType: 'DELIVERY', placeId: 101,
       lines: [{ variantId: 1001, quantity: 2 }, { variantId: 3002, quantity: 1 }],
-      memo: '현금 10,000원 받음 → 거스름돈 5,000원',
+      cashGiven: 10000,
     })
     await staffLogin(page)
 
@@ -38,7 +38,7 @@ test.describe('주문 처리', () => {
     await expect(card.locator('.lines')).toContainText(/아메리카노 ICE\s*×2/)
     await expect(card.locator('.lines')).toContainText(/아이스크림 컵\s*×1/)
     await expect(card.locator('.pay')).toHaveText('현금 5,000원')
-    await expect(card.locator('.memo')).toContainText('거스름돈 5,000원')
+    await expect(card.locator('.pay-note')).toContainText('현금 10,000원 받음 → 거스름돈 5,000원')
 
     await card.getByRole('button', { name: /완료/ }).click()
     await expect(page.locator('.toast')).toContainText(`${name}님 완료`)

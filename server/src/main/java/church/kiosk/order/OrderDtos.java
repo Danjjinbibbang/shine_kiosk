@@ -42,6 +42,8 @@ public final class OrderDtos {
 			PayMethod remainderMethod,
 			@NotEmpty(message = "메뉴를 담아 주세요.") @Valid List<LineRequest> lines,
 			String memo,
+			/** 손님이 낸 현금 (현금 결제일 때). 거스름돈은 서버가 지금 금액 기준으로 계산해 payNote 로 보여준다. */
+			Integer cashGiven,
 			/** 키오스크가 만든 요청 번호. 같은 번호로 다시 오면 새로 만들지 않고 처음 것을 돌려준다. */
 			String clientRequestId) {
 		public boolean wantsFreeDrink() { return Boolean.TRUE.equals(useFreeDrink); }
@@ -87,7 +89,24 @@ public final class OrderDtos {
 							String editedAt, String editNote,
 							/** 실제로 받은 현금/이체. cashAmount - settledCash 가 양수면 더 받을 돈, 음수면 돌려줄 돈 */
 							int settledCash, int settledTransfer,
-							List<LineView> lines) {}
+							/** 손님이 낸 현금. 없으면 null */
+							Integer cashGiven,
+							List<LineView> lines) {
+
+		/** "현금 5,000원 받음 → 거스름돈 1,000원" — 지금 금액 기준이라 수정 뒤에도 맞는다. 현금을 안 냈으면 null */
+		@com.fasterxml.jackson.annotation.JsonProperty
+		public String payNote() {
+			if (cashGiven == null) return null;
+			int change = cashGiven - cashAmount;
+			if (change > 0) return "현금 " + won(cashGiven) + " 받음 → 거스름돈 " + won(change);
+			if (change == 0) return "현금 " + won(cashGiven) + " 딱 맞게";
+			// 낸 돈보다 금액이 커진 경우: 이미 거슬러 준 돈은 빼고, 실제로 아직 못 받은 만큼만
+			int owed = cashAmount - settledCash;
+			return owed > 0 ? "현금 " + won(cashGiven) + " 받음 → " + won(owed) + " 더 받아야" : "현금 " + won(cashGiven) + " 받음";
+		}
+
+		private static String won(int n) { return String.format("%,d원", n); }
+	}
 
 	/** 스태프 화면 상단의 오늘 집계. */
 	public record DailySummary(String date, int orderCount, int totalAmount,

@@ -54,11 +54,25 @@ class OrderApiTests extends ApiTestSupport {
 		}
 
 		@Test
-		@DisplayName("메모(현금 거스름돈 안내)가 저장된다")
+		@DisplayName("낸 현금(cashGiven)으로 거스름돈 안내(payNote)가 계산되고, 메모는 따로 저장된다")
 		void memo() throws Exception {
 			Map<String, Object> body = new HashMap<>(cashOrder("박민수", line(PEACH_TEA, 1)));
-			body.put("memo", "현금 5,000원 받음 → 거스름돈 3,000원");
-			assertThat(createOrder(body).<String>read("$.memo")).isEqualTo("현금 5,000원 받음 → 거스름돈 3,000원");
+			body.put("memo", "얼음 적게");
+			body.put("cashGiven", 5000);
+			Response r = createOrder(body);
+			assertThat(r.<String>read("$.memo")).isEqualTo("얼음 적게");
+			assertThat(r.<Integer>read("$.cashGiven")).isEqualTo(5000);
+			assertThat(r.<String>read("$.payNote")).isEqualTo("현금 5,000원 받음 → 거스름돈 3,000원");
+			Map<String, Object> exact = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 2)));
+			exact.put("cashGiven", 2000);
+			assertThat(createOrder(exact).<String>read("$.payNote")).isEqualTo("현금 2,000원 딱 맞게");
+			Map<String, Object> less = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 2)));
+			less.put("cashGiven", 1000);
+			assertThat(createOrder(less).status()).isEqualTo(400);
+			// 이체 주문엔 낸 현금이 없다
+			Map<String, Object> t = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
+			t.put("payMethod", "TRANSFER"); t.put("cashGiven", 5000);
+			assertThat(createOrder(t).body()).doesNotContain("payNote");
 			body.put("memo", "   ");
 			assertThat(createOrder(body).body()).doesNotContain("\"memo\"");
 		}

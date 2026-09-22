@@ -102,6 +102,34 @@ class OrderEditSettlementTests extends ApiTestSupport {
 	}
 
 	@Test
+	@DisplayName("거스름돈 안내는 수정 뒤 지금 금액 기준으로 다시 계산된다. 현금으로 더 받으면 낸 돈도 늘어난다")
+	void payNoteFollowsEdits() throws Exception {
+		Map<String, Object> body = new HashMap<>(cashOrder("손님", line(ICECREAM_CUP, 1)));   // 3,000
+		body.put("cashGiven", 5000);
+		Response created = createOrder(body);
+		long id = id(created);
+		assertThat(created.<String>read("$.payNote")).isEqualTo("현금 5,000원 받음 → 거스름돈 2,000원");
+
+		Response r = edit(id, line(VANILLA_ICE, 1));                            // 2,500 → 돌려줄 500
+		assertThat(r.<String>read("$.payNote")).isEqualTo("현금 5,000원 받음 → 거스름돈 2,500원");
+		assertThat(r.body()).as("메모는 비어 있음").doesNotContain("\"memo\"");
+		staffPost("/api/staff/orders/" + id + "/settle", null);
+
+		Response r2 = edit(id, line(ICECREAM_CUP, 2));                          // 6,000 → 더 받을 3,500
+		assertThat(r2.<String>read("$.payNote")).isEqualTo("현금 5,000원 받음 → 3,500원 더 받아야");
+		staffPost("/api/staff/orders/" + id + "/settle", Map.of("method", "CASH"));
+		Response o = staffGet("/api/staff/orders");
+		assertThat(o.<List<String>>read("$[?(@.id==" + id + ")].payNote")).containsExactly("현금 8,500원 받음 → 거스름돈 2,500원");
+
+		// 이체로 더 받으면 낸 현금은 그대로
+		Response r3 = edit(id, line(ICECREAM_CUP, 3));                          // 9,000 → 더 받을 3,000
+		staffPost("/api/staff/orders/" + id + "/settle", Map.of("method", "TRANSFER"));
+		o = staffGet("/api/staff/orders");
+		assertThat(o.<List<String>>read("$[?(@.id==" + id + ")].payNote")).containsExactly("현금 8,500원 받음 → 거스름돈 2,500원");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].transferAmount")).containsExactly(3000);
+	}
+
+	@Test
 	@DisplayName("더 받을 돈은 현금/계좌이체/쿠폰 중 골라서 받는다. 쿠폰은 잔액이 모자라면 거부")
 	void extraByChosenMethod() throws Exception {
 		// 이체 1,000 → 3,000: 더 받을 2,000 을 현금으로 → 이체 1,000 + 현금 2,000

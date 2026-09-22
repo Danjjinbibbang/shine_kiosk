@@ -28,7 +28,7 @@ public class OrderRepository {
 			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
 			total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
 			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at,
-			edited_at, edit_note, settled_cash, settled_transfer, client_request_id
+			edited_at, edit_note, settled_cash, settled_transfer, client_request_id, cash_given
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
@@ -37,7 +37,7 @@ public class OrderRepository {
 						   PayMethod payMethod,
 						   PayMethod remainderMethod, Long couponId, int couponAmount,
 						   int freeAmount, String freeItemName,
-						   int cashAmount, int transferAmount, String memo, String clientRequestId) {}
+						   int cashAmount, int transferAmount, String memo, String clientRequestId, Integer cashGiven) {}
 
 	/** unitPrice 는 옵션 가격을 더한 값. options 는 스냅샷으로 함께 저장한다. */
 	public record LineRow(Long menuItemId, Long variantId, String menuName, String variantLabel,
@@ -63,10 +63,10 @@ public class OrderRepository {
 						                    total_amount, staff_free_amount,
 						                    pay_method, remainder_method, coupon_id, coupon_amount,
 						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at,
-						                    settled_cash, settled_transfer, client_request_id)
+						                    settled_cash, settled_transfer, client_request_id, cash_given)
 						VALUES (:date, :no, :name, :receive, :placeId, :placeName,
 						        :total, :staffFree, :pay, :remainder, :couponId, :couponAmount,
-						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now, :cash, :transfer, :requestId)
+						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now, :cash, :transfer, :requestId, :cashGiven)
 						""")
 				.param("date", row.orderDate()).param("no", row.orderNo())
 				.param("name", row.customerName()).param("receive", row.receiveType().name())
@@ -78,7 +78,7 @@ public class OrderRepository {
 				.param("freeAmount", row.freeAmount()).param("freeItemName", row.freeItemName())
 				.param("cash", row.cashAmount()).param("transfer", row.transferAmount())
 				.param("memo", row.memo()).param("now", LocalDateTime.now().toString())
-				.param("requestId", row.clientRequestId())
+				.param("requestId", row.clientRequestId()).param("cashGiven", row.cashGiven())
 				.update(keys);
 		return keys.getKey().longValue();
 	}
@@ -147,6 +147,12 @@ public class OrderRepository {
 	public void settle(long orderId) {
 		jdbc.sql("UPDATE orders SET settled_cash = cash_amount, settled_transfer = transfer_amount WHERE id = :id")
 				.param("id", orderId).update();
+	}
+
+	/** 더 받을 돈을 현금으로 받았으면 손님이 낸 현금도 그만큼 늘어난 것 (거스름돈 계산이 계속 맞도록). */
+	public void addCashGiven(long orderId, int amount) {
+		jdbc.sql("UPDATE orders SET cash_given = COALESCE(cash_given, 0) + :amount WHERE id = :id")
+				.param("amount", amount).param("id", orderId).update();
 	}
 
 	public void markDone(long orderId) {
@@ -274,7 +280,7 @@ public class OrderRepository {
 				o.payMethod(), o.remainderMethod(),
 				o.couponId(), o.couponAmount(), o.freeAmount(), o.freeItemName(),
 				o.cashAmount(), o.transferAmount(), o.status(),
-				o.memo(), o.createdAt(), o.completedAt(), o.editedAt(), o.editNote(), o.settledCash(), o.settledTransfer(), lines);
+				o.memo(), o.createdAt(), o.completedAt(), o.editedAt(), o.editNote(), o.settledCash(), o.settledTransfer(), o.cashGiven(), lines);
 	}
 
 	private static OrderView mapOrder(ResultSet rs, int rowNum) throws SQLException {
@@ -294,6 +300,12 @@ public class OrderRepository {
 				rs.getInt("cash_amount"), rs.getInt("transfer_amount"), Status.valueOf(rs.getString("status")),
 				rs.getString("memo"), rs.getString("created_at"), rs.getString("completed_at"),
 				rs.getString("edited_at"), rs.getString("edit_note"), rs.getInt("settled_cash"), rs.getInt("settled_transfer"),
+				cashGiven(rs),
 				List.of());
+	}
+
+	private static Integer cashGiven(ResultSet rs) throws SQLException {
+		int v = rs.getInt("cash_given");
+		return rs.wasNull() ? null : v;
 	}
 }

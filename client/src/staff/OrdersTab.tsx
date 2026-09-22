@@ -204,6 +204,7 @@ function OrderCard({ order: o, busy, onSettle, onReceive, findCoupons, canSms, o
         ))}
       </div>
       <div className="pay">{payLine(o)}</div>
+      {o.payNote && <div className="memo pay-note">💵 {o.payNote}</div>}
       {o.memo && <div className="memo">📝 {o.memo}</div>}
       {o.editedAt && (
         <div className="edited">

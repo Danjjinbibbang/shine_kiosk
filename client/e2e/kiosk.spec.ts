@@ -102,7 +102,9 @@ test.describe('결제 흐름', () => {
 
     const order = await orderOf(request, name)
     expect(order.cashAmount).toBe(5000)
-    expect(order.memo).toBe('현금 10,000원 받음 → 거스름돈 5,000원')
+    expect(order.cashGiven).toBe(10000)
+    expect(order.payNote).toBe('현금 10,000원 받음 → 거스름돈 5,000원')
+    expect(order.memo ?? null).toBeNull()
   })
 
   test('현금 · 딱 맞게 → 거스름돈 없음 메모', async ({ page, request }) => {
@@ -115,7 +117,7 @@ test.describe('결제 흐름', () => {
     await page.getByRole('button', { name: /다음/ }).click()
     await pickNameByTyping(page, name, '주문 완료')
     await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
-    expect((await orderOf(request, name)).memo).toBe('현금 2,000원 딱 맞게')
+    expect((await orderOf(request, name)).payNote).toBe('현금 2,000원 딱 맞게')
   })
 
   test('계좌이체 · 배달(식당): 계좌 표시 → 보냈어요 → 직접 입력 → 완료', async ({ page, request }) => {
@@ -221,7 +223,7 @@ test.describe('결제 흐름', () => {
     const order = await orderOf(request, name)
     expect(order.couponAmount).toBe(1500)
     expect(order.cashAmount).toBe(1500)
-    expect(order.memo).toBe('현금 5,000원 받음 → 거스름돈 3,500원')
+    expect(order.payNote).toBe('현금 5,000원 받음 → 거스름돈 3,500원')
     expect((await lookupCoupon(request, name)).coupon.balance).toBe(0)
   })
 })
