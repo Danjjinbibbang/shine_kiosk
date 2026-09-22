@@ -294,6 +294,7 @@ test.describe('설정 · 메뉴 관리', () => {
     const name = uniq('유자차')
     await staffLogin(page)
     await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('button', { name: '메뉴', exact: true }).click()
     await page.getByRole('button', { name: '＋ 새 메뉴' }).click()
     const modal = page.locator('.modal')
     await modal.getByPlaceholder('예: 유자차').fill(name)
@@ -306,8 +307,10 @@ test.describe('설정 · 메뉴 관리', () => {
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(page.locator('.toast')).toContainText('추가됨')
 
+    // 저장한 메뉴의 카테고리 그룹이 자동으로 펼쳐진다
     const card = page.locator('.admin-item').filter({ hasText: name })
     await expect(card).toBeVisible()
+    await expect(page.locator('.cat-head').filter({ hasText: '논커피' })).toHaveAttribute('aria-expanded', 'true')
     await expect(card).toContainText('ICE 2,500원 · HOT 2,500원')
     const menu = async () => (await (await request.get('/api/menu')).json()) as Array<{ name: string; category: string; variants: Array<{ label: string; price: number }> }>
     const created = (await menu()).find((m) => m.name === name)!
@@ -346,6 +349,7 @@ test.describe('설정 · 메뉴 관리', () => {
   test('빈 이름/가격 없는 메뉴는 저장 불가', async ({ page }) => {
     await staffLogin(page)
     await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('button', { name: '메뉴', exact: true }).click()
     await page.getByRole('button', { name: '＋ 새 메뉴' }).click()
     const modal = page.locator('.modal')
     await expect(modal.getByRole('button', { name: '저장' })).toBeDisabled()
@@ -368,13 +372,15 @@ test.describe('설정 · 카테고리', () => {
     await expect(card).toBeVisible()
     await expect(card).toContainText('메뉴 0개')
 
-    // 메뉴 등록 화면의 카테고리 칩에 나온다
+    // 메뉴 등록 화면의 카테고리 칩에 나온다 (설정 홈으로 돌아가서 메뉴로)
+    await page.getByRole('button', { name: '설정으로' }).click()
     await page.getByRole('button', { name: '메뉴', exact: true }).click()
     await page.getByRole('button', { name: '＋ 새 메뉴' }).click()
     await expect(page.locator('.modal .chips').first().getByRole('button', { name })).toBeVisible()
     await page.getByRole('button', { name: '닫기' }).click()
 
     // 맨 위로 올리면 키오스크 카테고리 순서가 바뀐다
+    await page.getByRole('button', { name: '설정으로' }).click()
     await page.getByRole('button', { name: '카테고리' }).click()
     const menu = async () => (await (await request.get('/api/menu')).json()) as Array<{ category: string }>
     const before = [...new Set((await menu()).map((m) => m.category))]

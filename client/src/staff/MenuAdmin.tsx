@@ -6,13 +6,16 @@ import { won } from '../shared/types'
 import { Switch } from '../shared/Switch'
 
 /**
- * 메뉴 관리. 자주 쓰는 건 품절 토글이라 목록에서 바로 되게 하고,
- * 이름/가격/선택지 편집은 모달로.
+ * 메뉴 관리. 카테고리별로 접었다 펼 수 있게 묶는다 (메뉴가 많으면 한 줄로 늘어져 보기 힘들다).
+ * 자주 쓰는 건 품절 토글이라 목록에서 바로 되게 하고, 이름/가격/선택지 편집은 모달로.
  */
 export function MenuAdmin({ onToast, categories }: { onToast: (msg: string) => void; categories: string[] }) {
   const [items, setItems] = useState<AdminItem[] | null>(null)
-  const [editing, setEditing] = useState<AdminItem | 'new' | null>(null)
+  const [editing, setEditing] = useState<AdminItem | { category: string } | null>(null)
+  const [open, setOpen] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
+  const toggle = (cat: string) => setOpen((s) => { const n = new Set(s); if (n.has(cat)) n.delete(cat); else n.add(cat); return n })
+  const show = (cat: string) => setOpen((s) => (s.has(cat) ? s : new Set(s).add(cat)))
 
   const load = useCallback(() => {
     api.adminMenu().then(setItems).catch((e) => onToast(e.message))
@@ -33,53 +36,83 @@ export function MenuAdmin({ onToast, categories }: { onToast: (msg: string) => v
     }
   }
 
-  const move = (index: number, dir: -1 | 1) => {
+  /** 같은 카테고리 안에서 한 칸 위/아래. 전체 순서 목록에서 두 항목의 자리를 바꾼다. */
+  const move = (item: AdminItem, dir: -1 | 1) => {
     if (!items) return
-    const target = index + dir
-    if (target < 0 || target >= items.length) return
+    const group = items.filter((i) => i.category === item.category)
+    const gi = group.findIndex((i) => i.id === item.id)
+    const other = group[gi + dir]
+    if (!other) return
     const ids = items.map((i) => i.id)
-    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    const a = ids.indexOf(item.id)
+    const b = ids.indexOf(other.id)
+    ;[ids[a], ids[b]] = [ids[b], ids[a]]
     void run(() => api.reorderMenu(ids))
   }
 
   if (!items) return <div className="empty">불러오는 중…</div>
 
+  // 카테고리 순서(설정 > 카테고리)대로 묶고, 표에 없는 카테고리를 단 메뉴는 뒤에
+  const groups = [...categories, ...items.map((i) => i.category).filter((c) => !categories.includes(c))]
+    .filter((c, i, arr) => arr.indexOf(c) === i)
+    .map((cat) => ({ cat, list: items.filter((i) => i.category === cat) }))
+
   return (
     <div className="stack">
-      <button className="btn primary" onClick={() => setEditing('new')}>＋ 새 메뉴</button>
+      <button className="btn primary" onClick={() => setEditing({ category: categories[0] ?? '' })}>＋ 새 메뉴</button>
       {items.length === 0 && <div className="empty">메뉴가 없습니다. 새 메뉴를 추가해 주세요.</div>}
 
-      {items.map((item, idx) => (
-        <div key={item.id} className={'card admin-item' + (item.available ? '' : ' off')}>
-          <div className="row between">
-            <div>
-              <div className="admin-name">{item.name} <span className="muted admin-cat">{item.category}</span></div>
-              <div className="muted admin-variants">
-                {item.variants.map((v) => `${v.label ?? ''} ${won(v.price)}${v.available ? '' : ' (품절)'}`.trim()).join(' · ')}
+      {groups.map(({ cat, list }) => {
+        const soldOut = list.filter((i) => !i.available).length
+        const isOpen = open.has(cat)
+        return (
+          <section key={cat} className="cat-group">
+            <button className="cat-head" onClick={() => toggle(cat)} aria-expanded={isOpen}>
+              <span className="chev">{isOpen ? '▾' : '▸'}</span>
+              <b className="grow">{cat}</b>
+              <span className="muted">{list.length}개{soldOut > 0 && ` · 품절 ${soldOut}`}</span>
+            </button>
+            {isOpen && (
+              <div className="stack cat-body">
+                {list.length === 0 && <div className="muted" style={{ fontSize: 14, padding: '4px 0' }}>이 카테고리엔 아직 메뉴가 없어요.</div>}
+                {list.map((item, gi) => (
+                  <div key={item.id} className={'card admin-item' + (item.available ? '' : ' off')}>
+                    <div className="row between">
+                      <div>
+                        <div className="admin-name">{item.name}</div>
+                        <div className="muted admin-variants">
+                          {item.variants.map((v) => `${v.label ?? ''} ${won(v.price)}${v.available ? '' : ' (품절)'}`.trim()).join(' · ')}
+                        </div>
+                      </div>
+                      <Switch on={item.available} onLabel="판매중" offLabel="품절" disabled={busy}
+                        onChange={(next) => void run(() => api.setMenuAvailable(item.id, next), next ? `${item.name} 판매중` : `${item.name} 품절`)} />
+                    </div>
+                    <div className="row admin-actions">
+                      <button className="btn" disabled={busy || gi === 0} onClick={() => move(item, -1)} aria-label="위로">↑</button>
+                      <button className="btn" disabled={busy || gi === list.length - 1} onClick={() => move(item, 1)} aria-label="아래로">↓</button>
+                      <span className="grow" />
+                      <button className="btn" disabled={busy} onClick={() => setEditing(item)}>수정</button>
+                      <button className="btn danger" disabled={busy} onClick={() => {
+                        if (window.confirm(`"${item.name}" 메뉴를 삭제할까요?\n지난 주문 기록은 남습니다.`)) {
+                          void run(() => api.deleteMenuItem(item.id), `${item.name} 삭제됨`)
+                        }
+                      }}>삭제</button>
+                    </div>
+                  </div>
+                ))}
+                <button className="btn" style={{ minHeight: 40, fontSize: 14, alignSelf: 'flex-start' }} onClick={() => setEditing({ category: cat })}>＋ {cat}에 메뉴 추가</button>
               </div>
-            </div>
-            <Switch on={item.available} onLabel="판매중" offLabel="품절" disabled={busy}
-              onChange={(next) => void run(() => api.setMenuAvailable(item.id, next), next ? `${item.name} 판매중` : `${item.name} 품절`)} />
-          </div>
-          <div className="row admin-actions">
-            <button className="btn" disabled={busy || idx === 0} onClick={() => move(idx, -1)} aria-label="위로">↑</button>
-            <button className="btn" disabled={busy || idx === items.length - 1} onClick={() => move(idx, 1)} aria-label="아래로">↓</button>
-            <span className="grow" />
-            <button className="btn" disabled={busy} onClick={() => setEditing(item)}>수정</button>
-            <button className="btn danger" disabled={busy} onClick={() => {
-              if (window.confirm(`"${item.name}" 메뉴를 삭제할까요?\n지난 주문 기록은 남습니다.`)) {
-                void run(() => api.deleteMenuItem(item.id), `${item.name} 삭제됨`)
-              }
-            }}>삭제</button>
-          </div>
-        </div>
-      ))}
+            )}
+          </section>
+        )
+      })}
 
       {editing && (
-        <MenuItemModal item={editing === 'new' ? null : editing}
+        <MenuItemModal item={'id' in editing ? editing : null}
+          initialCategory={'id' in editing ? editing.category : editing.category}
           categories={categories}
           onClose={() => setEditing(null)}
-          onSaved={(msg) => { setEditing(null); onToast(msg); load() }} />
+          onSaved={(msg, category) => { setEditing(null); onToast(msg); show(category); load() }} />
       )}
     </div>
   )
@@ -87,16 +120,18 @@ export function MenuAdmin({ onToast, categories }: { onToast: (msg: string) => v
 
 interface ModalProps {
   item: AdminItem | null
+  /** 새 메뉴일 때 미리 골라 둘 카테고리 */
+  initialCategory: string
   categories: string[]
   onClose: () => void
-  onSaved: (msg: string) => void
+  onSaved: (msg: string, category: string) => void
 }
 
 const EMPTY_VARIANT: AdminVariant = { id: null, label: null, price: 0, available: true }
 
-function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
+function MenuItemModal({ item, initialCategory, categories, onClose, onSaved }: ModalProps) {
   const [name, setName] = useState(item?.name ?? '')
-  const [category, setCategory] = useState(item?.category ?? (categories[0] ?? '커피'))
+  const [category, setCategory] = useState(item?.category ?? initialCategory ?? (categories[0] ?? '커피'))
   const [available, setAvailable] = useState(item?.available ?? true)
   const [variants, setVariants] = useState<AdminVariant[]>(item?.variants ?? [{ ...EMPTY_VARIANT }])
   const [error, setError] = useState<string | null>(null)
@@ -122,7 +157,7 @@ function MenuItemModal({ item, categories, onClose, onSaved }: ModalProps) {
     try {
       if (item) await api.updateMenuItem(item.id, body)
       else await api.createMenuItem(body)
-      onSaved(item ? `${body.name} 수정됨` : `${body.name} 추가됨`)
+      onSaved(item ? `${body.name} 수정됨` : `${body.name} 추가됨`, body.category)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '저장하지 못했습니다.')
     } finally {
