@@ -364,6 +364,129 @@ with Case('I 단골', '주문한 이름이 단골 명단에 오름 (쿠폰 주�
     s, names = call('GET', '/api/customers/regulars')
     for n in ['김현금', '이영희', '목사님']: c.check(n in names, f'{n} in regulars')
 
+# ── J. 상태 전이 / 잘못된 호출 ───────────────────────────────────
+with Case('J 상태', '완료된 주문: 수정 거부, 두 번 완료 거부, 완료 상태에서 취소, 취소된 주문 되돌리기 거부, 없는 주문') as c:
+    s, o = order('김상태', [line(AME_ICE)], 'CASH')
+    act(o['id'], 'done')
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김상태', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(LATTE_ICE)], 'memo': None}); c.eq(s, 400, 'edit done'); c.contains(msg(u), '이미', 'msg')
+    s, d = act(o['id'], 'done'); c.eq(s, 400, 'done twice')
+    s, x = act(o['id'], 'cancel', {}); c.eq(s, 200, 'cancel from DONE')
+    c.eq(get_order(o['id'])['status'], 'CANCELED', 'status')
+    s, r = act(o['id'], 'reopen'); c.eq(s, 400, 'reopen canceled')
+    s, x2 = act(o['id'], 'cancel', {}); c.eq(s, 200, 'cancel twice is no-op')
+    c.check(not any(x['id'] == o['id'] for x in staff('GET', '/api/staff/orders')[1]), 'not in pending')
+    s, j = staff('POST', '/api/staff/orders/999999/done'); c.eq(s, 400, 'unknown order')
+
+with Case('J 상태', '정산할 게 없을 때 settle → 그냥 200, couponId 만 주면 거부') as c:
+    s, o = order('김정산없음', [line(AME_ICE)], 'CASH')
+    s, st = act(o['id'], 'settle', {}); c.eq(s, 200, 'noop settle')
+    cp = coupon('김정산없음', 20000)
+    s, st = act(o['id'], 'settle', {'couponId': cp['id']}); c.eq(s, 400, 'refund to coupon with nothing due'); c.contains(msg(st), '돌려줄 금액이 없', 'msg')
+
+# ── K. 쿠폰 경계 ─────────────────────────────────────────────────
+with Case('K 쿠폰경계', '잔액 0 + 무료 1잔만으로 결제 (1잔이면 낼 돈 0), 2잔이면 나머지 수단 필요') as c:
+    cp = coupon('김무료만', 20000)
+    staff('POST', f"/api/staff/coupons/{cp['id']}/adjust", {'balance': 0, 'freeDrinks': 1})
+    s, p = preview(cp['id'], [line(AFFO)], True); c.eq(p['freeAmount'], 3000, 'free'); c.eq(p['remainder'], 0, 'rem')
+    s, o = order('김무료만', [line(AFFO)], 'COUPON', coupon=cp['id'], free=True); c.eq(s, 200, msg(o)); c.eq(o['couponAmount'], 0, 'coupon 0'); c.eq(o['cashAmount'], 0, 'cash 0')
+    s, o2 = order('김무료만', [line(AFFO), line(AME_ICE)], 'COUPON', coupon=cp['id'], free=True); c.eq(s, 400, 'remainder needed')
+
+with Case('K 쿠폰경계', '무료 1잔은 돈 내는 잔 중 가장 비싼 잔 — 사역자 무료잔은 후보 아님, 옵션 포함가로 비교') as c:
+    cp = coupon('김무료후보', 20000)
+    lines = [line(AFFO, 1, [], staff_free=1), line(AME_ICE, 1, [SHOT]), line(AME_ICE, 1)]
+    s, p = preview(cp['id'], lines, True)
+    c.eq(s, 200, msg(p)); c.eq(p['freeAmount'], 1500, 'free = 아메+샷'); c.eq(p['total'], 2500, 'total excludes staff free')
+    s, o = order('김무료후보', lines, 'COUPON', coupon=cp['id'], free=True)
+    c.eq(s, 200, msg(o)); c.eq(o['freeAmount'], 1500, 'order free'); c.eq(o['couponAmount'], 1000, 'coupon'); c.eq(o['staffFreeAmount'], 3000, 'staffFree')
+
+with Case('K 쿠폰경계', '쿠폰에서 뺀 현금 주문을 다시 수정/취소해도 잔액이 맞는다') as c:
+    cp = coupon('김재수정', 20000)
+    s, o = order('김재수정', [line(AME_ICE)], 'CASH')
+    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김재수정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO)], 'memo': None})
+    s, st = act(o['id'], 'settle', {'method': 'COUPON', 'couponId': cp['id']}); c.eq(s, 200, msg(st))
+    c.eq(get_coupon(cp['id'])['balance'], 18000, 'after coupon settle')
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김재수정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(LATTE_ICE)], 'memo': None})
+    # 규칙: 쿠폰이 원래 뺐던 한도(2,000) 안에서 먼저 내고, 남은 현금 1,000 은 돌려줄 돈
+    c.eq(s, 200, msg(u)); c.eq(u['couponAmount'], 2000, 'coupon first'); c.eq(u['cashAmount'], 0, 'cash 0'); c.eq(get_coupon(cp['id'])['balance'], 18000, 'balance')
+    c.eq(u['settledCash'], 1000, 'refund 1000 due')
+    s, st = act(o['id'], 'settle', {'couponId': cp['id']}); c.eq(s, 200, msg(st)); c.eq(get_coupon(cp['id'])['balance'], 19000, 'refund into coupon')
+    s, x = act(o['id'], 'cancel', {}); c.eq(s, 200, msg(x))
+    c.eq(get_coupon(cp['id'])['balance'], 21000, 'cancel: coupon 2000 back → 21000 (원래 20000 + 현금 1000 이 쿠폰으로)')
+
+with Case('K 쿠폰경계', '삭제된 쿠폰으로 주문 → 거부, 잔액 정확히 0 되는 주문 OK') as c:
+    cp = coupon('김삭제쿠폰', 20000)
+    staff('DELETE', f"/api/staff/coupons/{cp['id']}")
+    s, o = order('김삭제쿠폰', [line(AME_ICE)], 'COUPON', coupon=cp['id']); c.eq(s, 400, 'deleted coupon')
+    cp2 = coupon('김딱맞게', 3000)
+    s, o = order('김딱맞게', [line(AFFO)], 'COUPON', coupon=cp2['id']); c.eq(s, 200, msg(o)); c.eq(get_coupon(cp2['id'])['balance'], 0, 'zero')
+
+# ── L. 지난 주문은 스냅샷 ────────────────────────────────────────
+with Case('L 스냅샷', '옵션/장소/메뉴 이름·가격을 바꾸거나 지워도 지난 주문 표시는 그대로') as c:
+    s, opt = staff('POST', '/api/staff/menu/options', {'name': '시나몬', 'price': 200, 'category': '커피', 'available': True})
+    s, o = order('김스냅', [line(AME_ICE, 1, [opt['id']])], 'CASH', 'DELIVERY', 102)
+    c.eq(o['placeName'], '전도사님실', 'place'); c.eq(o['lines'][0]['options'][0]['name'], '시나몬', 'opt')
+    staff('DELETE', f"/api/staff/menu/options/{opt['id']}")
+    staff('PUT', '/api/staff/places/102', {'floor': 1, 'name': '전도사님실(구)', 'active': True})
+    variants = lambda price: [{'id': AME_ICE, 'label': 'ICE', 'price': price, 'available': True}, {'id': AME_HOT, 'label': 'HOT', 'price': 1000, 'available': True}]
+    s, item = staff('PUT', '/api/staff/menu/10', {'name': '아메리카노2', 'category': '커피', 'variants': variants(1100), 'available': True})
+    c.eq(s, 200, msg(item))
+    after = get_order(o['id'])
+    c.eq(after['placeName'], '전도사님실', 'place snapshot'); c.eq(after['lines'][0]['options'][0]['name'], '시나몬', 'option snapshot')
+    c.eq(after['lines'][0]['menuName'], '아메리카노', 'menu name snapshot'); c.eq(after['lines'][0]['unitPrice'], 1200, 'price snapshot')
+    staff('PUT', '/api/staff/menu/10', {'name': '아메리카노', 'category': '커피', 'variants': variants(1000), 'available': True})
+    staff('PUT', '/api/staff/places/102', {'floor': 1, 'name': '전도사님실', 'active': True})
+
+with Case('L 스냅샷', '카테고리 이름 변경 → 메뉴/옵션 따라감, 키오스크 탭도 바뀜, 옵션 규칙 유지') as c:
+    s, cats = staff('GET', '/api/staff/categories'); coffee = next(x for x in cats if x['name'] == '커피')
+    s, r = staff('PUT', f"/api/staff/categories/{coffee['id']}", {'name': '커피류'}); c.eq(s, 200, msg(r))
+    s, menu = call('GET', '/api/menu'); c.check(any(m['category'] == '커피류' for m in menu) and not any(m['category'] == '커피' for m in menu), 'items renamed')
+    s, opts = call('GET', '/api/menu/options'); c.check(all(x['category'] == '커피류' for x in opts if x['name'] in ('샷 추가', '연하게')), 'options renamed')
+    s, tabs = call('GET', '/api/menu/categories'); c.eq(tabs[0], '커피류', 'kiosk tab')
+    s, o = order('김카테', [line(AME_ICE, 1, [SHOT])], 'CASH'); c.eq(s, 200, 'option still applies after rename ' + msg(o))
+    staff('PUT', f"/api/staff/categories/{coffee['id']}", {'name': '커피'})
+
+# ── M. 동시 주문 ─────────────────────────────────────────────────
+import threading
+with Case('M 동시', '키오스크 20대가 동시에 주문해도 번호가 겹치지 않고 전부 접수') as c:
+    results_ = []
+    def go(i):
+        s, o = order(f'동시{i}', [line(AME_ICE)], 'CASH')
+        results_.append((s, o.get('orderNo') if isinstance(o, dict) else None, msg(o)))
+    ts = [threading.Thread(target=go, args=(i,)) for i in range(20)]
+    for t in ts: t.start()
+    for t in ts: t.join()
+    c.check(all(r[0] == 200 for r in results_), f'all accepted: {[r for r in results_ if r[0] != 200][:3]}')
+    nos = [r[1] for r in results_ if r[0] == 200]
+    c.eq(len(set(nos)), len(nos), f'order numbers unique {sorted(nos)}')
+
+with Case('M 동시', '같은 쿠폰으로 동시에 두 주문 → 잔액이 음수가 되지 않는다') as c:
+    cp = coupon('김동시쿠폰', 3000)
+    res = []
+    def go2(i):
+        s, o = order('김동시쿠폰', [line(AFFO)], 'COUPON', coupon=cp['id'])
+        res.append(s)
+    ts = [threading.Thread(target=go2, args=(i,)) for i in range(2)]
+    for t in ts: t.start()
+    for t in ts: t.join()
+    bal = get_coupon(cp['id'])['balance']
+    c.check(bal >= 0, f'balance not negative: {bal}'); c.eq(sorted(res), [200, 400], f'one ok one rejected {res}')
+
+# ── N. 리포트/백업 파일 ──────────────────────────────────────────
+with Case('N 파일', '백업 zip 안에 db + CSV 3개 + 안내문, 쿠폰 CSV 에 이름/번호/잔액') as c:
+    import zipfile
+    s, b = call('GET', '/api/staff/reports/backup.zip', staff=True, raw=True)
+    z = zipfile.ZipFile(io.BytesIO(b)); names = z.namelist()
+    for n in ['kiosk.db', '쿠폰 잔액.csv', '매출-일별.csv', '주문-전체.csv', '읽어주세요.txt']: c.check(n in names, f'{n} in zip {names}')
+    c.check(z.read('kiosk.db').startswith(b'SQLite format 3'), 'db valid')
+    cc = z.read('쿠폰 잔액.csv').decode('utf-8-sig'); c.check('김딱맞게' in cc, 'coupon csv content')
+    oc = z.read('주문-전체.csv').decode('utf-8-sig'); c.check(oc.count('\n') > 20, f'orders csv rows {oc.count(chr(10))}')
+    s, b = call('GET', '/api/staff/reports/orders.csv?date=2000-01-01', staff=True, raw=True); c.eq(b.decode('utf-8-sig').count('\n'), 1, 'empty day csv = header only')
+    s, j = call('GET', '/api/staff/reports/orders.csv?date=abc', staff=True); c.eq(s, 400, 'bad date')
+
+with Case('N 파일', '단골 명단: 최근 주문한 이름, 중복 없음') as c:
+    s, names = call('GET', '/api/customers/regulars')
+    c.eq(len(names), len(set(names)), 'unique'); c.check('동시1' in names, 'recent order name')
+
 # ══════════════════════════════════════════════════════════════════
 print()
 ok = sum(1 for r in results if r[2]); total = len(results)
