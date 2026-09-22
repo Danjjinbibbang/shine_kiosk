@@ -137,7 +137,9 @@ public class SchemaMigration {
 		for (java.util.Map<String, Object> r : rows) {
 			Integer amount = church.kiosk.order.OrderService.parseLegacyCashMemo(String.valueOf(r.get("memo")));
 			if (amount == null) continue;
-			jdbc.sql("UPDATE orders SET cash_given = :given, memo = NULL WHERE id = :id").param("given", amount).param("id", r.get("id")).update();
+			// 낸 돈이 있으면 현금 몫 중 낸 돈 안의 금액은 이미 받은 것 (늘어난 몫이 거스름돈에서 흡수되도록)
+			jdbc.sql("UPDATE orders SET cash_given = :given, memo = NULL, settled_cash = MIN(cash_amount, :given) WHERE id = :id AND status <> 'CANCELED'")
+					.param("given", amount).param("id", r.get("id")).update();
 			n++;
 		}
 		if (n > 0) log.info("옛 방식 현금 메모 {}건을 cash_given 으로 옮겼습니다", n);
