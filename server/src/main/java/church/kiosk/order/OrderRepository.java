@@ -136,6 +136,13 @@ public class OrderRepository {
 		jdbc.sql("DELETE FROM order_line WHERE order_id = :id").param("id", orderId).update();
 	}
 
+	/** 더 받을 돈을 어떤 수단으로 받았는지에 따라 결제 칸을 다시 나눈다 (쿠폰에서 뺐으면 쿠폰 사용액으로). */
+	public void updatePayment(long orderId, Long couponId, int couponAmount, int cash, int transfer) {
+		jdbc.sql("UPDATE orders SET coupon_id = :couponId, coupon_amount = :couponAmount, cash_amount = :cash, transfer_amount = :transfer WHERE id = :id")
+				.param("couponId", couponId).param("couponAmount", couponAmount)
+				.param("cash", cash).param("transfer", transfer).param("id", orderId).update();
+	}
+
 	/** 돌려주거나 더 받은 뒤: 실제 받은 금액을 현재 금액으로 맞춘다. */
 	public void settle(long orderId) {
 		jdbc.sql("UPDATE orders SET settled_cash = cash_amount, settled_transfer = transfer_amount WHERE id = :id")

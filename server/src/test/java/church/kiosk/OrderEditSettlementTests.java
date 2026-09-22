@@ -102,7 +102,79 @@ class OrderEditSettlementTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("쿠폰 주문은 잔액이 자동으로 맞춰지고 돌려줄 현금은 없다. 쿠폰+현금 주문은 현금 차액만")
+	@DisplayName("더 받을 돈은 현금/계좌이체/쿠폰 중 골라서 받는다. 쿠폰은 잔액이 모자라면 거부")
+	void extraByChosenMethod() throws Exception {
+		// 이체 1,000 → 3,000: 더 받을 2,000 을 현금으로 → 이체 1,000 + 현금 2,000
+		Map<String, Object> t = new HashMap<>(cashOrder("손님", line(AMERICANO_ICE, 1)));
+		t.put("payMethod", "TRANSFER");
+		long id = id(createOrder(t));
+		edit(id, line(ICECREAM_CUP, 1));
+		Response r = staffPost("/api/staff/orders/" + id + "/settle", Map.of("method", "CASH"));
+		assertThat(r.status()).as(r.body()).isEqualTo(200);
+		Response o = staffGet("/api/staff/orders");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].transferAmount")).containsExactly(1000);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].cashAmount")).containsExactly(2000);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].settledCash")).containsExactly(2000);
+		assertThat(staffPost("/api/staff/orders/" + id + "/done", null).status()).isEqualTo(200);
+
+		// 현금 1,000 → 3,000: 더 받을 2,000 을 주문자 쿠폰에서 → 쿠폰 2,000 + 현금 1,000, 잔액 18,000
+		long coupon = registerCoupon("이영희", 20000);
+		long cash = id(createOrder(cashOrder("이영희", line(AMERICANO_ICE, 1))));
+		edit(cash, line(ICECREAM_CUP, 1));
+		assertThat(staffPost("/api/staff/orders/" + cash + "/settle", Map.of("method", "COUPON")).message()).contains("골라 주세요");
+		Response c = staffPost("/api/staff/orders/" + cash + "/settle", Map.of("method", "COUPON", "couponId", coupon));
+		assertThat(c.status()).as(c.body()).isEqualTo(200);
+		assertThat(balanceOf("이영희")).isEqualTo(18000);
+		o = staffGet("/api/staff/orders");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + cash + ")].couponAmount")).containsExactly(2000);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + cash + ")].cashAmount")).containsExactly(1000);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + cash + ")].couponId")).containsExactly((int) coupon);
+		// 취소하면 쿠폰에서 뺀 2,000 은 자동 복원
+		staffPost("/api/staff/orders/" + cash + "/cancel", null);
+		assertThat(balanceOf("이영희")).isEqualTo(20000);
+
+		// 잔액 500 짜리 쿠폰으로 2,000 을 빼려 하면 거부
+		long poor = registerCoupon("김철수", 500);
+		long cash2 = id(createOrder(cashOrder("김철수", line(AMERICANO_ICE, 1))));
+		edit(cash2, line(ICECREAM_CUP, 1));
+		Response bad = staffPost("/api/staff/orders/" + cash2 + "/settle", Map.of("method", "COUPON", "couponId", poor));
+		assertThat(bad.status()).isEqualTo(400);
+		assertThat(bad.message()).contains("잔액이 500원");
+		// 계좌이체로 받기
+		assertThat(staffPost("/api/staff/orders/" + cash2 + "/settle", Map.of("method", "TRANSFER")).status()).isEqualTo(200);
+		o = staffGet("/api/staff/orders");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + cash2 + ")].transferAmount")).containsExactly(2000);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + cash2 + ")].cashAmount")).containsExactly(1000);
+	}
+
+	@Test
+	@DisplayName("쿠폰 주문이 커지면 자동으로 더 빼지 않고 더 받을 돈으로 남긴다 → 쿠폰에서 빼기 선택 가능")
+	void couponOrderGrows() throws Exception {
+		long coupon = registerCoupon("이영희", 20000);
+		Map<String, Object> body = new HashMap<>(cashOrder("이영희", line(AMERICANO_ICE, 1)));
+		body.put("payMethod", "COUPON");
+		body.put("couponId", coupon);
+		long id = id(createOrder(body));
+		assertThat(balanceOf("이영희")).isEqualTo(19000);
+		Response r = edit(id, line(ICECREAM_CUP, 1));                          // 1,000 → 3,000
+		assertThat(balanceOf("이영희")).as("자동으로 더 빼지 않는다").isEqualTo(19000);
+		assertThat(r.<Integer>read("$.couponAmount")).isEqualTo(1000);
+		assertThat(r.<Integer>read("$.cashAmount")).as("더 받을 2,000 이 현금 칸에 표시").isEqualTo(2000);
+		assertThat(r.<Integer>read("$.settledCash")).isZero();
+		assertThat(staffPost("/api/staff/orders/" + id + "/done", null).status()).as("정산 전 완료 불가").isEqualTo(400);
+		// 다른 쿠폰에서는 못 빼고, 그 쿠폰에서 빼면 잔액 17,000 / 쿠폰 3,000 / 현금 0
+		long other = registerCoupon("박민수", 20000);
+		assertThat(staffPost("/api/staff/orders/" + id + "/settle", Map.of("method", "COUPON", "couponId", other)).message()).contains("이 주문에 쓴 쿠폰");
+		assertThat(staffPost("/api/staff/orders/" + id + "/settle", Map.of("method", "COUPON", "couponId", coupon)).status()).isEqualTo(200);
+		assertThat(balanceOf("이영희")).isEqualTo(17000);
+		Response o = staffGet("/api/staff/orders");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].couponAmount")).containsExactly(3000);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].cashAmount")).containsExactly(0);
+		assertThat(staffPost("/api/staff/orders/" + id + "/done", null).status()).isEqualTo(200);
+	}
+
+	@Test
+	@DisplayName("쿠폰 주문이 줄면 차액이 잔액으로 저절로 돌아가고 돌려줄 현금은 없다. 쿠폰+현금 주문은 현금 차액만")
 	void couponAutoAdjusts() throws Exception {
 		long coupon = registerCoupon("이영희", 20000);
 		Map<String, Object> body = new HashMap<>(cashOrder("이영희", line(ICECREAM_CUP, 1)));

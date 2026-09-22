@@ -70,10 +70,15 @@ public class OrderService {
 	 *  2) 남은 금액은 잔액에서 전액 차감. 잔액이 모자라면 잔액을 다 쓰고 나머지(remainder)는 현금/계좌이체.
 	 */
 	static CouponUse applyCoupon(Coupon coupon, PricedLines priced, boolean wantFree) {
+		return applyCoupon(coupon, priced, wantFree, Integer.MAX_VALUE);
+	}
+
+	/** maxCoupon: 잔액에서 뺄 수 있는 상한. 수정 때는 원래 뺐던 금액까지만 — 늘어난 몫은 스태프가 수단을 고른다. */
+	static CouponUse applyCoupon(Coupon coupon, PricedLines priced, boolean wantFree, int maxCoupon) {
 		boolean useFree = wantFree && coupon.freeDrinks() > 0 && priced.maxUnitPrice() > 0;
 		int freeAmount = useFree ? priced.maxUnitPrice() : 0;
 		int payable = priced.total() - freeAmount;
-		int couponAmount = Math.min(coupon.balance(), payable);
+		int couponAmount = Math.min(Math.min(coupon.balance(), maxCoupon), payable);
 		return new CouponUse(useFree, freeAmount, useFree ? priced.maxUnitName() : null,
 				couponAmount, payable - couponAmount);
 	}
@@ -156,7 +161,8 @@ public class OrderService {
 
 	/**
 	 * 스태프가 항목/이름/장소를 고친다. 쿠폰을 쓴 주문이면 먼저 차감(무료 1잔 포함)을 되돌리고
-	 * 새 항목 기준으로 다시 차감해서, 잔액 이력이 항상 실제 주문과 맞아떨어지게 한다.
+	 * 새 항목 기준으로 다시 차감하되, 원래 뺐던 금액까지만 뺀다. 금액이 줄면 차액이 잔액으로 저절로 돌아가고,
+	 * 늘면 늘어난 몫은 "더 받을 돈"으로 남아 스태프가 현금/이체/쿠폰 중 고른다 (settle).
 	 */
 	@Transactional
 	public OrderView update(long orderId, UpdateRequest req) {
@@ -170,19 +176,22 @@ public class OrderService {
 			boolean usedFree = existing.freeAmount() > 0;
 			couponService.refundForOrder(existing.couponId(), existing.couponAmount(), usedFree, orderId);
 			Coupon coupon = couponService.require(existing.couponId());
-			use = applyCoupon(coupon, priced, usedFree); // 무료 1잔 사용 여부는 원래 선택을 유지
+			use = applyCoupon(coupon, priced, usedFree, existing.couponAmount()); // 무료 1잔 사용 여부는 원래 선택을 유지
 			couponService.useForOrder(existing.couponId(), use.couponAmount(), use.useFree(), orderId);
 			if (use.remainder() > 0 && remainderMethod == null) {
-				remainderMethod = PayMethod.CASH; // 원래 쿠폰만으로 됐던 주문이 커지면 나머지는 현금으로 받는다
+				remainderMethod = PayMethod.CASH; // 표시용 기본값. 실제 수단은 정산 때 고른다
 			}
 		}
+		// 돈으로 낼 몫(remainder)은 이미 받은 칸(settled)부터 채우고, 남는 게 있으면 원래 수단 칸에 "더 받을 돈"으로 붙는다.
 		int remainder = use.remainder();
 		PayMethod remainderBy = existing.payMethod() == PayMethod.COUPON ? remainderMethod : existing.payMethod();
-		if (remainderBy == PayMethod.NONE && remainder > 0) {
-			remainderBy = PayMethod.CASH; // 전부 무료였던 주문에 돈 낼 잔이 생기면 현금으로 받는다
+		if (remainderBy == null || remainderBy == PayMethod.NONE) {
+			remainderBy = PayMethod.CASH;
 		}
-		int cash = remainderBy == PayMethod.CASH ? remainder : 0;
-		int transfer = remainderBy == PayMethod.TRANSFER ? remainder : 0;
+		int transfer = Math.min(remainder, existing.settledTransfer());
+		int cash = Math.min(remainder - transfer, existing.settledCash());
+		int left = remainder - transfer - cash;
+		if (remainderBy == PayMethod.TRANSFER) transfer += left; else cash += left;
 
 		OrderRow row = new OrderRow(existing.orderDate(), existing.orderNo(), Validation.name(req.customerName(), "이름", Validation.NAME_MAX),
 				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
@@ -217,23 +226,60 @@ public class OrderService {
 		return Math.max(0, o.settledCash() - o.cashAmount()) + Math.max(0, o.settledTransfer() - o.transferAmount());
 	}
 
+	/** 수정으로 더 받을 돈 (지금 금액 − 실제 받은 돈, 양수만). 어떤 수단으로 받을지는 정산 때 고른다. */
+	static int extraDue(OrderView o) {
+		return Math.max(0, o.cashAmount() - o.settledCash()) + Math.max(0, o.transferAmount() - o.settledTransfer());
+	}
+
 	/**
-	 * 스태프가 차액을 처리한 뒤 누른다. couponId 를 주면 돌려줄 돈을 현금 대신 그 쿠폰 잔액에 넣는다.
-	 * 쿠폰으로 결제한 주문이면 그 쿠폰이어야 하고, 현금/이체 주문이면 스태프가 고른 쿠폰(보통 주문자 이름으로 찾은 것).
+	 * 스태프가 차액을 처리한 뒤 누른다.
+	 * 돌려줄 돈: couponId 를 주면 현금 대신 그 쿠폰 잔액에 넣는다 (쿠폰 주문이면 그 쿠폰이어야 함).
+	 * 더 받을 돈: method 로 현금/계좌이체/쿠폰 중 어떻게 받았는지 고른다. 쿠폰이면 couponId 의 잔액에서 빼고
+	 *   주문에 쿠폰 사용액으로 붙는다 (현금 주문이라도). method 가 없으면 원래 수단 칸 그대로 받은 것으로.
 	 */
 	@Transactional
-	public void settle(long orderId, Long couponId) {
+	public void settle(long orderId, Long couponId, PayMethod method) {
 		OrderView order = require(orderId);
-		if (couponId != null) {
-			int refund = refundDue(order);
-			if (refund <= 0) {
-				throw new BusinessException("돌려줄 금액이 없습니다.");
+		int refund = refundDue(order);
+		int extra = extraDue(order);
+		if (refund > 0) {
+			if (couponId != null) {
+				if (order.couponId() != null && !order.couponId().equals(couponId)) {
+					throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
+				}
+				couponService.require(couponId);
+				couponService.refundForOrder(couponId, refund, false, orderId);
 			}
-			if (order.couponId() != null && !order.couponId().equals(couponId)) {
-				throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
+		}
+		else if (extra > 0 && method != null) {
+			int cash = order.settledCash();
+			int transfer = order.settledTransfer();
+			Long useCoupon = order.couponId();
+			int couponAmount = order.couponAmount();
+			switch (method) {
+				case CASH -> cash += extra;
+				case TRANSFER -> transfer += extra;
+				case COUPON -> {
+					if (couponId == null) {
+						throw new BusinessException("어느 쿠폰에서 뺄지 골라 주세요.");
+					}
+					if (order.couponId() != null && !order.couponId().equals(couponId)) {
+						throw new BusinessException("이 주문에 쓴 쿠폰에서만 뺄 수 있습니다.");
+					}
+					Coupon coupon = couponService.require(couponId);
+					if (coupon.balance() < extra) {
+						throw new BusinessException("쿠폰 잔액이 " + String.format("%,d", coupon.balance()) + "원이라 " + String.format("%,d", extra) + "원을 뺄 수 없습니다. 현금이나 이체로 받아 주세요.");
+					}
+					couponService.useForOrder(couponId, extra, false, orderId);
+					useCoupon = couponId;
+					couponAmount += extra;
+				}
+				default -> throw new BusinessException("받는 방법을 확인해 주세요.");
 			}
-			couponService.require(couponId);
-			couponService.refundForOrder(couponId, refund, false, orderId);
+			orderRepository.updatePayment(orderId, useCoupon, couponAmount, cash, transfer);
+		}
+		else if (couponId != null) {
+			throw new BusinessException("돌려줄 금액이 없습니다.");
 		}
 		orderRepository.settle(orderId);
 		events.broadcastOrdersChanged();

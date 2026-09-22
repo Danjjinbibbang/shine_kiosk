@@ -264,14 +264,25 @@ with Case('E 정산', '현금 주문 차액을 주문자 쿠폰에 넣기') as c
     s, st = act(o['id'], 'settle', {'couponId': cp['id']}); c.eq(s, 200, msg(st))
     c.eq(get_coupon(cp['id'])['balance'], 22000, 'coupon +2000'); c.eq(st['settledCash'], 1000, 'settled')
 
-with Case('E 정산', '쿠폰 주문 수정 → 쿠폰 차감이 다시 계산되고 무료잔 선택 유지') as c:
+with Case('E 정산', '쿠폰 주문이 커지면 더 받을 돈으로 남고, 무료잔 선택 유지, 쿠폰에서 빼기로 정산') as c:
     cp = coupon('김쿠폰수정', 20000)
     s, o = order('김쿠폰수정', [line(AFFO), line(AME_ICE)], 'COUPON', coupon=cp['id'], free=True)
     c.eq(get_coupon(cp['id'])['balance'], 19000, 'before')     # 무료=아포카토 3000, 쿠폰 1000
     s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김쿠폰수정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO), line(LATTE_ICE)], 'memo': None})
-    c.eq(s, 200, msg(u)); c.eq(u['freeAmount'], 3000, 'free kept'); c.eq(u['couponAmount'], 2000, 'coupon re-deducted')
-    c.eq(get_coupon(cp['id'])['balance'], 18000, 'after'); c.eq(get_coupon(cp['id'])['freeDrinks'], 0, 'free used once')
-    s, d = act(o['id'], 'done'); c.eq(s, 200, 'coupon order needs no settle')
+    c.eq(s, 200, msg(u)); c.eq(u['freeAmount'], 3000, 'free kept'); c.eq(u['couponAmount'], 1000, 'coupon capped'); c.eq(u['cashAmount'], 1000, 'extra shown as cash')
+    c.eq(get_coupon(cp['id'])['balance'], 19000, 'not auto-deducted'); c.eq(get_coupon(cp['id'])['freeDrinks'], 0, 'free used once')
+    s, d = act(o['id'], 'done'); c.eq(s, 400, 'done blocked until settled')
+    s, st = act(o['id'], 'settle', {'method': 'COUPON', 'couponId': cp['id']}); c.eq(s, 200, msg(st))
+    c.eq(st['couponAmount'], 2000, 'coupon after'); c.eq(st['cashAmount'], 0, 'cash 0'); c.eq(get_coupon(cp['id'])['balance'], 18000, 'balance after')
+    s, d = act(o['id'], 'done'); c.eq(s, 200, 'done')
+
+with Case('E 정산', '더 받을 돈을 계좌이체로 / 다른 사람 쿠폰에서 / 잔액 부족 쿠폰 → 거부') as c:
+    s, o = order('김더받기', [line(AME_ICE)], 'CASH')
+    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김더받기', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO)], 'memo': None})
+    poor = coupon('김더받기', 1000)
+    s, x = act(o['id'], 'settle', {'method': 'COUPON', 'couponId': poor['id']}); c.eq(s, 400, 'poor coupon'); c.contains(msg(x), '잔액이', 'msg')
+    s, st = act(o['id'], 'settle', {'method': 'TRANSFER'}); c.eq(s, 200, msg(st))
+    c.eq(st['cashAmount'], 1000, 'cash'); c.eq(st['transferAmount'], 2000, 'transfer'); c.eq(st['settledTransfer'], 2000, 'settled')
 
 with Case('E 정산', '쿠폰+현금 주문에서 쿠폰 부분 차액을 쿠폰 잔액으로 정산') as c:
     cp = coupon('김혼합', 2000)

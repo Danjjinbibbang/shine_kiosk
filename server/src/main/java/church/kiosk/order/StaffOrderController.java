@@ -48,13 +48,16 @@ public class StaffOrderController {
 		orderService.complete(id);
 	}
 
-	/** couponId 가 있으면 돌려줄 돈을 그 쿠폰 잔액에 넣는다. 없으면 현금으로 준 것으로. */
-	public record SettleRequest(Long couponId) {}
+	/**
+	 * 돌려줄 돈: couponId 가 있으면 그 쿠폰 잔액에 넣는다, 없으면 현금으로 준 것으로.
+	 * 더 받을 돈: method = CASH | TRANSFER | COUPON (COUPON 이면 couponId 필요).
+	 */
+	public record SettleRequest(Long couponId, OrderDtos.PayMethod method) {}
 
 	/** 수정으로 생긴 차액(돌려줄 돈/더 받을 돈)을 처리했다는 표시. */
 	@PostMapping("/{id}/settle")
 	public void settle(@PathVariable long id, @RequestBody(required = false) SettleRequest request) {
-		orderService.settle(id, request == null ? null : request.couponId());
+		orderService.settle(id, request == null ? null : request.couponId(), request == null ? null : request.method());
 	}
 
 	@PostMapping("/{id}/reopen")

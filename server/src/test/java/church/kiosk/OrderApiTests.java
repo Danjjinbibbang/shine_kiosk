@@ -418,15 +418,17 @@ class OrderApiTests extends ApiTestSupport {
 		}
 
 		@Test
-		@DisplayName("수정: 쿠폰 주문이 커져서 잔액을 넘으면 나머지는 현금으로 잡힌다")
-		void updateBeyondBalanceFallsBackToCash() throws Exception {
+		@DisplayName("수정: 쿠폰 주문이 커지면 원래 뺐던 만큼만 쿠폰, 늘어난 몫은 더 받을 돈(현금 칸)으로 — 잔액에서 자동으로 더 빼지 않는다")
+		void updateGrowthStaysUnsettled() throws Exception {
 			long id = registerCoupon("김철수", 3000);
 			long orderId = ((Number) createOrder(couponOrder("김철수", id, line(AMERICANO_ICE, 1))).read("$.id")).longValue();
 			Response r = staffPut("/api/staff/orders/" + orderId, Map.of(
 					"customerName", "김철수", "receiveType", "STORE", "lines", List.of(line(ICECREAM_CUP, 2))));
-			assertThat(r.<Integer>read("$.couponAmount")).isEqualTo(3000);
-			assertThat(r.<Integer>read("$.cashAmount")).isEqualTo(3000);
+			assertThat(r.<Integer>read("$.couponAmount")).isEqualTo(1000);
+			assertThat(r.<Integer>read("$.cashAmount")).isEqualTo(5000);
+			assertThat(r.<Integer>read("$.settledCash")).isZero();
 			assertThat(r.<String>read("$.remainderMethod")).isEqualTo("CASH");
+			assertThat(balanceOf("김철수")).isEqualTo(2000);
 		}
 
 		@Test

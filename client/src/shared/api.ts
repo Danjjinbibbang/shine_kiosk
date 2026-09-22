@@ -83,7 +83,9 @@ export const api = {
   updateOrder: (id: number, body: UpdateOrderRequest) => put<Order>(`/api/staff/orders/${id}`, body),
   doneOrder: (id: number) => post<void>(`/api/staff/orders/${id}/done`),
   reopenOrder: (id: number) => post<void>(`/api/staff/orders/${id}/reopen`),
-  settleOrder: (id: number, couponId: number | null = null) => post<void>(`/api/staff/orders/${id}/settle`, { couponId }),
+  /** 돌려줄 돈: couponId 로 쿠폰에 넣기(없으면 현금). 더 받을 돈: method 로 현금/이체/쿠폰(couponId) 중 어떻게 받았는지 */
+  settleOrder: (id: number, opts: { couponId?: number | null; method?: 'CASH' | 'TRANSFER' | 'COUPON' } = {}) =>
+    post<void>(`/api/staff/orders/${id}/settle`, { couponId: opts.couponId ?? null, method: opts.method ?? null }),
   couponsByName: (name: string) => request<Coupon[]>(`/api/staff/coupons?name=${encodeURIComponent(name)}`),
   cancelOrder: (id: number, refundToCouponId: number | null = null) => post<void>(`/api/staff/orders/${id}/cancel`, { refundToCouponId }),
   staffLookupCoupon: (name: string, phoneLast4?: string) =>
