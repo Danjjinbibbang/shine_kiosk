@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../shared/api'
 import { cartTotal, toLineRequests, type CartLine } from '../shared/cart'
+import { useAutoReload } from '../shared/useAutoReload'
 import type { Coupon, CouponPreview, CreateOrderRequest, Order, PayMethod, Place, ReceiveType } from '../shared/types'
 import { MenuStep } from './MenuStep'
 import { CartStep } from './CartStep'
@@ -60,6 +61,8 @@ export function KioskApp() {
   const [order, setOrder] = useState<Order | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // 새 버전이 나오면, 손님이 아무것도 안 담은 첫 화면일 때만 새로고침
+  useAutoReload(step === 'menu' && draft.cart.length === 0)
 
   // 사역자 무료 잔을 뺀, 실제로 낼 금액
   const total = useMemo(() => cartTotal(draft.cart), [draft.cart])

@@ -54,6 +54,7 @@ public class SchemaMigration {
 		jdbc.sql("CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_client_request ON orders(client_request_id)").update();
 		dropColumnIfExists("coupon", "phone_last4"); // phone 에서 계산하므로 더 이상 저장하지 않는다
 		registerMissingCategories();
+		migrateCashMemos(); // 옛 키오스크 화면이 남아 있으면 그 뒤에도 옛 방식 메모가 들어올 수 있어 기동 때마다
 	}
 
 	/** 메뉴/옵션에 쓰인 카테고리가 카테고리 표에 없으면 (예전 DB) 메뉴 순서대로 등록한다. */
@@ -124,9 +125,6 @@ public class SchemaMigration {
 		if (c.table().equals("orders") && c.name().equals("settled_transfer")) {
 			jdbc.sql("UPDATE orders SET settled_transfer = transfer_amount").update();
 		}
-		if (c.table().equals("orders") && c.name().equals("cash_given")) {
-			migrateCashMemos();
-		}
 	}
 
 	/**
@@ -134,17 +132,15 @@ public class SchemaMigration {
 	 * 그 글에서 낸 돈을 뽑아 cash_given 에 넣고, 메모는 자유 텍스트만 남긴다.
 	 */
 	private void migrateCashMemos() {
-		java.util.regex.Pattern given = java.util.regex.Pattern.compile("^현금 ([0-9,]+)원 (받음 → 거스름돈 [0-9,]+원|딱 맞게)$");
-		List<java.util.Map<String, Object>> rows = jdbc.sql("SELECT id, memo FROM orders WHERE memo LIKE '현금 %'").query().listOfRows();
+		List<java.util.Map<String, Object>> rows = jdbc.sql("SELECT id, memo, cash_amount FROM orders WHERE memo LIKE '현금 %' AND cash_given IS NULL").query().listOfRows();
 		int n = 0;
 		for (java.util.Map<String, Object> r : rows) {
-			java.util.regex.Matcher m = given.matcher(String.valueOf(r.get("memo")).trim());
-			if (!m.matches()) continue;
-			int amount = Integer.parseInt(m.group(1).replace(",", ""));
+			Integer amount = church.kiosk.order.OrderService.parseLegacyCashMemo(String.valueOf(r.get("memo")));
+			if (amount == null) continue;
 			jdbc.sql("UPDATE orders SET cash_given = :given, memo = NULL WHERE id = :id").param("given", amount).param("id", r.get("id")).update();
 			n++;
 		}
-		if (n > 0) log.info("현금 메모 {}건을 cash_given 으로 옮겼습니다", n);
+		if (n > 0) log.info("옛 방식 현금 메모 {}건을 cash_given 으로 옮겼습니다", n);
 	}
 
 	private void addMissingColumns() {

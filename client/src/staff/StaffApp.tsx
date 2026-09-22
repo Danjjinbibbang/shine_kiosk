@@ -1,3 +1,4 @@
+import { useAutoReload } from '../shared/useAutoReload'
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, getStaffToken, setStaffToken, subscribeOrders } from '../shared/api'
 import type { DailySummary } from '../shared/types'
@@ -17,6 +18,8 @@ export function StaffApp() {
   const [tick, setTick] = useState(0) // 주문 변경 신호. 자식 탭이 이걸 보고 다시 불러온다.
   const [online, setOnline] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
+  // 새 버전이 나오면 새로고침 (로그인은 토큰이 폰에 저장돼 있어 유지된다)
+  useAutoReload(true)
 
   useEffect(() => {
     if (!getStaffToken()) {

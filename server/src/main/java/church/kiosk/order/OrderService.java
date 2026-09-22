@@ -142,12 +142,21 @@ public class OrderService {
 			transfer = remainder;
 		}
 
+		// 아직 새로고침 안 된 옛 키오스크 화면은 낸 돈을 메모 글로 보낸다 → 낸 돈으로 해석하고 메모는 비운다
+		Integer given = req.cashGiven();
+		String memo = Validation.memo(req.memo());
+		Integer legacy = given == null ? parseLegacyCashMemo(memo) : null;
+		if (legacy != null) {
+			given = legacy;
+			memo = null;
+		}
+
 		String today = LocalDate.now().toString();
 		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
 				place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
-				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), requestId,
-				cashGiven(req.cashGiven(), cash));
+				use.freeAmount(), use.freeItemName(), cash, transfer, memo, requestId,
+				cashGiven(given, cash));
 		long orderId = orderRepository.insert(row);
 		orderRepository.insertLines(orderId, priced.lines());
 		if (couponId != null) {
@@ -251,6 +260,16 @@ public class OrderService {
 		couponService.creditChange(couponId, change, orderId);
 		orderRepository.setCashGiven(orderId, order.cashAmount());
 		events.broadcastOrdersChanged();
+	}
+
+	private static final java.util.regex.Pattern LEGACY_CASH_MEMO =
+			java.util.regex.Pattern.compile("^현금 ([0-9,]+)원 (받음 → 거스름돈 [0-9,]+원|딱 맞게)$");
+
+	/** 옛 키오스크 화면이 메모에 넣던 "현금 5,000원 받음 → 거스름돈 1,000원" 에서 낸 돈을 뽑는다. 아니면 null. */
+	public static Integer parseLegacyCashMemo(String memo) {
+		if (memo == null) return null;
+		java.util.regex.Matcher m = LEGACY_CASH_MEMO.matcher(memo.trim());
+		return m.matches() ? Integer.valueOf(m.group(1).replace(",", "")) : null;
 	}
 
 	/** 손님이 낸 현금. 현금을 받는 주문이 아니면 무시하고, 낼 금액보다 적게 냈다고 오면 거부. */

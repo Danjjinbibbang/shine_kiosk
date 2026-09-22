@@ -69,6 +69,12 @@ class OrderApiTests extends ApiTestSupport {
 			Map<String, Object> less = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 2)));
 			less.put("cashGiven", 1000);
 			assertThat(createOrder(less).status()).isEqualTo(400);
+			// 옛 키오스크 화면이 보내는 메모 글도 낸 돈으로 해석
+			Map<String, Object> legacy = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 2)));
+			legacy.put("memo", "현금 5,000원 받음 → 거스름돈 3,000원");
+			Response lr = createOrder(legacy);
+			assertThat(lr.<Integer>read("$.cashGiven")).isEqualTo(5000);
+			assertThat(lr.body()).doesNotContain("\"memo\"");
 			// 이체 주문엔 낸 현금이 없다
 			Map<String, Object> t = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
 			t.put("payMethod", "TRANSFER"); t.put("cashGiven", 5000);
