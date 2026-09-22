@@ -57,9 +57,9 @@ def login():
 def line(vid, qty=1, opts=None, staff_free=0):
     return {'variantId': vid, 'quantity': qty, 'optionIds': opts or [], 'staffFreeQty': staff_free}
 
-def order(name, lines, pay='CASH', receive='STORE', place=None, coupon=None, free=None, remainder=None, memo=None, rid=None):
+def order(name, lines, pay='CASH', receive='STORE', place=None, coupon=None, free=None, remainder=None, memo=None, rid=None, cash_given=None):
     body = {'customerName': name, 'receiveType': receive, 'placeId': place, 'payMethod': pay, 'couponId': coupon,
-            'useFreeDrink': free, 'remainderMethod': remainder, 'lines': lines, 'memo': memo,
+            'useFreeDrink': free, 'remainderMethod': remainder, 'lines': lines, 'memo': memo, 'cashGiven': cash_given,
             'clientRequestId': rid or str(uuid.uuid4())}
     return call('POST', '/api/orders', body)
 
@@ -302,6 +302,18 @@ with Case('E 정산', '수정 검증: 메뉴 없음/이름 없음/이름 21자/�
     c.eq(staff('PUT', f"/api/staff/orders/{o['id']}", {**base, 'customerName': ' ', 'lines': [line(AME_ICE)]})[0], 400, 'blank name')
     c.eq(staff('PUT', f"/api/staff/orders/{o['id']}", {**base, 'customerName': '가' * 21, 'lines': [line(AME_ICE)]})[0], 400, 'long name')
     c.eq(staff('PUT', f"/api/staff/orders/{o['id']}", {**base, 'lines': [line(AME_ICE, 0)]})[0], 400, 'qty 0')
+
+with Case('E 정산', '낸 현금이 있으면 늘어난 몫은 거스름돈에서 제하고, 잔돈은 쿠폰에 넣는다') as c:
+    cp = coupon('김잔돈', 20000)
+    s, o = order('김잔돈', [line(AME_ICE)], 'CASH', cash_given=5000)
+    c.eq(s, 200, msg(o)); c.eq(o['payNote'], '현금 5,000원 받음 → 거스름돈 4,000원', 'note')
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO), line(AME_ICE)], 'memo': None})   # 4,000
+    c.eq(s, 200, msg(u)); c.eq(u['settledCash'], 4000, 'absorbed'); c.eq(u['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원', 'note2')
+    s, d = act(o['id'], 'done'); c.eq(s, 200, 'done without settle'); act(o['id'], 'reopen')
+    s, x = staff('POST', f"/api/staff/orders/{o['id']}/change-to-coupon", {'couponId': cp['id']}); c.eq(s, 200, msg(x))
+    c.eq(get_coupon(cp['id'])['balance'], 21000, 'coupon +1000'); c.eq(get_order(o['id'])['payNote'], '현금 4,000원 딱 맞게', 'note3')
+    s, u2 = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO, 2)], 'memo': None})   # 6,000
+    c.eq(u2['cashAmount'] - u2['settledCash'], 2000, 'extra 2000'); c.eq(u2['payNote'], '현금 4,000원 받음 → 2,000원 더 받아야', 'note4')
 
 # ── F. 메뉴/옵션/카테고리/장소 관리가 키오스크에 반영 ─────────────
 with Case('F 설정', '카테고리 추가 → 메뉴 추가 → 키오스크 메뉴에 등장 → 주문 가능 → 삭제 후 주문 거부, 지난 주문 유지') as c:

@@ -65,6 +65,7 @@ export function OrdersTab({ status, tick, onChanged, onToast }: Props) {
       {orders.map((o) => (
         <OrderCard key={o.id} order={o} busy={busyId === o.id}
           onSettle={(couponId) => run(o.id, () => api.settleOrder(o.id, { couponId }), couponId != null ? '쿠폰 잔액에 넣었습니다' : '정산 표시했습니다')}
+          onChangeToCoupon={(couponId) => run(o.id, () => api.changeToCoupon(o.id, couponId), '거스름돈을 쿠폰 잔액에 넣었습니다')}
           onReceive={(method, couponId) => run(o.id, () => api.settleOrder(o.id, { method, couponId }),
             method === 'COUPON' ? '쿠폰 잔액에서 뺐습니다' : method === 'TRANSFER' ? '계좌이체로 받은 것으로 표시했습니다' : '현금으로 받은 것으로 표시했습니다')}
           findCoupons={(customerName) => api.couponsByName(customerName)}
@@ -102,6 +103,8 @@ interface CardProps {
   onEdit: () => void
   /** 더 받을 돈을 어떻게 받았는지 */
   onReceive: (method: 'CASH' | 'TRANSFER' | 'COUPON', couponId?: number) => void
+  /** 거스름돈을 쿠폰 잔액에 넣기 */
+  onChangeToCoupon: (couponId: number) => void
 }
 
 /** "현금 1,000원" / "5,000원 = 무료 1잔(아메리카노 ICE) + 쿠폰 3,000원 + 현금 1,000원" */
@@ -160,7 +163,7 @@ function settlement(o: Order): { refund: number; extra: number } {
   return { refund: (cash < 0 ? -cash : 0) + (transfer < 0 ? -transfer : 0), extra: (cash > 0 ? cash : 0) + (transfer > 0 ? transfer : 0) }
 }
 
-function OrderCard({ order: o, busy, onSettle, onReceive, findCoupons, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
+function OrderCard({ order: o, busy, onSettle, onReceive, onChangeToCoupon, findCoupons, canSms, onSms, onDone, onReopen, onCancel, onEdit }: CardProps) {
   const delivery = o.receiveType === 'DELIVERY'
   const time = o.createdAt.slice(11, 16)
   const stale = o.orderDate !== localToday()
@@ -168,12 +171,14 @@ function OrderCard({ order: o, busy, onSettle, onReceive, findCoupons, canSms, o
   // 쿠폰을 골라야 할 때: 쿠폰 주문이면 그 쿠폰, 아니면 주문자 이름으로 찾은 후보.
   // 하나면 바로, 여럿이면 고르게, 없으면 안내. settle(돌려줄 돈), receive(더 받을 돈), cancel(취소 환불) 셋 다 쓴다.
   const [candidates, setCandidates] = useState<Coupon[] | 'none' | null>(null)
-  const [pickFor, setPickFor] = useState<'settle' | 'receive' | 'cancel'>('settle')
+  const [pickFor, setPickFor] = useState<'settle' | 'receive' | 'cancel' | 'change'>('settle')
   const [cancelling, setCancelling] = useState(false)
   const paid = o.settledCash + o.settledTransfer
+  // 아직 안 준 거스름돈 (낸 현금 − 현금 몫). 완료 때 주거나 쿠폰에 넣는다
+  const change = o.cashGiven != null && o.status !== 'CANCELED' ? Math.max(0, o.cashGiven - o.cashAmount) : 0
 
-  const pickCoupon = async (purpose: 'settle' | 'receive' | 'cancel') => {
-    const done = (id: number) => (purpose === 'settle' ? onSettle(id) : purpose === 'receive' ? onReceive('COUPON', id) : onCancel(id))
+  const pickCoupon = async (purpose: 'settle' | 'receive' | 'cancel' | 'change') => {
+    const done = (id: number) => (purpose === 'settle' ? onSettle(id) : purpose === 'receive' ? onReceive('COUPON', id) : purpose === 'change' ? onChangeToCoupon(id) : onCancel(id))
     setPickFor(purpose)
     if (o.couponId != null) {
       done(o.couponId)
@@ -204,7 +209,15 @@ function OrderCard({ order: o, busy, onSettle, onReceive, findCoupons, canSms, o
         ))}
       </div>
       <div className="pay">{payLine(o)}</div>
-      {o.payNote && <div className="memo pay-note">💵 {o.payNote}</div>}
+      {o.payNote && (
+        <div className="memo pay-note row" style={{ alignItems: 'center', gap: 8 }}>
+          <span className="grow">💵 {o.payNote}</span>
+          {change > 0 && o.status === 'PENDING' && (
+            <button className="btn" style={{ minHeight: 36, fontSize: 13 }} disabled={busy} onClick={() => void pickCoupon('change')}>잔돈 쿠폰에 넣기</button>
+          )}
+        </div>
+      )}
+      {pickFor === 'change' && change > 0 && <CouponCandidates candidates={candidates} customerName={o.customerName} busy={busy} onPick={onChangeToCoupon} />}
       {o.memo && <div className="memo">📝 {o.memo}</div>}
       {o.editedAt && (
         <div className="edited">

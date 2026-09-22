@@ -163,6 +163,19 @@ public class CouponService {
 		couponRepository.insertTx(couponId, orderId, -amount, freeDelta, "USE", after);
 	}
 
+	/** 거스름돈을 쿠폰에 넣는다. 현금이 들어온 것이므로 충전(CHARGE)으로 남긴다. 잔돈이라 무료잔 적립은 없다. */
+	@Transactional
+	public void creditChange(long couponId, int amount, long orderId) {
+		if (amount <= 0) {
+			throw new BusinessException("넣을 금액이 없습니다.");
+		}
+		Coupon coupon = require(couponId);
+		int after = coupon.balance() + amount;
+		Validation.balance(after);
+		couponRepository.update(couponId, after, coupon.freeDrinks());
+		couponRepository.insertTx(couponId, orderId, amount, 0, "CHARGE", after);
+	}
+
 	/** 주문 취소/수정 시 차감한 금액과 소모한 무료 1잔을 되돌린다. */
 	@Transactional
 	public void refundForOrder(long couponId, int amount, boolean restoreFreeDrink, long orderId) {

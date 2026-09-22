@@ -202,6 +202,11 @@ public class OrderService {
 		orderRepository.update(orderId, row, describe(existing));
 		orderRepository.deleteLines(orderId);
 		orderRepository.insertLines(orderId, priced.lines());
+		if (existing.cashGiven() != null) {
+			// 손님 현금은 바구니에 있고 거스름돈은 완료 때 준다. 늘어난 몫은 거스름돈에서 먼저 제하고,
+			// 낸 돈을 넘는 만큼만 "더 받을 돈"이 된다. 줄어들면 거스름돈이 커질 뿐 돌려줄 돈은 없다.
+			orderRepository.setSettledCash(orderId, Math.min(cash, existing.cashGiven()));
+		}
 
 		OrderView updated = orderRepository.findById(orderId).orElseThrow();
 		events.broadcastOrdersChanged();
@@ -220,6 +225,32 @@ public class OrderService {
 			return name + " " + qty;
 		}).toList());
 		return lines + " · " + String.format("%,d", o.totalAmount()) + "원";
+	}
+
+	/**
+	 * 거스름돈(낸 현금 − 현금 몫)을 돌려주는 대신 손님 쿠폰에 넣는다. 500원 같은 잔돈을 거슬러 주기 애매할 때.
+	 * 쿠폰으로 결제한 주문이면 그 쿠폰이어야 하고, 아니면 스태프가 고른 쿠폰(주문자 이름으로 찾은 것).
+	 * 쿠폰엔 충전(CHARGE)으로 남아 그날 충전 입금에 잡힌다. 넣고 나면 낸 현금 = 현금 몫이 되어 거스름돈 0.
+	 */
+	@Transactional
+	public void changeToCoupon(long orderId, long couponId) {
+		OrderView order = require(orderId);
+		if (order.status() == Status.CANCELED) {
+			throw new BusinessException("취소된 주문입니다.");
+		}
+		if (order.cashGiven() == null) {
+			throw new BusinessException("낸 현금이 기록되지 않은 주문입니다.");
+		}
+		int change = order.cashGiven() - order.cashAmount();
+		if (change <= 0) {
+			throw new BusinessException("거스름돈이 없습니다.");
+		}
+		if (order.couponId() != null && !order.couponId().equals(couponId)) {
+			throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
+		}
+		couponService.creditChange(couponId, change, orderId);
+		orderRepository.setCashGiven(orderId, order.cashAmount());
+		events.broadcastOrdersChanged();
 	}
 
 	/** 손님이 낸 현금. 현금을 받는 주문이 아니면 무시하고, 낼 금액보다 적게 냈다고 오면 거부. */

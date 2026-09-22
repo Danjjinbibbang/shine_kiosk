@@ -87,6 +87,8 @@ export const api = {
   settleOrder: (id: number, opts: { couponId?: number | null; method?: 'CASH' | 'TRANSFER' | 'COUPON' } = {}) =>
     post<void>(`/api/staff/orders/${id}/settle`, { couponId: opts.couponId ?? null, method: opts.method ?? null }),
   couponsByName: (name: string) => request<Coupon[]>(`/api/staff/coupons?name=${encodeURIComponent(name)}`),
+  /** 거스름돈을 돌려주는 대신 쿠폰 잔액에 넣기 (잔돈 적립) */
+  changeToCoupon: (id: number, couponId: number) => post<void>(`/api/staff/orders/${id}/change-to-coupon`, { couponId }),
   cancelOrder: (id: number, refundToCouponId: number | null = null) => post<void>(`/api/staff/orders/${id}/cancel`, { refundToCouponId }),
   staffLookupCoupon: (name: string, phoneLast4?: string) =>
     post<LookupResult>('/api/staff/coupons/lookup', { name, phoneLast4: phoneLast4 || null }),

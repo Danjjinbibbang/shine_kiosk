@@ -60,6 +60,17 @@ public class StaffOrderController {
 		orderService.settle(id, request == null ? null : request.couponId(), request == null ? null : request.method());
 	}
 
+	public record ChangeToCouponRequest(Long couponId) {}
+
+	/** 거스름돈을 돌려주는 대신 손님 쿠폰 잔액에 넣는다 (잔돈 적립). */
+	@PostMapping("/{id}/change-to-coupon")
+	public void changeToCoupon(@PathVariable long id, @RequestBody ChangeToCouponRequest request) {
+		if (request == null || request.couponId() == null) {
+			throw new church.kiosk.support.BusinessException("어느 쿠폰에 넣을지 골라 주세요.");
+		}
+		orderService.changeToCoupon(id, request.couponId());
+	}
+
 	@PostMapping("/{id}/reopen")
 	public void reopen(@PathVariable long id) {
 		orderService.reopen(id);

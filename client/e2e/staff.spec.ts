@@ -641,6 +641,27 @@ test.describe('수정과 정산', () => {
     await expect(card2.getByRole('button', { name: /완료/ })).toBeEnabled()
   })
 
+  test('거스름돈이 있으면 늘어난 몫을 거기서 제하고, 잔돈은 쿠폰에 넣을 수 있다', async ({ page, request }) => {
+    const name = uniq('잔돈')
+    await registerCoupon(request, name, 20000)
+    await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 1 }], cashGiven: 5000 })   // 1,000, 낸 돈 5,000
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await expect(card.locator('.pay-note')).toContainText('현금 5,000원 받음 → 거스름돈 4,000원')
+    await card.getByRole('button', { name: '수정' }).click()
+    const modal = page.locator('.modal')
+    await modal.locator('.chips').last().getByRole('button', { name: /^아이스크림 컵/ }).click()   // +3,000 → 4,000
+    await modal.getByRole('button', { name: '저장' }).click()
+    await expect(card.locator('.pay-note')).toContainText('거스름돈 1,000원')
+    await expect(card.locator('.settle')).toHaveCount(0)   // 더 받을 돈 없음
+    await expect(card.getByRole('button', { name: /완료/ })).toBeEnabled()
+    await card.getByRole('button', { name: '잔돈 쿠폰에 넣기' }).click()
+    await expect(page.locator('.toast')).toContainText('거스름돈을 쿠폰 잔액에 넣었습니다')
+    await expect(card.locator('.pay-note')).toContainText('현금 4,000원 딱 맞게')
+    await expect(card.getByRole('button', { name: '잔돈 쿠폰에 넣기' })).toHaveCount(0)
+    expect((await lookupCoupon(request, name)).coupon.balance).toBe(21000)
+  })
+
   test('취소하면서 받은 돈을 주문자 쿠폰에 넣기', async ({ page, request }) => {
     const name = uniq('취소쿠폰')
     await registerCoupon(request, name, 20000)

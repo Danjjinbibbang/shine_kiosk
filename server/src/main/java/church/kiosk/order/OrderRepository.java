@@ -149,6 +149,15 @@ public class OrderRepository {
 				.param("id", orderId).update();
 	}
 
+	/** 낸 현금이 있는 주문: 현금 몫 중 이미 손에 있는 만큼을 받은 것으로 (거스름돈이 늘어난 몫을 흡수). */
+	public void setSettledCash(long orderId, int settledCash) {
+		jdbc.sql("UPDATE orders SET settled_cash = :v WHERE id = :id").param("v", settledCash).param("id", orderId).update();
+	}
+
+	public void setCashGiven(long orderId, int cashGiven) {
+		jdbc.sql("UPDATE orders SET cash_given = :v WHERE id = :id").param("v", cashGiven).param("id", orderId).update();
+	}
+
 	/** 더 받을 돈을 현금으로 받았으면 손님이 낸 현금도 그만큼 늘어난 것 (거스름돈 계산이 계속 맞도록). */
 	public void addCashGiven(long orderId, int amount) {
 		jdbc.sql("UPDATE orders SET cash_given = COALESCE(cash_given, 0) + :amount WHERE id = :id")
