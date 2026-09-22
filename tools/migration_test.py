@@ -120,11 +120,9 @@ s, ch = call('POST', f"/api/staff/coupons/{c2['id']}/charge", {'amount': 20000},
 s, h = call('GET', f"/api/staff/coupons/{c2['id']}/history", None, tok); check(len(h) == 3 and all('freeDelta' in x for x in h), f'옛 이력 + 새 이력 {len(h)}줄')
 # 옛 주문 수정/정산/취소가 되는지
 s, u = call('PUT', f"/api/staff/orders/{o1['id']}", {'customerName': '김현금', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(1001, 1)], 'memo': None}, tok)
-check(s == 200 and u['settledCash'] == 2000 and u['cashAmount'] == 1000, f'옛 현금 주문 수정 → 돌려줄 1,000 {u.get("settledCash")}/{u.get("cashAmount")}')
+check(s == 200 and u['settledCash'] == 1000 and u['cashAmount'] == 1000, f'옛 현금 주문(5,000 냄) 수정 2,000→1,000: 돌려줄 돈 없이 거스름돈만 커짐 {u.get("settledCash")}/{u.get("cashAmount")}')
 check(u.get('cashGiven') == 5000 and u.get('payNote') == '현금 5,000원 받음 → 거스름돈 4,000원' and u.get('memo') is None, f'옛 현금 메모가 낸 돈으로 옮겨지고 수정 뒤 거스름돈이 다시 계산됨: {u.get("cashGiven")} / {u.get("payNote")} / memo={u.get("memo")}')
-s, _ = call('POST', f"/api/staff/orders/{o1['id']}/done", None, tok); check(s == 400, '정산 전 완료 불가')
-s, _ = call('POST', f"/api/staff/orders/{o1['id']}/settle", {}, tok); check(s == 200, '현금 정산')
-s, _ = call('POST', f"/api/staff/orders/{o1['id']}/done", None, tok); check(s == 200, '완료')
+s, _ = call('POST', f"/api/staff/orders/{o1['id']}/done", None, tok); check(s == 200, '정산 없이 바로 완료')
 s, _ = call('POST', f"/api/staff/orders/{o2['id']}/cancel", {}, tok); check(s == 200, '옛 쿠폰 주문 취소')
 s, c1b = call('GET', f"/api/staff/coupons/{c1['id']}", None, tok); check(c1b['balance'] == 20000 and c1b['freeDrinks'] == 1, f'취소 후 잔액/무료잔 복원 {c1b["balance"]}/{c1b["freeDrinks"]}')
 s, o4 = call('POST', '/api/orders', {'customerName': '새손님', 'receiveType': 'STORE', 'payMethod': 'CASH', 'lines': [{'variantId': 1001, 'quantity': 1, 'optionIds': [1]}], 'clientRequestId': 'mig-1'})
