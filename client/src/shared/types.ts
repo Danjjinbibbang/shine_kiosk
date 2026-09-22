@@ -217,6 +217,10 @@ export interface Order {
   settledTransfer: number
   /** 손님이 낸 현금 (없으면 생략) */
   cashGiven?: number | null
+  /** 거스름돈 중 쿠폰에 넣은 금액 */
+  changeCredited: number
+  /** 아직 안 준 거스름돈 */
+  changeDue: number
   /** "현금 5,000원 받음 → 거스름돈 1,000원" — 수정 뒤에도 지금 금액 기준 (없으면 생략) */
   payNote?: string | null
   lines: OrderLine[]

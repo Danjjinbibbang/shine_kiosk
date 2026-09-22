@@ -28,7 +28,7 @@ public class OrderRepository {
 			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
 			total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
 			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at,
-			edited_at, edit_note, settled_cash, settled_transfer, client_request_id, cash_given
+			edited_at, edit_note, settled_cash, settled_transfer, client_request_id, cash_given, change_credited
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
@@ -154,8 +154,9 @@ public class OrderRepository {
 		jdbc.sql("UPDATE orders SET settled_cash = :v WHERE id = :id").param("v", settledCash).param("id", orderId).update();
 	}
 
-	public void setCashGiven(long orderId, int cashGiven) {
-		jdbc.sql("UPDATE orders SET cash_given = :v WHERE id = :id").param("v", cashGiven).param("id", orderId).update();
+	/** 거스름돈 일부/전부를 쿠폰에 넣었다는 기록. 낸 돈은 그대로 두어 사실이 남는다. */
+	public void addChangeCredited(long orderId, int amount) {
+		jdbc.sql("UPDATE orders SET change_credited = change_credited + :v WHERE id = :id").param("v", amount).param("id", orderId).update();
 	}
 
 	/** 더 받을 돈을 현금으로 받았으면 손님이 낸 현금도 그만큼 늘어난 것 (거스름돈 계산이 계속 맞도록). */
@@ -289,7 +290,7 @@ public class OrderRepository {
 				o.payMethod(), o.remainderMethod(),
 				o.couponId(), o.couponAmount(), o.freeAmount(), o.freeItemName(),
 				o.cashAmount(), o.transferAmount(), o.status(),
-				o.memo(), o.createdAt(), o.completedAt(), o.editedAt(), o.editNote(), o.settledCash(), o.settledTransfer(), o.cashGiven(), lines);
+				o.memo(), o.createdAt(), o.completedAt(), o.editedAt(), o.editNote(), o.settledCash(), o.settledTransfer(), o.cashGiven(), o.changeCredited(), lines);
 	}
 
 	private static OrderView mapOrder(ResultSet rs, int rowNum) throws SQLException {
@@ -309,7 +310,7 @@ public class OrderRepository {
 				rs.getInt("cash_amount"), rs.getInt("transfer_amount"), Status.valueOf(rs.getString("status")),
 				rs.getString("memo"), rs.getString("created_at"), rs.getString("completed_at"),
 				rs.getString("edited_at"), rs.getString("edit_note"), rs.getInt("settled_cash"), rs.getInt("settled_transfer"),
-				cashGiven(rs),
+				cashGiven(rs), rs.getInt("change_credited"),
 				List.of());
 	}
 

@@ -101,7 +101,8 @@ CREATE TABLE IF NOT EXISTS orders (
     transfer_amount INTEGER NOT NULL DEFAULT 0,
     status          TEXT    NOT NULL,          -- PENDING | DONE | CANCELED
     memo            TEXT,                      -- 스태프/손님 자유 메모
-    cash_given      INTEGER,                   -- 손님이 낸 현금 (거스름돈 = cash_given - cash_amount). 현금 안 냈으면 NULL
+    cash_given      INTEGER,                   -- 손님이 낸 현금. 현금 안 냈으면 NULL
+    change_credited INTEGER NOT NULL DEFAULT 0, -- 거스름돈 중 쿠폰에 넣은 금액. 남은 거스름돈 = cash_given - cash_amount - change_credited
     -- 스태프 수정: 언제, 이전엔 뭐였는지. 실제 받은 현금/이체(settled_*)와 현재 금액의 차이가 돌려주거나 더 받을 돈.
     edited_at       TEXT,
     edit_note       TEXT,

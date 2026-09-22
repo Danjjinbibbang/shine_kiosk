@@ -165,11 +165,21 @@ class OrderEditSettlementTests extends ApiTestSupport {
 		assertThat(r.status()).as(r.body()).isEqualTo(200);
 		assertThat(balanceOf("이영희")).isEqualTo(20500);
 		Response o = staffGet("/api/staff/orders");
-		assertThat(o.<List<String>>read("$[?(@.id==" + id + ")].payNote")).containsExactly("현금 2,500원 딱 맞게");
-		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].cashGiven")).containsExactly(2500);
+		assertThat(o.<List<String>>read("$[?(@.id==" + id + ")].payNote")).containsExactly("현금 3,000원 받음 → 거스름돈 500원은 쿠폰 충전");
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].cashGiven")).as("낸 돈은 그대로").containsExactly(3000);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].changeCredited")).containsExactly(500);
+		assertThat(o.<List<Integer>>read("$[?(@.id==" + id + ")].changeDue")).containsExactly(0);
 		Response h = staffGet("/api/staff/coupons/" + coupon + "/history");
 		assertThat(h.<List<String>>read("$[?(@.orderId==" + id + ")].reason")).containsExactly("CHARGE");
 		assertThat(staffPost("/api/staff/orders/" + id + "/change-to-coupon", Map.of("couponId", coupon)).message()).contains("거스름돈이 없");
+		// 잔돈을 넣은 뒤 주문이 줄면 새 거스름돈이 또 생기고, 늘면 (쿠폰에 넣은 건 못 쓰니) 낸 돈 − 넣은 잔돈을 넘는 만큼 더 받는다
+		Response smaller = edit(id, line(AMERICANO_ICE, 1));                                   // 1,000
+		assertThat(smaller.<String>read("$.payNote")).isEqualTo("현금 3,000원 받음 → 거스름돈 2,000원 (500원은 쿠폰 충전, 1,500원 드리기)");
+		assertThat(smaller.<Integer>read("$.changeDue")).isEqualTo(1500);
+		Response bigger = edit(id, line(ICECREAM_CUP, 1));                                     // 3,000
+		assertThat(bigger.<Integer>read("$.settledCash")).as("손에 있는 현금은 2,500 뿐").isEqualTo(2500);
+		assertThat(bigger.<String>read("$.payNote")).isEqualTo("현금 3,000원 받음 (500원은 쿠폰 충전) → 500원 더 받아야");
+		edit(id, line(VANILLA_ICE, 1));                                                          // 2,500 으로 되돌림
 		// 그날 충전 입금에 잡힌다
 		Response days = staffGet("/api/staff/reports/days");
 		assertThat(days.<Integer>read("$[0].couponChargeAmount")).isEqualTo(20500);

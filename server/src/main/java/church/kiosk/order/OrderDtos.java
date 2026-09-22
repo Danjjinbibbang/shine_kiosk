@@ -91,7 +91,15 @@ public final class OrderDtos {
 							int settledCash, int settledTransfer,
 							/** 손님이 낸 현금. 없으면 null */
 							Integer cashGiven,
+							/** 거스름돈 중 쿠폰에 넣은 금액 */
+							int changeCredited,
 							List<LineView> lines) {
+
+		/** 아직 안 준 거스름돈 (낸 현금 − 현금 몫 − 쿠폰에 넣은 잔돈). 낸 현금 기록이 없으면 0 */
+		@com.fasterxml.jackson.annotation.JsonProperty
+		public int changeDue() {
+			return cashGiven == null ? 0 : Math.max(0, cashGiven - cashAmount - changeCredited);
+		}
 
 		/**
 		 * "현금 5,000원 받음 → 거스름돈 1,000원" — 지금 금액 기준이라 수정 뒤에도 맞는다. 현금을 안 냈으면 null.
@@ -103,12 +111,21 @@ public final class OrderDtos {
 			if (cashGiven == null) return null;
 			boolean mixed = cashAmount != totalAmount;
 			String head = mixed ? "현금 몫 " + won(cashAmount) + " · " : "현금 ";
-			int change = cashGiven - cashAmount;
+			String creditedNote = changeCredited > 0 ? " (" + won(changeCredited) + "은 쿠폰 충전)" : "";
+			// 아직 못 받은 현금이 있으면 (낸 돈 − 쿠폰에 넣은 잔돈 을 넘게 늘어난 경우) 그것부터
+			int owed = cashAmount - settledCash;
+			if (owed > 0) return head + won(cashGiven) + " 받음" + creditedNote + " → " + won(owed) + " 더 받아야";
+			int change = cashGiven - cashAmount;            // 전체 거스름돈 (쿠폰에 넣은 것 포함)
+			int remaining = change - changeCredited;       // 아직 손에 쥐어 줄 거스름돈
+			if (changeCredited > 0) {
+				String credited = won(changeCredited) + "은 쿠폰 충전";
+				return remaining <= 0
+						? head + won(cashGiven) + " 받음 → 거스름돈 " + credited
+						: head + won(cashGiven) + " 받음 → 거스름돈 " + won(change) + " (" + credited + ", " + won(remaining) + " 드리기)";
+			}
 			if (change > 0) return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change);
 			if (change == 0) return head + won(cashGiven) + " 딱 맞게";
-			// 낸 돈보다 금액이 커진 경우: 이미 거슬러 준 돈은 빼고, 실제로 아직 못 받은 만큼만
-			int owed = cashAmount - settledCash;
-			return owed > 0 ? head + won(cashGiven) + " 받음 → " + won(owed) + " 더 받아야" : head + won(cashGiven) + " 받음";
+			return head + won(cashGiven) + " 받음";
 		}
 
 		private static String won(int n) { return String.format("%,d원", n); }

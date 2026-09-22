@@ -657,7 +657,7 @@ test.describe('수정과 정산', () => {
     await expect(card.getByRole('button', { name: /완료/ })).toBeEnabled()
     await card.getByRole('button', { name: '잔돈 쿠폰에 넣기' }).click()
     await expect(page.locator('.toast')).toContainText('거스름돈을 쿠폰 잔액에 넣었습니다')
-    await expect(card.locator('.pay-note')).toContainText('현금 4,000원 딱 맞게')
+    await expect(card.locator('.pay-note')).toContainText('현금 5,000원 받음 → 거스름돈 1,000원은 쿠폰 충전')
     await expect(card.getByRole('button', { name: '잔돈 쿠폰에 넣기' })).toHaveCount(0)
     expect((await lookupCoupon(request, name)).coupon.balance).toBe(21000)
   })

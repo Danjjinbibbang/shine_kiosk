@@ -311,9 +311,9 @@ with Case('E 정산', '낸 현금이 있으면 늘어난 몫은 거스름돈에�
     c.eq(s, 200, msg(u)); c.eq(u['settledCash'], 4000, 'absorbed'); c.eq(u['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원', 'note2')
     s, d = act(o['id'], 'done'); c.eq(s, 200, 'done without settle'); act(o['id'], 'reopen')
     s, x = staff('POST', f"/api/staff/orders/{o['id']}/change-to-coupon", {'couponId': cp['id']}); c.eq(s, 200, msg(x))
-    c.eq(get_coupon(cp['id'])['balance'], 21000, 'coupon +1000'); c.eq(get_order(o['id'])['payNote'], '현금 4,000원 딱 맞게', 'note3')
+    c.eq(get_coupon(cp['id'])['balance'], 21000, 'coupon +1000'); c.eq(get_order(o['id'])['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원은 쿠폰 충전', 'note3')
     s, u2 = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO, 2)], 'memo': None})   # 6,000
-    c.eq(u2['cashAmount'] - u2['settledCash'], 2000, 'extra 2000'); c.eq(u2['payNote'], '현금 4,000원 받음 → 2,000원 더 받아야', 'note4')
+    c.eq(u2['cashAmount'] - u2['settledCash'], 2000, 'extra 2000'); c.eq(u2['payNote'], '현금 5,000원 받음 (1,000원은 쿠폰 충전) → 2,000원 더 받아야', 'note4')
 
 # ── F. 메뉴/옵션/카테고리/장소 관리가 키오스크에 반영 ─────────────
 with Case('F 설정', '카테고리 추가 → 메뉴 추가 → 키오스크 메뉴에 등장 → 주문 가능 → 삭제 후 주문 거부, 지난 주문 유지') as c:

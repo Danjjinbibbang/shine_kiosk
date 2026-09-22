@@ -175,7 +175,7 @@ function OrderCard({ order: o, busy, onSettle, onReceive, onChangeToCoupon, find
   const [cancelling, setCancelling] = useState(false)
   const paid = o.settledCash + o.settledTransfer
   // 아직 안 준 거스름돈 (낸 현금 − 현금 몫). 완료 때 주거나 쿠폰에 넣는다
-  const change = o.cashGiven != null && o.status !== 'CANCELED' ? Math.max(0, o.cashGiven - o.cashAmount) : 0
+  const change = o.status === 'CANCELED' ? 0 : o.changeDue
 
   const pickCoupon = async (purpose: 'settle' | 'receive' | 'cancel' | 'change') => {
     const done = (id: number) => (purpose === 'settle' ? onSettle(id) : purpose === 'receive' ? onReceive('COUPON', id) : purpose === 'change' ? onChangeToCoupon(id) : onCancel(id))
