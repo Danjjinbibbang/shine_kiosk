@@ -239,6 +239,8 @@ function OrderCard({ order: o, busy, onSettle, onReceive, onChangeToCoupon, find
             {orderLabel(o)} {o.customerName}님 주문을 취소합니다.
             {paid > 0 && ` 받은 ${won(paid)}은?`}
             {o.couponId != null && <small className="muted"> (쿠폰으로 낸 몫은 자동 복원)</small>}
+            {change > 0 && <small className="muted"> (낸 현금 {won(o.cashGiven ?? 0)} 중 거스름돈 {won(change)}은 어차피 현금으로 드리기)</small>}
+            {o.changeCredited > 0 && <small className="muted"> (쿠폰에 넣은 잔돈 {won(o.changeCredited)}은 쿠폰에 그대로)</small>}
           </span>
           {paid > 0 ? (
             <>

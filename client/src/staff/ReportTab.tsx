@@ -98,7 +98,7 @@ export function ReportTab({ onToast }: { onToast: (msg: string) => void }) {
                         <div className="muted lines">
                           {o.lines.map((l) => `${l.menuName}${l.variantLabel ? ' ' + l.variantLabel : ''}${l.options.length ? ' (' + l.options.map((x) => x.name).join(', ') + ')' : ''} ×${l.quantity}${l.staffFreeQty ? ` (사역자 ${l.staffFreeQty})` : ''}`).join(' / ')}
                         </div>
-                        <div className="muted">{won(o.totalAmount)} · {PAY_LABEL[o.payMethod]}{o.receiveType === 'DELIVERY' && ` · 🚶 ${o.placeName}`}</div>
+                        <div className="muted">{payBreakdown(o)}{o.receiveType === 'DELIVERY' && ` · 🚶 ${o.placeName}`}</div>
                       </div>
                     ))}
                   </div>
@@ -136,4 +136,15 @@ async function downloadCsv(path: string, filename: string, onToast: (m: string) 
   } catch (e) {
     onToast(e instanceof ApiError ? e.message : '내려받지 못했습니다.')
   }
+}
+
+/** "3,000원 · 현금" / "10,500원 = 쿠폰 4,500원 + 현금 6,000원" — 섞인 주문은 구성대로 */
+function payBreakdown(o: Order): string {
+  const parts: string[] = []
+  if (o.freeAmount) parts.push('무료 1잔')
+  if (o.couponAmount) parts.push(`쿠폰 ${won(o.couponAmount)}`)
+  if (o.cashAmount) parts.push(`현금 ${won(o.cashAmount)}`)
+  if (o.transferAmount) parts.push(`이체 ${won(o.transferAmount)}`)
+  if (parts.length <= 1) return `${won(o.totalAmount)} · ${parts[0] ?? PAY_LABEL[o.payMethod]}`
+  return `${won(o.totalAmount)} = ${parts.join(' + ')}`
 }

@@ -172,10 +172,12 @@ export function CouponStep({ lines, total, submitting, onDone }: CouponProps) {
         {error && <div className="error">{error}</div>}
         <div className="muted center">"{name}" 이름의 쿠폰이 {candidates.length}개 있어요. 본인 전화번호를 골라 주세요.</div>
         <div className="stack">
-          {candidates.map((c) => (
+          {candidates.map((c) => c.phoneLast4 ? (
             <button key={c.id} className="btn huge" disabled={busy} onClick={() => void lookup(name, c.phoneLast4 ?? '')}>
-              📱 010-****-{c.phoneLast4 ?? '????'}
+              📱 010-****-{c.phoneLast4}
             </button>
+          ) : (
+            <div key={c.id} className="muted center" style={{ fontSize: 18 }}>📱 전화번호가 등록되지 않은 쿠폰이 있어요 — 스태프에게 말씀해 주세요</div>
           ))}
         </div>
         <div className="kiosk-foot">

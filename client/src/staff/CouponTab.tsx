@@ -235,7 +235,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
               <div key={t.id} className="history-row">
                 <span className="muted when">{t.createdAt.slice(5, 10).replace('-', '/')} {t.createdAt.slice(11, 16)}</span>
                 <span className="grow">
-                  {REASON[t.reason] ?? t.reason}
+                  {t.reason === 'CHARGE' && t.orderNo != null ? '잔돈 충전' : (REASON[t.reason] ?? t.reason)}
                   {t.orderNo != null && <span className="muted"> · 주문 #{t.orderNo}</span>}
                   {t.freeDelta !== 0 && <span className="muted"> · 무료잔 {t.freeDelta > 0 ? '+' : ''}{t.freeDelta}</span>}
                 </span>
