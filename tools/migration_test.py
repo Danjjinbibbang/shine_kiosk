@@ -60,6 +60,8 @@ def register_old(name, amount, phone):
     s, j = call('POST', '/api/staff/coupons', {'name': name, 'phone': phone, 'amount': amount}, tok)
     if s == 200 and (j.get('phone') or j.get('phoneLast4')):
         return s, j
+    if s == 200:   # 옛 버전이 phone 필드를 무시하고 만든 쿠폰 → 지우고 그 버전 방식으로 다시
+        call('DELETE', f"/api/staff/coupons/{j['id']}", None, tok)
     s2, j2 = call('POST', '/api/staff/coupons', {'name': name, 'phoneLast4': phone[-4:], 'amount': amount}, tok)
     return (s2, j2) if s2 == 200 else (s, j)
 
