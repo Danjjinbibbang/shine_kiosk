@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { createOrder, lookupCoupon, orderCard, orderOf, registerCoupon, staffLogin, uniq } from './helpers'
+import { addMenuInModal, createOrder, lookupCoupon, orderCard, orderOf, registerCoupon, staffLogin, uniq } from './helpers'
 
 test.describe('로그인', () => {
   test('틀린 PIN 은 오류, 맞으면 목록, 새로고침해도 유지, 나가기하면 다시 PIN', async ({ page }) => {
@@ -94,7 +94,7 @@ test.describe('주문 처리', () => {
     await modal.getByRole('button', { name: '배달' }).click()
     await modal.getByRole('button', { name: '1층 전도사님실' }).click()
     await modal.locator('.cart-line').first().getByRole('button', { name: '+' }).click()
-    await modal.locator('.chips').last().getByRole('button', { name: /^아포카토/ }).click()
+    await addMenuInModal(page, '커피', /^아포카토/)
     await expect(modal.locator('.total-box .amount')).toHaveText('5,000원')
     await modal.getByRole('button', { name: '저장' }).click()
 
@@ -600,7 +600,7 @@ test.describe('수정과 정산', () => {
     const card = orderCard(page, name)
     await card.getByRole('button', { name: '수정' }).click()
     const modal = page.locator('.modal')
-    await modal.locator('.chips').last().getByRole('button', { name: /^아이스크림 컵/ }).click()
+    await addMenuInModal(page, '아이스크림', /^아이스크림 컵/)
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(card.locator('.settle')).toContainText('3,000원 더 받기')
     await expect(card.getByRole('button', { name: '현금으로 받았어요' })).toBeVisible()
@@ -627,7 +627,7 @@ test.describe('수정과 정산', () => {
     const card = orderCard(page, name)
     await card.getByRole('button', { name: '수정' }).click()
     const modal = page.locator('.modal')
-    await modal.locator('.chips').last().getByRole('button', { name: /^아이스크림 컵/ }).click()
+    await addMenuInModal(page, '아이스크림', /^아이스크림 컵/)
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(card.locator('.settle')).toContainText('3,000원 더 받기')
     await card.getByRole('button', { name: '쿠폰에서 빼기' }).click()
@@ -641,7 +641,7 @@ test.describe('수정과 정산', () => {
     await createOrder(request, { customerName: name2, lines: [{ variantId: 1001, quantity: 1 }] })
     const card2 = orderCard(page, name2)
     await card2.getByRole('button', { name: '수정' }).click()
-    await modal.locator('.chips').last().getByRole('button', { name: /^아이스크림 컵/ }).click()
+    await addMenuInModal(page, '아이스크림', /^아이스크림 컵/)
     await modal.getByRole('button', { name: '저장' }).click()
     await card2.getByRole('button', { name: '계좌이체로 받았어요' }).click()
     await expect(card2.locator('.pay')).toContainText('현금 1,000원 + 이체 3,000원')
@@ -657,7 +657,7 @@ test.describe('수정과 정산', () => {
     await expect(card.locator('.pay-note')).toContainText('현금 5,000원 받음 → 거스름돈 4,000원')
     await card.getByRole('button', { name: '수정' }).click()
     const modal = page.locator('.modal')
-    await modal.locator('.chips').last().getByRole('button', { name: /^아이스크림 컵/ }).click()   // +3,000 → 4,000
+    await addMenuInModal(page, '아이스크림', /^아이스크림 컵/)   // +3,000 → 4,000
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(card.locator('.pay-note')).toContainText('거스름돈 1,000원')
     await expect(card.locator('.settle')).toHaveCount(0)   // 더 받을 돈 없음
@@ -691,7 +691,7 @@ test.describe('수정과 정산', () => {
     const card = orderCard(page, name)
     await card.getByRole('button', { name: '수정' }).click()
     const modal = page.locator('.modal')
-    await modal.locator('.chips').last().getByRole('button', { name: /^아메리카노 ICE/ }).click()
+    await addMenuInModal(page, '커피', /^아메리카노 ICE/)
     await modal.locator('.cart-line-wrap').first().getByRole('button', { name: '−' }).click()
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(card.locator('.settle')).toContainText('2,000원 돌려주기')
@@ -711,7 +711,7 @@ test.describe('수정과 정산', () => {
     const card = orderCard(page, name)
     await card.getByRole('button', { name: '수정' }).click()
     const modal = page.locator('.modal')
-    await modal.locator('.chips').last().getByRole('button', { name: /^아메리카노 ICE/ }).click()
+    await addMenuInModal(page, '커피', /^아메리카노 ICE/)
     await modal.locator('.cart-line-wrap').first().getByRole('button', { name: '−' }).click()   // 컵 빼고 아메리카노만
     await modal.getByRole('button', { name: '저장' }).click()
     await expect(card.locator('.settle')).toContainText('1,500원 돌려주기')

@@ -121,3 +121,11 @@ export async function staffLogin(page: Page) {
 export function orderCard(page: Page, customerName: string) {
   return page.locator('.order-card').filter({ has: page.locator('.who', { hasText: customerName }) })
 }
+
+/** 주문 수정 모달의 '메뉴 추가': 카테고리를 펼치고 메뉴를 누른다 (카테고리별 아코디언) */
+export async function addMenuInModal(page: Page, category: string, menu: RegExp) {
+  const modal = page.locator('.modal')
+  const head = modal.locator('.cat-head').filter({ has: page.locator('b', { hasText: new RegExp(`^${category}$`) }) })
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+  await modal.locator('.cat-body').getByRole('button', { name: menu }).click()
+}

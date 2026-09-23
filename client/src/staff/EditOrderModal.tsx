@@ -20,6 +20,8 @@ interface Props {
  */
 export function EditOrderModal({ order, onClose, onSaved }: Props) {
   const [menu, setMenu] = useState<MenuItem[]>([])
+  // '메뉴 추가' 는 카테고리별로 접어 둔다 (메뉴가 많으면 한 줄로 늘어져 고르기 힘들다)
+  const [openCat, setOpenCat] = useState<string | null>(null)
   const [allOptions, setAllOptions] = useState<MenuOption[]>([])
   const [floors, setFloors] = useState<FloorGroup[]>([])
   const [name, setName] = useState(order.customerName)
@@ -65,6 +67,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
     }).catch(() => setError('메뉴를 불러오지 못했습니다.'))
   }, [order])
 
+  const categories = useMemo(() => [...new Set(menu.map((m) => m.category))], [menu])
   const total = useMemo(() => cartTotal(lines), [lines])
   const staffFree = useMemo(() => cartStaffFree(lines), [lines])
 
@@ -169,14 +172,29 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
 
         <div className="field">
           <label>메뉴 추가</label>
-          <div className="chips">
-            {menu.flatMap((item) => item.variants.map((v) => (
-              <button key={v.id} className="btn"
-                onClick={() => setLines(addPlainCup(lines, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price }))}>
-                {item.name}{v.label ? ` ${v.label}` : ''} <span className="muted">{won(v.price)}</span>
-              </button>
-            )))}
-          </div>
+          {categories.map((cat) => {
+            const items = menu.filter((m) => m.category === cat)
+            const open = openCat === cat
+            return (
+              <section key={cat} className="cat-group">
+                <button className="cat-head" aria-expanded={open} onClick={() => setOpenCat(open ? null : cat)}>
+                  <span className="chev">{open ? '▾' : '▸'}</span>
+                  <b className="grow">{cat}</b>
+                  <span className="muted">{items.reduce((n, m) => n + m.variants.length, 0)}개</span>
+                </button>
+                {open && (
+                  <div className="chips cat-body">
+                    {items.flatMap((item) => item.variants.map((v) => (
+                      <button key={v.id} className="btn"
+                        onClick={() => setLines(addPlainCup(lines, { variantId: v.id, itemName: item.name, category: item.category, label: v.label, price: v.price }))}>
+                        {item.name}{v.label ? ` ${v.label}` : ''} <span className="muted">{won(v.price)}</span>
+                      </button>
+                    )))}
+                  </div>
+                )}
+              </section>
+            )
+          })}
         </div>
 
         <div className="field">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
-import { RULES, formatPhoneInput, isChargeAmount, isMobile } from '../shared/rules'
+import { RULES, formatMoneyInput, formatPhoneInput, isChargeAmount, isMobile, parseMoney } from '../shared/rules'
 import type { ChargePreset, Coupon, CouponTx } from '../shared/types'
 import { won } from '../shared/types'
 
@@ -93,7 +93,7 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
   })
 
   const adjust = (c: Coupon) => wrap(async () => {
-    const balance = newBalance === '' ? c.balance : Number(newBalance)
+    const balance = newBalance === '' ? c.balance : parseMoney(newBalance)
     const free = newFree === '' ? c.freeDrinks : Number(newFree)
     if (!window.confirm(`${c.name}님\n잔액 ${won(c.balance)} → ${won(balance)}\n무료잔 ${c.freeDrinks}잔 → ${free}잔\n이렇게 바꿀까요?`)) return
     const updated = await api.adjustCoupon(c.id, balance, free)
@@ -209,8 +209,8 @@ export function CouponTab({ onToast }: { onToast: (msg: string) => void }) {
             <div className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
               <div className="muted" style={{ fontSize: 14 }}>잘못 충전했을 때 직접 고칩니다. 비워 두면 그대로, 차액은 이력에 남습니다.</div>
               <div className="row">
-                <input className="text-input grow" inputMode="numeric" placeholder={`잔액 (지금 ${won(coupon.balance)})`} value={newBalance} maxLength={7}
-                  onChange={(e) => setNewBalance(e.target.value.replace(/[^0-9]/g, ''))} autoFocus />
+                <input className="text-input grow" inputMode="numeric" placeholder={`잔액 (지금 ${won(coupon.balance)})`} value={newBalance} maxLength={11}
+                  onChange={(e) => setNewBalance(formatMoneyInput(e.target.value))} autoFocus />
                 <input className="text-input" style={{ width: 130 }} inputMode="numeric" placeholder={`무료 ${coupon.freeDrinks}잔`} value={newFree} maxLength={3}
                   onChange={(e) => setNewFree(e.target.value.replace(/[^0-9]/g, ''))} />
               </div>
@@ -303,8 +303,8 @@ function AmountPicker({ preset, amount, custom, busy, label, onAmount, onSubmit 
         ))}
       </div>
       <div className="row">
-        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액" value={amount} maxLength={6}
-          onChange={(e) => onAmount(e.target.value.replace(/[^0-9]/g, ''))} />
+        <input className="text-input grow" inputMode="numeric" placeholder="다른 금액" value={amount} maxLength={9}
+          onChange={(e) => onAmount(formatMoneyInput(e.target.value))} />
         <button className="btn" disabled={busy || !ok} onClick={() => onSubmit(custom)}>{custom > 0 ? label(custom) : '확인'}</button>
       </div>
       {custom > 0 && !ok && <div className="error" style={{ fontSize: 13 }}>한 번에 {won(preset.max)}까지 충전할 수 있어요.</div>}

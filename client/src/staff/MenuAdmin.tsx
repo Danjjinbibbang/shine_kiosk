@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../shared/api'
-import { RULES, isPrice } from '../shared/rules'
+import { RULES, formatMoneyInput, isPrice, parseMoney } from '../shared/rules'
 import type { AdminItem, AdminVariant, SaveItemRequest } from '../shared/types'
 import { won } from '../shared/types'
 import { Switch } from '../shared/Switch'
@@ -198,8 +198,8 @@ function MenuItemModal({ item, initialCategory, categories, onClose, onSaved }: 
               <div key={i} className="row variant-edit">
                 <input className="text-input" placeholder="예: ICE" value={v.label ?? ''} maxLength={RULES.labelMax}
                   onChange={(e) => setVariant(i, { label: e.target.value })} />
-                <input className="text-input price" inputMode="numeric" placeholder="가격" value={v.price || ''} maxLength={6}
-                  onChange={(e) => setVariant(i, { price: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })} />
+                <input className="text-input price" inputMode="numeric" placeholder="가격" value={v.price ? v.price.toLocaleString('ko-KR') : ''} maxLength={9}
+                  onChange={(e) => setVariant(i, { price: parseMoney(formatMoneyInput(e.target.value)) })} />
                 <Switch small on={v.available} onLabel="판매" offLabel="품절" onChange={(next) => setVariant(i, { available: next })} />
                 <button className="btn ghost" disabled={variants.length === 1} aria-label="선택지 삭제"
                   onClick={() => setVariants((vs) => vs.filter((_, k) => k !== i))}>✕</button>

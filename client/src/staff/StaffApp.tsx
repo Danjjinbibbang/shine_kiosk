@@ -1,4 +1,5 @@
 import { useAutoReload } from '../shared/useAutoReload'
+import { useStayOnPage } from '../shared/useStayOnPage'
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, getStaffToken, setStaffToken, subscribeOrders } from '../shared/api'
 import type { DailySummary } from '../shared/types'
@@ -20,6 +21,8 @@ export function StaffApp() {
   const [toast, setToast] = useState<string | null>(null)
   // 새 버전이 나오면 새로고침 (로그인은 토큰이 폰에 저장돼 있어 유지된다)
   useAutoReload(true)
+  // 뒤로가기로 손님 화면(키오스크)으로 넘어가지 않게
+  useStayOnPage()
 
   useEffect(() => {
     if (!getStaffToken()) {

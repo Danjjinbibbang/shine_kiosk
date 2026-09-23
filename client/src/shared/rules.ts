@@ -20,6 +20,18 @@ export function isMobile(raw: string): boolean {
   return /^01[016789][0-9]{8}$/.test(raw.replace(/[^0-9]/g, ''))
 }
 
+/** 금액 입력칸: 타이핑하는 대로 12,000 처럼 쉼표를 넣는다 (빈 칸은 빈 문자열) */
+export function formatMoneyInput(raw: string, max = 9_999_999): string {
+  const digits = raw.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '')
+  if (!digits) return ''
+  return Math.min(Number(digits), max).toLocaleString('ko-KR')
+}
+
+/** 쉼표가 섞인 입력칸 값에서 숫자만 (빈 칸은 0) */
+export function parseMoney(value: string): number {
+  return Number(value.replace(/[^0-9]/g, '')) || 0
+}
+
 /** 타이핑하는 대로 010-1234-5678 모양으로. 숫자 11자리(하이픈 포함 13자)까지만 */
 export function formatPhoneInput(raw: string): string {
   const d = raw.replace(/[^0-9]/g, '').slice(0, 11)
