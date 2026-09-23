@@ -701,7 +701,7 @@ pkg update && pkg upgrade -y && pkg install -y openjdk-21
 termux-setup-storage
 mkdir -p ~/kiosk/data ~/kiosk/config ~/.termux/boot
 # 3) jar + 부팅 스크립트 (GitHub 릴리스에서)
-R=https://github.com/fasol/shine_kiosk/releases/latest/download
+R=https://github.com/Danjjinbibbang/shine_kiosk/releases/latest/download
 curl -L -o ~/kiosk/kiosk-server.jar        $R/kiosk-server.jar
 curl -L -o ~/.termux/boot/start-kiosk.sh   $R/start-kiosk.sh
 sed -i 's/\\r$//' ~/.termux/boot/start-kiosk.sh
@@ -736,7 +736,7 @@ o.bullets('업데이트 절차 (PC → 태블릿)', [
     '3. Git Bash: gh release create v0.x.y server/build/libs/kiosk-server.jar deploy/start-kiosk.sh -t "v0.x.y" -n "변경 요약"',
     ('#', '태블릿 (Termux)'),
     '4. 백업: cp ~/kiosk/data/kiosk.db ~/storage/downloads/kiosk-before-update.db  (또는 폰에서 백업 내려받기)',
-    '5. curl -L -o ~/kiosk/kiosk-server.jar https://github.com/fasol/shine_kiosk/releases/latest/download/kiosk-server.jar',
+    '5. curl -L -o ~/kiosk/kiosk-server.jar https://github.com/Danjjinbibbang/shine_kiosk/releases/latest/download/kiosk-server.jar',
     '6. pkill -f kiosk-server.jar; ~/.termux/boot/start-kiosk.sh &   (또는 재부팅)',
     '7. tail -f ~/kiosk/kiosk.log 에서 "컬럼 추가", "Started" 확인. 폰/태블릿 화면은 1분 안에 자동 새로고침',
     ('#', '되돌리기'),
