@@ -6,7 +6,9 @@ import { won } from './types'
  * 안드로이드는 ?body=, iOS 는 &body= 를 쓴다.
  */
 export function smsLink(phone: string, body: string): string {
-  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+  // 아이패드 사파리는 기본이 데스크톱 모드라 userAgent 에 Macintosh 로 나온다 → 터치 지원 여부로 같이 판단
+  const ua = navigator.userAgent
+  const ios = /iPhone|iPad|iPod/i.test(ua) || (/Mac/i.test(ua) && navigator.maxTouchPoints > 1)
   return `sms:${phone}${ios ? '&' : '?'}body=${encodeURIComponent(body)}`
 }
 

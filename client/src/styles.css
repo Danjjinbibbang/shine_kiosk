@@ -53,6 +53,8 @@ input { font: inherit; }
 /* ── 키오스크 ──────────────────────────────── */
 .kiosk {
   height: 100%; display: flex; flex-direction: column; max-width: 1100px; margin: 0 auto; padding: 16px;
+  /* 아이패드(홈 버튼 없는 모델)의 화면 아래 인디케이터에 버튼이 가리지 않게 */
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
 .kiosk-head { display: flex; align-items: center; gap: 12px; padding: 4px 4px 12px; }
 .kiosk-head h1 { font-size: 34px; margin: 0; flex: 1; }
@@ -151,7 +153,7 @@ input { font: inherit; }
 .pin-dots span.on { background: var(--primary); }
 
 /* ── 스태프 ────────────────────────────────── */
-.staff { min-height: 100%; display: flex; flex-direction: column; font-size: 17px; }
+.staff { min-height: 100%; display: flex; flex-direction: column; font-size: 17px; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .staff-head {
   position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line);
   padding: 10px 14px; display: flex; flex-direction: column; gap: 8px;

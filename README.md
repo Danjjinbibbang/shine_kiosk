@@ -38,11 +38,14 @@ DB 파일은 `./data/kiosk.db` 에 자동 생성된다. 스키마는 매 기동�
 # 서버 API 테스트 (JUnit + MockMvc, 임시 SQLite). 인증/메뉴/쿠폰/주문/스태프 처리 전 분기
 ./gradlew :server:test
 
-# 브라우저 E2E (Playwright, 설치된 크롬 사용). jar 를 8091 에 임시 DB 로 띄우고 키오스크/스태프 화면을 실제로 조작
+# 브라우저 E2E (Playwright). jar 를 8091 에 임시 DB 로 띄우고 키오스크/스태프 화면을 실제로 조작
+# 크롬(안드로이드와 같은 엔진) + WebKit(아이패드 사파리와 같은 엔진) 세 프로젝트가 함께 돈다
+npx playwright install webkit      # 처음 한 번
 ./gradlew bootJar && cd client && npm run e2e
+npx playwright test --project=kiosk-ipad   # 아이패드(사파리)만
 ```
 
-E2E 는 태블릿(800×1333)과 폰(412×915) 뷰포트로 돈다. 실패하면 `client/test-results/` 에 스크린샷이 남는다.
+E2E 는 태블릿(800×1333)·폰(412×915)·아이패드(820×1180, 사파리 엔진) 뷰포트로 돈다. 실패하면 `client/test-results/` 에 스크린샷이 남는다.
 
 ```sh
 # 통합 시나리오 (47 케이스): 실제 jar 에 API 로 주문→처리→쿠폰→매출을 이어서 검사. 반드시 빈 DB 로 띄운 서버에
