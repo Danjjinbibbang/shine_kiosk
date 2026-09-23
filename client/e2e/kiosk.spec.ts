@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   addToCart, createOrder, gotoKiosk, kioskCouponLookup, lookupCoupon, menuCard, orderOf, pickNameByTyping,
-  registerCoupon, showMenuCard, toReceiveStep, uniq,
+  registerCoupon, showMenuCard, staffToken, toReceiveStep, uniq,
 } from './helpers'
 
 test.describe('메뉴 화면', () => {
@@ -40,6 +40,45 @@ test.describe('메뉴 화면', () => {
     // 탭에 담긴 개수 배지
     await expect(page.locator('.category-tabs .btn.tab').nth(0).locator('.tab-badge')).toHaveText('1')
   })
+})
+
+test.describe('레이아웃', () => {
+  // 담으면 줄에 스테퍼가 붙어 선택지 버튼이 좁아진다. 긴 이름·큰 금액이어도 카드 밖으로 나가면 안 된다.
+  for (const vp of [{ name: '세로', width: 800, height: 1333 }, { name: '가로', width: 1333, height: 800 }]) {
+    test(`메뉴 카드: 담아도 글씨가 테두리를 벗어나지 않는다 (${vp.name})`, async ({ page, request }) => {
+      const long = uniq('아주아주긴이름의스페셜음료')
+      const token = await staffToken(request)
+      const created = await request.post('/api/staff/menu', {
+        headers: { 'X-Staff-Token': token },
+        data: { name: long, category: '커피', available: true,
+          variants: [{ label: '아이스진하게열', price: 100000, available: true }, { label: '핫', price: 99900, available: true }] },
+      })
+      expect(created.ok(), await created.text()).toBeTruthy()
+      const id = (await created.json()).id
+      try {
+        await page.setViewportSize({ width: vp.width, height: vp.height })
+        await gotoKiosk(page)
+        const count = await page.locator('.menu-card .btn.variant').count()
+        for (let i = 0; i < count; i++) await page.locator('.menu-card .btn.variant').nth(i).click()
+        const overflow = await page.evaluate(() => {
+          const bad: string[] = []
+          document.querySelectorAll('.menu-card').forEach((card) => {
+            const box = card.getBoundingClientRect()
+            card.querySelectorAll('.name, .variant-row, .btn.variant').forEach((el) => {
+              const r = el.getBoundingClientRect()
+              if (r.right > box.right + 0.5 || r.left < box.left - 0.5) bad.push('밖으로: ' + el.textContent)
+              if (el.scrollWidth > el.clientWidth + 0.5) bad.push('잘림: ' + el.textContent)
+            })
+          })
+          return bad
+        })
+        expect(overflow, overflow.join(' / ')).toEqual([])
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+      } finally {
+        await request.delete(`/api/staff/menu/${id}`, { headers: { 'X-Staff-Token': token } })
+      }
+    })
+  }
 })
 
 test.describe('장바구니', () => {

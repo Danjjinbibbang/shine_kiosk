@@ -64,8 +64,8 @@ input { font: inherit; }
 .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .grid.wide { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 
-/* 메뉴 카드: 태블릿 세로(800px)에서 2열, 가로(1333px)에서 3열이 되도록 300px 기준 */
-.menu-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+/* 메뉴 카드: 태블릿 세로(800px)에서 2열, 가로(1333px)에서 3열. 담으면 옆에 스테퍼가 붙으므로 카드가 좁으면 안 된다 */
+.menu-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
 .menu-card {
   display: flex; flex-direction: column; gap: 10px; min-width: 0;
   padding: 16px; background: var(--panel); border: 2px solid var(--line); border-radius: var(--radius);
@@ -73,12 +73,14 @@ input { font: inherit; }
 }
 .menu-card .name { font-size: 26px; font-weight: 800; }
 .variant-row { display: flex; gap: 8px; min-width: 0; }
-.btn.variant { flex: 1; min-width: 0; justify-content: space-between; min-height: 64px; padding: 8px 16px; font-size: 22px; }
-.btn.variant .price { font-weight: 600; color: var(--muted); white-space: nowrap; }
+/* 선택지 이름은 길면 말줄임, 가격은 항상 통째로 — 어느 쪽도 버튼(카드) 밖으로 나가지 않게 */
+.btn.variant { flex: 1 1 auto; min-width: 0; overflow: hidden; gap: 10px; justify-content: space-between; min-height: 64px; padding: 8px 14px; font-size: 22px; }
+.btn.variant > :first-child { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn.variant .price { flex: 0 0 auto; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .btn.variant.selected .price { color: var(--primary); }
 .stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.stepper .btn { min-width: 56px; min-height: 64px; padding: 0; font-size: 30px; }
-.stepper .n { min-width: 40px; text-align: center; font-size: 26px; font-weight: 900; }
+.stepper .btn { min-width: 52px; min-height: 64px; padding: 0; font-size: 30px; }
+.stepper .n { min-width: 34px; text-align: center; font-size: 26px; font-weight: 900; }
 .category-title { font-size: 20px; color: var(--muted); margin: 18px 4px 8px; font-weight: 700; }
 /* 메뉴 화면 카테고리 탭 (설정 > 카테고리 순서대로, 개수는 가변) */
 .category-tabs { position: sticky; top: 0; z-index: 1; display: flex; gap: 8px; padding: 4px 0 10px; background: var(--bg); overflow-x: auto; }
