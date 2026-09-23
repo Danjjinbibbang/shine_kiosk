@@ -49,15 +49,27 @@ def check(cond, what):
     print(('  ok   ' if cond else '  FAIL ') + what)
     if not cond: fails.append(what)
 
-shutil.rmtree(DBDIR, ignore_errors=True); os.makedirs(DBDIR)
+shutil.rmtree(DBDIR, ignore_errors=True); os.makedirs(DBDIR, exist_ok=True)
 
 # ── 1. 옛 버전으로 데이터 만들기 ──
 print('[v0.1.1] 데이터 만들기')
 p = start(OLD_JAR, os.path.join(S, 'mig_old.log'))
 s, j = call('POST', '/api/staff-auth/login', {'pin': '1234'}); tok = j['token']
-s, c1 = call('POST', '/api/staff/coupons', {'name': '이영희', 'phoneLast4': '1111', 'amount': 20000}, tok); check(s == 200, f'옛 쿠폰 등록(뒤4자리) {c1}')
-s, c2 = call('POST', '/api/staff/coupons', {'name': '박철수', 'amount': 50000}, tok); check(s == 200, f'옛 쿠폰 등록(번호 없음) {c2}')
-s, c3 = call('POST', '/api/staff/coupons', {'name': '이영희', 'phoneLast4': '2222', 'amount': 5000}, tok); check(s == 200, '옛 동명이인 쿠폰')
+def register_old(name, amount, phone):
+    '''옛 버전에 쿠폰을 넣는다. v0.1.x 는 phoneLast4, v0.2.0+ 는 phone 을 받는다.'''
+    s, j = call('POST', '/api/staff/coupons', {'name': name, 'phone': phone, 'amount': amount}, tok)
+    if s == 200 and (j.get('phone') or j.get('phoneLast4')):
+        return s, j
+    s2, j2 = call('POST', '/api/staff/coupons', {'name': name, 'phoneLast4': phone[-4:], 'amount': amount}, tok)
+    return (s2, j2) if s2 == 200 else (s, j)
+
+s, c1 = register_old('이영희', 20000, '01000001111'); check(s == 200, f'옛 쿠폰 등록 {c1}')
+s, c2 = call('POST', '/api/staff/coupons', {'name': '박철수', 'amount': 50000}, tok)
+NO_PHONE_OK = s == 200            # v0.1.x 는 번호 없이도 등록됐다
+if not NO_PHONE_OK:
+    s, c2 = register_old('박철수', 50000, '01000009999')
+check(s == 200, f'옛 쿠폰 등록(번호 {"없음" if NO_PHONE_OK else "있음"}) {c2}')
+s, c3 = register_old('이영희', 5000, '01000002222'); check(s == 200, '옛 동명이인 쿠폰')
 call('POST', f"/api/staff/coupons/{c2['id']}/charge", {'amount': 15000}, tok)
 def line(v, q=1): return {'variantId': v, 'quantity': q}
 s, o1 = call('POST', '/api/orders', {'customerName': '김현금', 'receiveType': 'STORE', 'payMethod': 'CASH', 'lines': [line(1001, 2)], 'memo': '현금 5,000원 받음 → 거스름돈 3,000원'}); check(s == 200, '옛 현금 주문 (옛 방식 메모)')
@@ -67,14 +79,15 @@ call('POST', f"/api/staff/orders/{o3['id']}/done", None, tok)
 s, old_orders = call('GET', '/api/staff/orders', None, tok)
 s, old_done = call('GET', '/api/staff/orders?status=DONE', None, tok)
 s, old_c1 = call('POST', '/api/coupons/lookup', {'name': '이영희', 'phoneLast4': '1111'})
-old_balance = old_c1['coupon']['balance']; old_free = old_c1['coupon']['freeDrinks']
+old_coupon = old_c1.get('coupon') or call('GET', f"/api/staff/coupons/{c1['id']}", None, tok)[1]
+old_balance = old_coupon['balance']; old_free = old_coupon['freeDrinks']
 print(f'  옛 상태: 대기 {len(old_orders)}건, 완료 {len(old_done)}건, 이영희(1111) 잔액 {old_balance} 무료 {old_free}')
 stop(p)
 
 con = sqlite3.connect(DB)
 old_cols = {t: [r[1] for r in con.execute(f'PRAGMA table_info({t})')] for t in ('coupon', 'orders', 'menu_option')}
-check('phone_last4' in old_cols['coupon'] and 'phone' not in old_cols['coupon'], '옛 스키마: coupon.phone_last4 있고 phone 없음')
-check('settled_cash' not in old_cols['orders'], '옛 스키마: orders.settled_cash 없음')
+OLD_HAS_LAST4 = 'phone_last4' in old_cols['coupon']
+print(f"  옛 스키마: coupon={'phone_last4' if OLD_HAS_LAST4 else 'phone'}, orders 컬럼 {len(old_cols['orders'])}개")
 con.close()
 shutil.copy(DB, DB + '.before-migration')
 
@@ -107,14 +120,19 @@ s, cs = call('GET', '/api/staff/coupons?name=이영희', None, tok)
 check(len(cs) == 2, f'동명이인 쿠폰 2개 유지 {[(c["name"], c.get("phone"), c.get("phoneLast4")) for c in cs]}')
 c1n = next(c for c in cs if c['id'] == c1['id'])
 check(c1n['balance'] == old_balance and c1n['freeDrinks'] == old_free, f'잔액/무료잔 유지 {c1n["balance"]}/{c1n["freeDrinks"]}')
-check(c1n.get('phone') is None, '옛 쿠폰은 phone 없음 (뒤 4자리는 삭제됨 — 번호 다시 넣어야)')
+check(OLD_HAS_LAST4 == (c1n.get('phone') is None), '옛 전화번호 처리: v0.1.x 는 번호가 비고(다시 입력 필요), v0.2+ 는 그대로 유지')
 s, k = call('POST', '/api/coupons/lookup', {'name': '박철수'})
 check(k['status'] == 'FOUND' and k['coupon']['balance'] == 65000, f'번호 없는 옛 쿠폰 키오스크 조회 {k}')
 s, k2 = call('POST', '/api/coupons/lookup', {'name': '이영희'})
 check(k2['status'] == 'NEED_PHONE' and len(k2['candidates']) == 2, f'옛 동명이인: 후보 목록 {k2}')
-check(all(c.get('phoneLast4') is None for c in k2['candidates']), '[주의] 옛 동명이인 후보의 뒤 4자리 없음 → 키오스크에서 고를 수 없음, 번호 등록 필요')
-s, ch = call('POST', f"/api/staff/coupons/{c2['id']}/charge", {'amount': 10000}, tok)
-check(s == 400 and '전화번호' in ch.get('message', ''), f'번호 없는 옛 쿠폰 충전 잠김: {ch.get("message")}')
+last4 = [c.get('phoneLast4') for c in k2['candidates']]
+if OLD_HAS_LAST4:
+    check(all(x is None for x in last4), '[주의] v0.1.x 동명이인은 뒤 4자리가 비어 키오스크에서 못 고름 → 번호 등록 필요')
+else:
+    check(all(x for x in last4), f'동명이인 후보의 뒤 4자리 유지 {last4}')
+if NO_PHONE_OK:
+    s, ch = call('POST', f"/api/staff/coupons/{c2['id']}/charge", {'amount': 10000}, tok)
+    check(s == 400 and '전화번호' in ch.get('message', ''), f'번호 없는 옛 쿠폰 충전 잠김: {ch.get("message")}')
 s, ph = call('PUT', f"/api/staff/coupons/{c2['id']}/phone", {'phone': '010-9999-8888'}, tok); check(s == 200, '번호 넣기')
 s, ch = call('POST', f"/api/staff/coupons/{c2['id']}/charge", {'amount': 20000}, tok); check(s == 200 and ch['freeDrinks'] == 3, f'번호 넣은 뒤 충전 OK, 무료 +1 → {ch.get("freeDrinks")}')
 s, h = call('GET', f"/api/staff/coupons/{c2['id']}/history", None, tok); check(len(h) == 3 and all('freeDelta' in x for x in h), f'옛 이력 + 새 이력 {len(h)}줄')
@@ -127,7 +145,7 @@ s, _ = call('POST', f"/api/staff/orders/{o2['id']}/cancel", {}, tok); check(s ==
 s, c1b = call('GET', f"/api/staff/coupons/{c1['id']}", None, tok); check(c1b['balance'] == 20000 and c1b['freeDrinks'] == 1, f'취소 후 잔액/무료잔 복원 {c1b["balance"]}/{c1b["freeDrinks"]}')
 s, o4 = call('POST', '/api/orders', {'customerName': '새손님', 'receiveType': 'STORE', 'payMethod': 'CASH', 'lines': [{'variantId': 1001, 'quantity': 1, 'optionIds': [1]}], 'clientRequestId': 'mig-1'})
 check(s == 200 and o4['totalAmount'] == 1500 and o4['orderNo'] == 4, f'새 주문 번호 이어짐 #{o4.get("orderNo")} 옵션 가격 {o4.get("totalAmount")}')
-s, days = call('GET', '/api/staff/reports/days', None, tok); check(len(days) == 1 and days[0]['orderCount'] == 3, f'매출 집계 {days}')
+s, days = call('GET', '/api/staff/reports/days', None, tok); check(len(days) == 1 and days[0]['orderCount'] == 3, f"매출 집계 {days[0] if days else None}")
 s, sm = call('GET', '/api/staff/orders/summary', None, tok); check(sm['orderCount'] == 3, f'오늘 집계 취소 제외 {sm}')
 bk = os.listdir(os.path.join(DBDIR, 'bk')) if os.path.isdir(os.path.join(DBDIR, 'bk')) else []
 check(any(f.startswith('kiosk-backup-') for f in bk), f'기동 시 자동 백업 {bk}')
@@ -139,6 +157,7 @@ p = start(NEW_JAR, os.path.join(S, 'mig_new2.log'))
 s, j = call('POST', '/api/staff-auth/login', {'pin': '1234'}); tok = j['token']
 s, orders = call('GET', '/api/staff/orders', None, tok); check(s == 200 and len(orders) == 1, f'재기동 후 대기 {len(orders)}건 (새손님)')
 s, cs = call('GET', '/api/staff/coupons?name=박철수', None, tok); check(cs[0]['balance'] == 85000 and cs[0]['phone'] == '01099998888', f'재기동 후 쿠폰 유지 {cs}')
+s, menu = call('GET', '/api/menu/categories'); check(s == 200 and len(menu) >= 3, f'키오스크 카테고리 탭 {menu}')
 log = open(os.path.join(S, 'mig_new2.log'), encoding='utf-8', errors='replace').read()
 check('ERROR' not in log and 'Exception' not in log, '재기동 로그에 오류 없음')
 stop(p)
