@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS menu_option (
     available  INTEGER NOT NULL DEFAULT 1
 );
 
+-- 배달 장소. 배달은 없앴다 — 옛 주문(place_id)이 가리키므로 테이블만 남겨 둔다.
 CREATE TABLE IF NOT EXISTS delivery_place (
     id         INTEGER PRIMARY KEY,
     floor      INTEGER NOT NULL,
@@ -86,9 +87,9 @@ CREATE TABLE IF NOT EXISTS orders (
     order_date      TEXT    NOT NULL,          -- YYYY-MM-DD
     order_no        INTEGER NOT NULL,          -- 당일 순번
     customer_name   TEXT    NOT NULL,
-    receive_type    TEXT    NOT NULL,          -- STORE | DELIVERY
-    place_id        INTEGER REFERENCES delivery_place(id),
-    place_name      TEXT,                      -- 주문 시점 장소명 스냅샷
+    receive_type    TEXT    NOT NULL,          -- 이제는 늘 STORE. 배달을 없애기 전 주문엔 DELIVERY 가 남아 있다
+    place_id        INTEGER REFERENCES delivery_place(id), -- 옛 배달 주문용 (지금은 늘 NULL)
+    place_name      TEXT,                      -- 옛 배달 주문의 장소명 스냅샷
     total_amount    INTEGER NOT NULL,          -- 사역자 무료를 뺀, 실제로 받을 금액
     staff_free_amount INTEGER NOT NULL DEFAULT 0, -- 사역자 무료로 뺀 금액 (장바구니에서 잔마다 '사역자' 체크)
     pay_method      TEXT    NOT NULL,          -- TRANSFER | COUPON | CASH | NONE(전부 무료라 결제 없음)

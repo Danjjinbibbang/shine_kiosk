@@ -1,4 +1,4 @@
-import type { AdminItem, AdminOption, AdminPlace, Category, ChargePreset, Coupon, CouponPreview, CouponTx, CreateOrderRequest, DailySummary, DayReport, FloorGroup, LineRequest, LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest } from './types'
+import type { AdminItem, AdminOption, Category, ChargePreset, Coupon, CouponPreview, CouponTx, CreateOrderRequest, DailySummary, DayReport, LineRequest, LookupResult, MenuItem, MenuOption, Order, OrderStatus, SaveItemRequest, UpdateOrderRequest } from './types'
 
 const STAFF_TOKEN_KEY = 'shine-kiosk.staffToken'
 
@@ -65,7 +65,6 @@ export const api = {
   menu: () => request<MenuItem[]>('/api/menu'),
   menuCategories: () => request<string[]>('/api/menu/categories'),
   menuOptions: () => request<MenuOption[]>('/api/menu/options'),
-  places: () => request<FloorGroup[]>('/api/places'),
   regulars: () => request<string[]>('/api/customers/regulars'),
   paymentInfo: () => request<{ bankAccount: string }>('/api/orders/payment-info'),
   lookupCoupon: (name: string, phoneLast4?: string) =>
@@ -87,8 +86,11 @@ export const api = {
   settleOrder: (id: number, opts: { couponId?: number | null; method?: 'CASH' | 'TRANSFER' | 'COUPON' } = {}) =>
     post<void>(`/api/staff/orders/${id}/settle`, { couponId: opts.couponId ?? null, method: opts.method ?? null }),
   couponsByName: (name: string) => request<Coupon[]>(`/api/staff/coupons?name=${encodeURIComponent(name)}`),
-  /** 거스름돈을 돌려주는 대신 쿠폰 잔액에 넣기 (잔돈 적립) */
+  /** 거스름돈은 현금으로 주지 않고 쿠폰 잔액에 넣는다 (무료 1잔 적립 없음) */
   changeToCoupon: (id: number, couponId: number) => post<void>(`/api/staff/orders/${id}/change-to-coupon`, { couponId }),
+  /** 쿠폰이 없는 손님: 쿠폰을 새로 만들고 거스름돈을 넣는다 */
+  changeToNewCoupon: (id: number, name: string, phone: string) =>
+    post<Coupon>(`/api/staff/orders/${id}/change-to-new-coupon`, { name, phone }),
   /** 받은 돈을 어떻게 돌려줬는지: 쿠폰(refundToCouponId) / 현금 / 계좌이체 */
   cancelOrder: (id: number, opts: { refundToCouponId?: number | null; method?: 'CASH' | 'TRANSFER' } = {}) =>
     post<void>(`/api/staff/orders/${id}/cancel`, { refundToCouponId: opts.refundToCouponId ?? null, method: opts.method ?? null }),
@@ -106,7 +108,7 @@ export const api = {
   deleteCoupon: (id: number) => del<void>(`/api/staff/coupons/${id}`),
   couponPreset: () => request<ChargePreset>('/api/staff/coupons/preset'),
 
-  // ── 스태프 설정 (메뉴 / 장소) ────────────────────────
+  // ── 스태프 설정 (메뉴) ────────────────────────
   categories: () => request<Category[]>('/api/staff/categories'),
   createCategory: (name: string) => post<Category>('/api/staff/categories', { name }),
   renameCategory: (id: number, name: string) => put<Category>(`/api/staff/categories/${id}`, { name }),
@@ -124,10 +126,6 @@ export const api = {
   deleteOption: (id: number) => del<void>(`/api/staff/menu/options/${id}`),
   reportDays: () => request<DayReport[]>('/api/staff/reports/days'),
   reportOrders: (date: string) => request<Order[]>(`/api/staff/reports/orders?date=${date}`),
-  adminPlaces: () => request<AdminPlace[]>('/api/staff/places'),
-  createPlace: (body: { floor: number; name: string; active: boolean }) => post<AdminPlace>('/api/staff/places', body),
-  updatePlace: (id: number, body: { floor: number; name: string; active: boolean }) => put<AdminPlace>(`/api/staff/places/${id}`, body),
-  deletePlace: (id: number) => del<void>(`/api/staff/places/${id}`),
 }
 
 /** 서버가 ORDERS_CHANGED 를 뿌리면 onChange 를 부른다. 끊기면 알아서 다시 붙는다. */

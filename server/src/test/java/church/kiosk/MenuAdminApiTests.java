@@ -111,11 +111,9 @@ class MenuAdminApiTests extends ApiTestSupport {
 		// 자기 자신은 중복이 아니다
 		assertThat(staffPut("/api/staff/menu/10", item("아메리카노", "커피", List.of(variant(AMERICANO_ICE, "ICE", 1000, true)))).status()).isEqualTo(200);
 
-		// 옵션: 같은 카테고리 같은 이름 거부, 장소: 같은 층 같은 이름 거부, 층 1~99
+		// 옵션: 같은 카테고리 같은 이름 거부
 		assertThat(staffPost("/api/staff/menu/options", Map.of("name", "샷 추가", "price", 500, "category", "커피", "available", true)).message()).contains("같은 이름의 옵션");
 		assertThat(staffPost("/api/staff/menu/options", Map.of("name", "샷 추가", "price", 500, "category", "논커피", "available", true)).status()).as("다른 카테고리면 OK").isEqualTo(200);
-		assertThat(staffPost("/api/staff/places", Map.of("floor", 1, "name", "식당", "active", true)).message()).contains("이미 있습니다");
-		assertThat(staffPost("/api/staff/places", Map.of("floor", 100, "name", "옥상", "active", true)).message()).contains("1~99");
 	}
 
 	@Test
@@ -194,41 +192,10 @@ class MenuAdminApiTests extends ApiTestSupport {
 		assertThat(staffGet("/api/staff/menu").<List<String>>read("$[*].name")).doesNotContain("아샷추");
 	}
 
-	// ── 배달 장소 ──────────────────────────────────────────
-
-	@Test
-	@DisplayName("장소: 추가/수정/숨김/삭제, 고객 화면은 active 만")
-	void places() throws Exception {
-		Response created = staffPost("/api/staff/places", Map.of("floor", 2, "name", "1번방", "active", true));
-		assertThat(created.status()).as(created.body()).isEqualTo(200);
-		long id = ((Number) created.read("$.id")).longValue();
-		assertThat(getJson("/api/places").<List<Integer>>read("$[*].floor")).containsExactly(1, 2);
-
-		staffPut("/api/staff/places/" + id, Map.of("floor", 2, "name", "소망방", "active", false));
-		assertThat(getJson("/api/places").<List<Integer>>read("$[*].floor")).containsExactly(1);
-		assertThat(staffGet("/api/staff/places").<List<String>>read("$[?(@.id==" + id + ")].name")).containsExactly("소망방");
-
-		Map<String, Object> order = new HashMap<>(cashOrder("a", line(AMERICANO_ICE, 1)));
-		order.put("receiveType", "DELIVERY");
-		order.put("placeId", PLACE_DINING);
-		createOrder(order);
-		staffDelete("/api/staff/places/" + PLACE_DINING);
-		assertThat(staffGet("/api/staff/places").<List<Boolean>>read("$[?(@.id==101)].active"))
-				.as("주문이 참조하는 장소는 숨김").containsExactly(false);
-
-		staffDelete("/api/staff/places/" + id);
-		assertThat(staffGet("/api/staff/places").<List<Integer>>read("$[*].id")).as("참조 없는 장소는 삭제").doesNotContain((int) id);
-
-		assertThat(staffPost("/api/staff/places", Map.of("floor", 0, "name", "x", "active", true)).status()).isEqualTo(400);
-		assertThat(staffPost("/api/staff/places", Map.of("floor", 1, "name", " ", "active", true)).status()).isEqualTo(400);
-		assertThat(staffDelete("/api/staff/places/999").status()).isEqualTo(400);
-	}
-
 	@Test
 	@DisplayName("관리 API 는 PIN 없이 못 쓴다")
 	void requiresStaff() throws Exception {
 		staffToken = null;
 		assertThat(staffGet("/api/staff/menu").status()).isEqualTo(401);
-		assertThat(staffGet("/api/staff/places").status()).isEqualTo(401);
 	}
 }

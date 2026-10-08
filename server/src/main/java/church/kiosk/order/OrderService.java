@@ -13,13 +13,10 @@ import church.kiosk.order.OrderDtos.CreateRequest;
 import church.kiosk.order.OrderDtos.LineRequest;
 import church.kiosk.order.OrderDtos.OrderView;
 import church.kiosk.order.OrderDtos.PayMethod;
-import church.kiosk.order.OrderDtos.ReceiveType;
 import church.kiosk.order.OrderDtos.Status;
 import church.kiosk.order.OrderDtos.UpdateRequest;
 import church.kiosk.order.OrderRepository.LineRow;
 import church.kiosk.order.OrderRepository.OrderRow;
-import church.kiosk.place.PlaceRepository;
-import church.kiosk.place.PlaceRepository.Place;
 import church.kiosk.realtime.KioskEventHandler;
 import church.kiosk.support.BusinessException;
 import church.kiosk.support.Validation;
@@ -37,18 +34,15 @@ public class OrderService {
 	private final OrderRepository orderRepository;
 	private final MenuRepository menuRepository;
 	private final MenuOptionRepository optionRepository;
-	private final PlaceRepository placeRepository;
 	private final CouponService couponService;
 	private final CustomerRepository customerRepository;
 	private final KioskEventHandler events;
 
 	public OrderService(OrderRepository orderRepository, MenuRepository menuRepository,
-						MenuOptionRepository optionRepository, PlaceRepository placeRepository,
-						CouponService couponService, CustomerRepository customerRepository, KioskEventHandler events) {
+						MenuOptionRepository optionRepository, CouponService couponService, CustomerRepository customerRepository, KioskEventHandler events) {
 		this.orderRepository = orderRepository;
 		this.menuRepository = menuRepository;
 		this.optionRepository = optionRepository;
-		this.placeRepository = placeRepository;
 		this.couponService = couponService;
 		this.customerRepository = customerRepository;
 		this.events = events;
@@ -104,7 +98,6 @@ public class OrderService {
 			}
 		}
 		PricedLines priced = price(req.lines());
-		Place place = resolvePlace(req.receiveType(), req.placeId());
 		String name = Validation.name(req.customerName(), "이름", Validation.NAME_MAX);
 
 		if (priced.total() == 0 && req.payMethod() != PayMethod.NONE) {
@@ -152,8 +145,7 @@ public class OrderService {
 		}
 
 		String today = LocalDate.now().toString();
-		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name, req.receiveType(),
-				place == null ? null : place.id(), place == null ? null : place.name(),
+		OrderRow row = new OrderRow(today, orderRepository.nextOrderNo(today), name,
 				priced.total(), priced.staffFreeAmount(), req.payMethod(), remainderMethod, couponId, use.couponAmount(),
 				use.freeAmount(), use.freeItemName(), cash, transfer, memo, requestId,
 				cashGiven(given, cash));
@@ -161,6 +153,7 @@ public class OrderService {
 		orderRepository.insertLines(orderId, priced.lines());
 		if (couponId != null) {
 			couponService.useForOrder(couponId, use.couponAmount(), use.useFree(), orderId);
+			creditChangeToOrderCoupon(orderId);
 		}
 		customerRepository.recordOrder(name);
 
@@ -170,7 +163,7 @@ public class OrderService {
 	}
 
 	/**
-	 * 스태프가 항목/이름/장소를 고친다. 쿠폰을 쓴 주문이면 먼저 차감(무료 1잔 포함)을 되돌리고
+	 * 스태프가 항목/이름/메모를 고친다. 쿠폰을 쓴 주문이면 먼저 차감(무료 1잔 포함)을 되돌리고
 	 * 새 항목 기준으로 다시 차감하되, 원래 뺐던 금액까지만 뺀다. 금액이 줄면 차액이 잔액으로 저절로 돌아가고,
 	 * 늘면 늘어난 몫은 "더 받을 돈"으로 남아 스태프가 현금/이체/쿠폰 중 고른다 (settle).
 	 */
@@ -178,7 +171,6 @@ public class OrderService {
 	public OrderView update(long orderId, UpdateRequest req) {
 		OrderView existing = requirePending(orderId);
 		PricedLines priced = price(req.lines());
-		Place place = resolvePlace(req.receiveType(), req.placeId());
 
 		CouponUse use = new CouponUse(false, 0, null, 0, priced.total());
 		PayMethod remainderMethod = existing.remainderMethod();
@@ -204,7 +196,6 @@ public class OrderService {
 		if (remainderBy == PayMethod.TRANSFER) transfer += left; else cash += left;
 
 		OrderRow row = new OrderRow(existing.orderDate(), existing.orderNo(), Validation.name(req.customerName(), "이름", Validation.NAME_MAX),
-				req.receiveType(), place == null ? null : place.id(), place == null ? null : place.name(),
 				priced.total(), priced.staffFreeAmount(),
 				existing.payMethod(), remainderMethod, existing.couponId(), use.couponAmount(),
 				use.freeAmount(), use.freeItemName(), cash, transfer, Validation.memo(req.memo()), null, existing.cashGiven());
@@ -217,6 +208,8 @@ public class OrderService {
 			// 손에 있는 현금 = 낸 돈 − 쿠폰에 넣은 잔돈 − 이미 준 거스름돈 (완료 때 거스름돈은 확정된다)
 			int inHand = existing.cashGiven() - existing.changeCredited() - existing.changePaid();
 			orderRepository.setSettledCash(orderId, Math.min(cash, inHand));
+			// 줄어서 거스름돈이 생겼으면 쿠폰 주문은 바로 그 쿠폰에 (늘어난 몫은 이미 넣은 잔돈을 건드리지 않고 더 받을 돈으로)
+			creditChangeToOrderCoupon(orderId);
 		}
 
 		OrderView updated = orderRepository.findById(orderId).orElseThrow();
@@ -239,12 +232,40 @@ public class OrderService {
 	}
 
 	/**
-	 * 거스름돈(낸 현금 − 현금 몫)을 돌려주는 대신 손님 쿠폰에 넣는다. 500원 같은 잔돈을 거슬러 주기 애매할 때.
+	 * 거스름돈은 현금으로 돌려주지 않고 늘 쿠폰에 충전한다.
 	 * 쿠폰으로 결제한 주문이면 그 쿠폰이어야 하고, 아니면 스태프가 고른 쿠폰(주문자 이름으로 찾은 것).
-	 * 쿠폰엔 충전(CHARGE)으로 남아 그날 충전 입금에 잡힌다. 낸 현금은 그대로 두고 "쿠폰에 넣은 잔돈"만 기록해 사실이 남는다.
+	 * 쿠폰엔 충전(CHARGE)으로 남아 그날 충전 입금에 잡힌다. 무료 1잔은 거스름돈 금액만 보고 정한다 ({@link CouponService#creditChange}).
+	 * 낸 현금은 그대로 두고 "쿠폰에 넣은 잔돈"만 기록해 사실이 남는다.
 	 */
 	@Transactional
 	public void changeToCoupon(long orderId, long couponId) {
+		OrderView order = requireChange(orderId);
+		if (order.couponId() != null && !order.couponId().equals(couponId)) {
+			throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
+		}
+		couponService.creditChange(couponId, order.changeDue(), orderId);
+		orderRepository.addChangeCredited(orderId, order.changeDue());
+		events.broadcastOrdersChanged();
+	}
+
+	/**
+	 * 쿠폰이 없는 손님: 스태프가 이름·전화번호로 쿠폰을 새로 만들고 거스름돈을 바로 넣는다.
+	 * 무료 1잔은 거스름돈 금액 기준 (20,000 이상 1잔, 30,000 이상 2잔).
+	 */
+	@Transactional
+	public Coupon changeToNewCoupon(long orderId, String name, String phone) {
+		OrderView order = requireChange(orderId);
+		if (order.couponId() != null) {
+			throw new BusinessException("쿠폰으로 결제한 주문입니다. 그 쿠폰에 넣어 주세요.");
+		}
+		Coupon coupon = couponService.registerEmpty(name, phone);
+		couponService.creditChange(coupon.id(), order.changeDue(), orderId);
+		orderRepository.addChangeCredited(orderId, order.changeDue());
+		events.broadcastOrdersChanged();
+		return couponService.require(coupon.id());
+	}
+
+	private OrderView requireChange(long orderId) {
 		OrderView order = require(orderId);
 		if (order.status() == Status.CANCELED) {
 			throw new BusinessException("취소된 주문입니다.");
@@ -252,16 +273,20 @@ public class OrderService {
 		if (order.cashGiven() == null) {
 			throw new BusinessException("낸 현금이 기록되지 않은 주문입니다.");
 		}
-		int change = order.changeDue();
-		if (change <= 0) {
+		if (order.changeDue() <= 0) {
 			throw new BusinessException("거스름돈이 없습니다.");
 		}
-		if (order.couponId() != null && !order.couponId().equals(couponId)) {
-			throw new BusinessException("이 주문에 쓴 쿠폰에만 넣을 수 있습니다.");
+		return order;
+	}
+
+	/** 쿠폰으로 결제한 주문이면 남은 거스름돈을 그 쿠폰에 바로 충전한다. 쿠폰이 없는 주문은 스태프가 쿠폰을 골라(만들어) 넣는다. */
+	private void creditChangeToOrderCoupon(long orderId) {
+		OrderView order = require(orderId);
+		if (order.couponId() == null || order.status() == Status.CANCELED || order.changeDue() <= 0) {
+			return;
 		}
-		couponService.creditChange(couponId, change, orderId);
-		orderRepository.addChangeCredited(orderId, change);
-		events.broadcastOrdersChanged();
+		couponService.creditChange(order.couponId(), order.changeDue(), orderId);
+		orderRepository.addChangeCredited(orderId, order.changeDue());
 	}
 
 	private static final java.util.regex.Pattern LEGACY_CASH_MEMO =
@@ -370,9 +395,11 @@ public class OrderService {
 		if (order.cashAmount() != order.settledCash() || order.transferAmount() != order.settledTransfer()) {
 			throw new BusinessException("돌려줄 돈이나 더 받을 돈이 남아 있습니다. 먼저 정산 버튼을 눌러 주세요.");
 		}
-		// 음료와 함께 거스름돈을 준다 — 이 시점의 거스름돈은 확정. 되돌려서 고치면 그 뒤 차액만 주고받는다
-		if (order.changeDue() > 0) {
-			orderRepository.addChangePaid(orderId, order.changeDue());
+		// 거스름돈은 현금으로 주지 않고 쿠폰에 넣는다. 쿠폰 주문이면 그 쿠폰에 저절로, 아니면 스태프가 먼저 넣어야 완료된다
+		creditChangeToOrderCoupon(orderId);
+		OrderView after = require(orderId);
+		if (after.changeDue() > 0) {
+			throw new BusinessException("거스름돈 " + String.format("%,d", after.changeDue()) + "원을 먼저 쿠폰에 넣어 주세요. (쿠폰이 없으면 새로 만들어서)");
 		}
 		orderRepository.markDone(orderId);
 		events.broadcastOrdersChanged();
@@ -478,19 +505,6 @@ public class OrderService {
 			}
 		}
 		return new PricedLines(lines, total, staffFree, max, maxName);
-	}
-
-
-
-	private Place resolvePlace(ReceiveType receiveType, Long placeId) {
-		if (receiveType != ReceiveType.DELIVERY) {
-			return null;
-		}
-		if (placeId == null) {
-			throw new BusinessException("배달 장소를 선택해 주세요.");
-		}
-		return placeRepository.findById(placeId)
-				.orElseThrow(() -> new BusinessException("배달 장소를 다시 선택해 주세요."));
 	}
 
 	private static PayMethod requireRemainderMethod(PayMethod method) {

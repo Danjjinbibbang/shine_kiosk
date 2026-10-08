@@ -58,17 +58,28 @@ public class CouponService {
 	/** 전화번호는 필수. 동명이인 구분과 잔액 문자, 취소·차액 환불을 쿠폰에 넣을 때 혼동을 막기 위해서다. */
 	@Transactional
 	public Coupon register(String name, String phoneRaw, int amount) {
-		String trimmed = Validation.name(name, "이름", Validation.NAME_MAX);
 		Validation.chargeAmount(amount);
+		int free = freeDrinksFor(amount);
+		long id = insertChecked(name, phoneRaw, amount, free);
+		couponRepository.insertTx(id, null, amount, free, "CHARGE", amount);
+		return couponRepository.findById(id).orElseThrow();
+	}
+
+	/** 잔액 0원으로 만든다. 쿠폰이 없는 손님의 거스름돈을 넣으려고 만들 때 (잔돈은 {@link #creditChange} 로 따로 넣는다). */
+	@Transactional
+	public Coupon registerEmpty(String name, String phoneRaw) {
+		long id = insertChecked(name, phoneRaw, 0, 0);
+		return couponRepository.findById(id).orElseThrow();
+	}
+
+	private long insertChecked(String name, String phoneRaw, int balance, int freeDrinks) {
+		String trimmed = Validation.name(name, "이름", Validation.NAME_MAX);
 		String phone = Validation.mobile(phoneRaw);
 		String last4 = Coupon.last4Of(phone);
 		if (couponRepository.findByName(trimmed).stream().anyMatch(c -> last4.equals(c.phoneLast4()))) {
 			throw new BusinessException("같은 이름에 같은 뒤 4자리 번호가 이미 있습니다.");
 		}
-		int free = freeDrinksFor(amount);
-		long id = couponRepository.insert(trimmed, phone, amount, free);
-		couponRepository.insertTx(id, null, amount, free, "CHARGE", amount);
-		return couponRepository.findById(id).orElseThrow();
+		return couponRepository.insert(trimmed, phone, balance, freeDrinks);
 	}
 
 	@Transactional
@@ -163,7 +174,11 @@ public class CouponService {
 		couponRepository.insertTx(couponId, orderId, -amount, freeDelta, "USE", after);
 	}
 
-	/** 거스름돈을 쿠폰에 넣는다. 현금이 들어온 것이므로 충전(CHARGE)으로 남긴다. 잔돈이라 무료잔 적립은 없다. */
+	/**
+	 * 거스름돈을 쿠폰에 넣는다. 현금이 들어온 것이므로 충전(CHARGE)으로 남긴다.
+	 * 무료 1잔은 일반 충전처럼 "이번에 넣는 거스름돈 금액" 만 보고 정한다 (20,000 이상 1잔, 30,000 이상 2잔).
+	 * 기존 잔액과 합쳐서 기준을 넘는 건 적립이 아니다 — 18,000 + 거스름돈 2,500 = 20,500 이어도 무료잔 없음.
+	 */
 	@Transactional
 	public void creditChange(long couponId, int amount, long orderId) {
 		if (amount <= 0) {
@@ -172,8 +187,9 @@ public class CouponService {
 		Coupon coupon = require(couponId);
 		int after = coupon.balance() + amount;
 		Validation.balance(after);
-		couponRepository.update(couponId, after, coupon.freeDrinks());
-		couponRepository.insertTx(couponId, orderId, amount, 0, "CHARGE", after);
+		int free = freeDrinksFor(amount);
+		couponRepository.update(couponId, after, coupon.freeDrinks() + free);
+		couponRepository.insertTx(couponId, orderId, amount, free, "CHARGE", after);
 	}
 
 	/** 주문 취소/수정 시 차감한 금액과 소모한 무료 1잔을 되돌린다. */

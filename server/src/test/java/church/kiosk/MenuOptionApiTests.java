@@ -88,7 +88,6 @@ class MenuOptionApiTests extends ApiTestSupport {
 		long coupon = registerCoupon("이영희", 20000);
 		Map<String, Object> body = new HashMap<>();
 		body.put("customerName", "이영희");
-		body.put("receiveType", "STORE");
 		body.put("payMethod", "COUPON");
 		body.put("couponId", coupon);
 		body.put("useFreeDrink", true);
@@ -111,7 +110,7 @@ class MenuOptionApiTests extends ApiTestSupport {
 	@DisplayName("스태프 수정 때도 옵션이 반영되고 옛 옵션은 지워진다")
 	void updateWithOptions() throws Exception {
 		long id = ((Number) createOrder(cashOrder("a", lineOpt(AMERICANO_ICE, 1, SHOT))).read("$.id")).longValue();
-		Response r = staffPut("/api/staff/orders/" + id, Map.of("customerName", "a", "receiveType", "STORE",
+		Response r = staffPut("/api/staff/orders/" + id, Map.of("customerName", "a",
 				"lines", List.of(lineOpt(AMERICANO_ICE, 2, MILD))));
 		assertThat(r.status()).as(r.body()).isEqualTo(200);
 		assertThat(r.<Integer>read("$.totalAmount")).isEqualTo(2000);

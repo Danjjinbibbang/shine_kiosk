@@ -147,7 +147,7 @@ public class ReportController {
 		return sb.toString();
 	}
 
-	private static final String ORDERS_HEADER = "날짜,번호,시각,이름,받는방법,장소,상태,메뉴,주문금액,현금,계좌이체,쿠폰,무료1잔,사역자무료,결제수단,낸현금,돌려준현금,돌려준이체,메모\n";
+	private static final String ORDERS_HEADER = "날짜,번호,시각,이름,상태,메뉴,주문금액,현금,계좌이체,쿠폰,무료1잔,사역자무료,결제수단,낸현금,돌려준현금,돌려준이체,메모\n";
 
 	@GetMapping(value = "/orders.csv", produces = "text/csv")
 	public ResponseEntity<byte[]> ordersCsv(@RequestParam String date) {
@@ -170,7 +170,7 @@ public class ReportController {
 			}).toList());
 			sb.append(String.join(",",
 					o.orderDate(), String.valueOf(o.orderNo()), o.createdAt().length() >= 16 ? o.createdAt().substring(11, 16) : "",
-					q(o.customerName()), o.receiveType().name().equals("DELIVERY") ? "배달" : "카페", q(o.placeName()),
+					q(o.customerName()),
 					statusLabel(o.status().name()), q(menu), String.valueOf(o.totalAmount()),
 					String.valueOf(o.cashAmount()), String.valueOf(o.transferAmount()), String.valueOf(o.couponAmount()),
 					String.valueOf(o.freeAmount()), String.valueOf(o.staffFreeAmount()), o.payMethod().name(),

@@ -2,7 +2,7 @@
  * 입력 규칙. 서버 Validation.java 와 같은 값. 화면에서 먼저 막고, 최종 판단은 서버가 한다.
  */
 export const RULES = {
-  nameMax: 20,        // 손님/쿠폰/옵션/카테고리/장소 이름
+  nameMax: 20,        // 손님/쿠폰/옵션/카테고리 이름
   menuNameMax: 30,
   labelMax: 10,       // ICE/HOT 같은 선택지
   memoMax: 200,
@@ -12,7 +12,6 @@ export const RULES = {
   balanceMax: 1_000_000,  // 정정으로 넣을 수 있는 잔액
   freeDrinksMax: 100,
   qtyMax: 99,
-  floorMax: 99,
 }
 
 /** 숫자만 남긴 휴대폰 번호가 11자리 형식에 맞는지 (010/011/016/017/018/019 + 8자리). 하이픈 포함 13자 */

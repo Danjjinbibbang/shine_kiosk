@@ -15,7 +15,6 @@ class OrderApiTests extends ApiTestSupport {
 	private Map<String, Object> couponOrder(String name, long couponId, Map<String, Object>... lines) {
 		Map<String, Object> m = new HashMap<>();
 		m.put("customerName", name);
-		m.put("receiveType", "STORE");
 		m.put("payMethod", "COUPON");
 		m.put("couponId", couponId);
 		m.put("lines", List.of(lines));
@@ -62,7 +61,7 @@ class OrderApiTests extends ApiTestSupport {
 			Response r = createOrder(body);
 			assertThat(r.<String>read("$.memo")).isEqualTo("얼음 적게");
 			assertThat(r.<Integer>read("$.cashGiven")).isEqualTo(5000);
-			assertThat(r.<String>read("$.payNote")).isEqualTo("현금 5,000원 받음 → 거스름돈 3,000원");
+			assertThat(r.<String>read("$.payNote")).isEqualTo("현금 5,000원 받음 → 거스름돈 3,000원 쿠폰에 넣기");
 			Map<String, Object> exact = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 2)));
 			exact.put("cashGiven", 2000);
 			assertThat(createOrder(exact).<String>read("$.payNote")).isEqualTo("현금 2,000원 딱 맞게");
@@ -84,32 +83,15 @@ class OrderApiTests extends ApiTestSupport {
 		}
 
 		@Test
-		@DisplayName("배달: 장소 필수, 비활성 장소(2층) 거부, 장소명 스냅샷")
-		void delivery() throws Exception {
+		@DisplayName("배달은 없다: 옛 화면이 받는 방법/장소를 보내도 매장 주문으로 받고 응답에 장소가 없다")
+		void noDelivery() throws Exception {
 			Map<String, Object> body = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
 			body.put("receiveType", "DELIVERY");
-			Response noPlace = createOrder(body);
-			assertThat(noPlace.status()).isEqualTo(400);
-			assertThat(noPlace.message()).contains("장소");
-
-			body.put("placeId", 203); // 2층 3번방 — active = 0
-			assertThat(createOrder(body).status()).isEqualTo(400);
-
-			body.put("placeId", PLACE_DINING);
-			Response ok = createOrder(body);
-			assertThat(ok.status()).isEqualTo(200);
-			assertThat(ok.<String>read("$.placeName")).isEqualTo("식당");
-			assertThat(ok.<Integer>read("$.placeId")).isEqualTo(101);
-		}
-
-		@Test
-		@DisplayName("매장 수령이면 placeId 를 보내도 무시된다")
-		void storeIgnoresPlace() throws Exception {
-			Map<String, Object> body = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
-			body.put("placeId", PLACE_DINING);
+			body.put("placeId", 101);
 			Response r = createOrder(body);
-			assertThat(r.status()).isEqualTo(200);
-			assertThat(r.body()).doesNotContain("placeName");
+			assertThat(r.status()).as(r.body()).isEqualTo(200);
+			assertThat(r.body()).doesNotContain("placeName").doesNotContain("receiveType");
+			assertThat(jdbc.sql("SELECT receive_type FROM orders").query(String.class).single()).isEqualTo("STORE");
 		}
 
 		@Test
@@ -123,10 +105,6 @@ class OrderApiTests extends ApiTestSupport {
 			Map<String, Object> noPay = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
 			noPay.remove("payMethod");
 			assertThat(createOrder(noPay).status()).isEqualTo(400);
-
-			Map<String, Object> noReceive = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
-			noReceive.remove("receiveType");
-			assertThat(createOrder(noReceive).status()).isEqualTo(400);
 		}
 
 		@Test
@@ -135,7 +113,7 @@ class OrderApiTests extends ApiTestSupport {
 			assertThat(createOrder(cashOrder("박민수", line(AMERICANO_ICE, 100))).message()).contains("99잔");
 			List<Map<String, Object>> many = new java.util.ArrayList<>();
 			for (int i = 0; i < 51; i++) many.add(line(AMERICANO_ICE, 1));
-			assertThat(createOrder(Map.of("customerName", "박민수", "receiveType", "STORE", "payMethod", "CASH", "lines", many)).message()).contains("50줄");
+			assertThat(createOrder(Map.of("customerName", "박민수", "payMethod", "CASH", "lines", many)).message()).contains("50줄");
 			assertThat(createOrder(cashOrder("이름이스무자를넘어가는아주아주긴손님이름입니다", line(AMERICANO_ICE, 1))).message()).contains("20자");
 			Map<String, Object> memo = new HashMap<>(cashOrder("박민수", line(AMERICANO_ICE, 1)));
 			memo.put("memo", "가".repeat(201));
@@ -399,24 +377,22 @@ class OrderApiTests extends ApiTestSupport {
 		}
 
 		@Test
-		@DisplayName("수정: 항목/이름/장소/메모가 바뀌고 금액이 다시 계산된다")
+		@DisplayName("수정: 항목/이름/메모가 바뀌고 금액이 다시 계산된다")
 		void update() throws Exception {
 			long id = pendingOrder();
 			Map<String, Object> body = Map.of(
-					"customerName", "박민수2", "receiveType", "DELIVERY", "placeId", PLACE_DINING,
+					"customerName", "박민수2",
 					"lines", List.of(line(VANILLA_ICE, 2)), "memo", "얼음 적게");
 			Response r = staffPut("/api/staff/orders/" + id, body);
 			assertThat(r.status()).as(r.body()).isEqualTo(200);
 			assertThat(r.<String>read("$.customerName")).isEqualTo("박민수2");
-			assertThat(r.<String>read("$.placeName")).isEqualTo("식당");
 			assertThat(r.<Integer>read("$.totalAmount")).isEqualTo(5000);
 			assertThat(r.<Integer>read("$.cashAmount")).isEqualTo(5000);
 			assertThat(r.<String>read("$.memo")).isEqualTo("얼음 적게");
 			assertThat(r.<List<String>>read("$.lines[*].menuName")).containsExactly("바닐라라떼");
 			assertThat(r.<Integer>read("$.orderNo")).as("번호는 유지").isEqualTo(1);
 
-			assertThat(staffPut("/api/staff/orders/" + id, Map.of("customerName", "x", "receiveType", "STORE", "lines", List.of())).status()).isEqualTo(400);
-			assertThat(staffPut("/api/staff/orders/" + id, Map.of("customerName", "x", "receiveType", "DELIVERY", "lines", List.of(line(AMERICANO_ICE, 1)))).status()).isEqualTo(400);
+			assertThat(staffPut("/api/staff/orders/" + id, Map.of("customerName", "x", "lines", List.of())).status()).isEqualTo(400);
 		}
 
 		@Test
@@ -429,7 +405,7 @@ class OrderApiTests extends ApiTestSupport {
 			assertThat(balanceOf("이영희")).isEqualTo(18000);
 
 			Response r = staffPut("/api/staff/orders/" + orderId, Map.of(
-					"customerName", "이영희", "receiveType", "STORE", "lines", List.of(line(VANILLA_ICE, 1), line(AMERICANO_ICE, 1))));
+					"customerName", "이영희", "lines", List.of(line(VANILLA_ICE, 1), line(AMERICANO_ICE, 1))));
 			assertThat(r.<Integer>read("$.freeAmount")).isEqualTo(2500);
 			assertThat(r.<String>read("$.freeItemName")).isEqualTo("바닐라라떼 ICE");
 			assertThat(r.<Integer>read("$.couponAmount")).isEqualTo(1000);
@@ -443,7 +419,7 @@ class OrderApiTests extends ApiTestSupport {
 			long id = registerCoupon("김철수", 3000);
 			long orderId = ((Number) createOrder(couponOrder("김철수", id, line(AMERICANO_ICE, 1))).read("$.id")).longValue();
 			Response r = staffPut("/api/staff/orders/" + orderId, Map.of(
-					"customerName", "김철수", "receiveType", "STORE", "lines", List.of(line(ICECREAM_CUP, 2))));
+					"customerName", "김철수", "lines", List.of(line(ICECREAM_CUP, 2))));
 			assertThat(r.<Integer>read("$.couponAmount")).isEqualTo(1000);
 			assertThat(r.<Integer>read("$.cashAmount")).isEqualTo(5000);
 			assertThat(r.<Integer>read("$.settledCash")).isZero();
@@ -456,7 +432,7 @@ class OrderApiTests extends ApiTestSupport {
 		void updateOnlyPending() throws Exception {
 			long id = pendingOrder();
 			staffPost("/api/staff/orders/" + id + "/done", null);
-			Response r = staffPut("/api/staff/orders/" + id, Map.of("customerName", "x", "receiveType", "STORE", "lines", List.of(line(AMERICANO_ICE, 1))));
+			Response r = staffPut("/api/staff/orders/" + id, Map.of("customerName", "x", "lines", List.of(line(AMERICANO_ICE, 1))));
 			assertThat(r.status()).isEqualTo(400);
 			assertThat(r.message()).contains("이미");
 		}

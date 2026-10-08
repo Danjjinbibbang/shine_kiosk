@@ -3,28 +3,26 @@ import { api, ApiError } from '../shared/api'
 import { cartTotal, toLineRequests, type CartLine } from '../shared/cart'
 import { useAutoReload } from '../shared/useAutoReload'
 import { useStayOnPage } from '../shared/useStayOnPage'
-import type { Coupon, CouponPreview, CreateOrderRequest, Order, PayMethod, Place, ReceiveType } from '../shared/types'
+import type { Coupon, CouponPreview, CreateOrderRequest, Order, PayMethod } from '../shared/types'
 import { MenuStep } from './MenuStep'
 import { CartStep } from './CartStep'
-import { PaymentStep, PlaceStep, ReceiveStep } from './ChoiceSteps'
+import { PaymentStep } from './ChoiceSteps'
 import { CashStep, CouponStep, TransferStep } from './PaymentSteps'
 import { NameStep } from './NameStep'
 import { DoneStep } from './DoneStep'
 
-export type Step = 'menu' | 'cart' | 'receive' | 'place' | 'payment' | 'transfer' | 'coupon' | 'cash' | 'name' | 'done'
+export type Step = 'menu' | 'cart' | 'payment' | 'transfer' | 'coupon' | 'cash' | 'name' | 'done'
 
 export type { CartLine } from '../shared/cart'
 export { lineKey, lineKeyOf, lineUnitPrice } from '../shared/cart'
 
 export interface Draft {
   cart: CartLine[]
-  receiveType?: ReceiveType
-  place?: Place
   payMethod?: PayMethod
   coupon?: Coupon
   preview?: CouponPreview
   remainderMethod?: 'CASH' | 'TRANSFER'
-  /** 현금으로 낸 돈 (거스름돈 안내용) */
+  /** 현금으로 낸 돈. 거스름돈은 쿠폰에 충전된다 */
   cashGiven?: number
   customerName?: string
   /** 이 주문 시도의 요청 번호. 실패해서 다시 눌러도 같은 번호를 보내 중복 접수를 막는다 */
@@ -45,8 +43,6 @@ const IDLE_RESET_MS = 120_000
 const STEP_TITLE: Record<Step, string> = {
   menu: '메뉴를 골라 주세요',
   cart: '주문 내용을 확인해 주세요',
-  receive: '어디서 받으시나요?',
-  place: '어디로 갖다 드릴까요?',
   payment: '어떻게 결제하시나요?',
   transfer: '계좌이체',
   coupon: '쿠폰',
@@ -113,7 +109,7 @@ export function KioskApp() {
 
   const submit = useCallback(async (customerName: string, extra: Partial<Draft> = {}) => {
     const d = { ...draft, ...extra }
-    if (!d.receiveType || !d.payMethod) return
+    if (!d.payMethod) return
     const requestId = d.requestId ?? newRequestId()
     if (!d.requestId) update({ requestId })
     setSubmitting(true)
@@ -121,8 +117,6 @@ export function KioskApp() {
     const body: CreateOrderRequest = {
       clientRequestId: requestId,
       customerName,
-      receiveType: d.receiveType,
-      placeId: d.place?.id ?? null,
       payMethod: d.payMethod,
       couponId: d.coupon?.id ?? null,
       useFreeDrink: d.preview?.useFreeDrink ?? false,
@@ -149,13 +143,12 @@ export function KioskApp() {
     go(method === 'TRANSFER' ? 'transfer' : method === 'COUPON' ? 'coupon' : 'cash')
   }
 
-  // 받는 방법까지 정해진 뒤: 낼 돈이 없으면(전부 사역자 무료) 결제 없이 이름만 받는다
-  const afterReceive = (extra: Partial<Draft>) => {
+  // 장바구니 다음: 낼 돈이 없으면(전부 사역자 무료) 결제 없이 이름만 받는다
+  const afterCart = () => {
     if (total === 0) {
-      update({ ...extra, payMethod: 'NONE', coupon: undefined, preview: undefined, remainderMethod: undefined, cashGiven: undefined })
+      update({ payMethod: 'NONE', coupon: undefined, preview: undefined, remainderMethod: undefined, cashGiven: undefined })
       go('name')
     } else {
-      update(extra)
       go('payment')
     }
   }
@@ -196,20 +189,7 @@ export function KioskApp() {
           <CartStep cart={draft.cart} total={total}
             onChange={(cart) => update({ cart })}
             onAddMore={back}
-            onNext={() => go('receive')} />
-        )}
-        {step === 'receive' && (
-          <ReceiveStep onSelect={(t) => {
-            if (t === 'DELIVERY') {
-              update({ receiveType: t })
-              go('place')
-            } else {
-              afterReceive({ receiveType: t, place: undefined })
-            }
-          }} />
-        )}
-        {step === 'place' && (
-          <PlaceStep onSelect={(p) => afterReceive({ place: p })} />
+            onNext={afterCart} />
         )}
         {step === 'payment' && (
           <PaymentStep total={total} onSelect={afterPayment} />
@@ -221,7 +201,7 @@ export function KioskApp() {
           <CouponStep lines={lines} total={total} submitting={submitting}
             onDone={(coupon, preview, remainderMethod) => {
               if (remainderMethod === 'CASH') {
-                // 모자란 만큼 현금이면 낸 돈/거스름돈 화면을 거친다 (스태프 메모용)
+                // 모자란 만큼 현금이면 낸 돈 화면을 거친다 (거스름돈은 이 쿠폰에 충전)
                 update({ coupon, preview, remainderMethod })
                 go('cash')
               } else {
@@ -231,7 +211,8 @@ export function KioskApp() {
             }} />
         )}
         {step === 'cash' && (
-          <CashStep total={draft.coupon ? (draft.preview?.remainder ?? total) : total} onNext={(cashGiven) => afterPaid({ cashGiven })} />
+          <CashStep total={draft.coupon ? (draft.preview?.remainder ?? total) : total} hasCoupon={!!draft.coupon}
+            onNext={(cashGiven) => afterPaid({ cashGiven })} />
         )}
         {step === 'name' && (
           <NameStep submitting={submitting} onSelect={(name) => void submit(name)} />

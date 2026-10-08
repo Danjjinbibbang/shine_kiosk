@@ -5,7 +5,7 @@ import {
   toLineRequests, toggleOptionOnOneCup, toggleStaffFreeOnOneCup, type CartLine,
 } from '../shared/cart'
 import { RULES } from '../shared/rules'
-import type { FloorGroup, MenuItem, MenuOption, Order, ReceiveType } from '../shared/types'
+import type { MenuItem, MenuOption, Order } from '../shared/types'
 import { won } from '../shared/types'
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
 }
 
 /**
- * 항목/이름/장소/메모를 고친다. 결제 수단은 서버가 유지하고 금액만 다시 계산한다.
+ * 항목/이름/메모를 고친다. 결제 수단은 서버가 유지하고 금액만 다시 계산한다.
  * 칩(옵션/사역자)은 키오스크와 똑같이 한 번에 한 잔만 바뀐다.
  */
 export function EditOrderModal({ order, onClose, onSaved }: Props) {
@@ -23,10 +23,7 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
   // '메뉴 추가' 는 카테고리별로 접어 둔다 (메뉴가 많으면 한 줄로 늘어져 고르기 힘들다)
   const [openCat, setOpenCat] = useState<string | null>(null)
   const [allOptions, setAllOptions] = useState<MenuOption[]>([])
-  const [floors, setFloors] = useState<FloorGroup[]>([])
   const [name, setName] = useState(order.customerName)
-  const [receiveType, setReceiveType] = useState<ReceiveType>(order.receiveType)
-  const [placeId, setPlaceId] = useState<number | null>(order.placeId)
   const [memo, setMemo] = useState(order.memo ?? '')
   const [lines, setLines] = useState<CartLine[]>([])
   const [ready, setReady] = useState(false)
@@ -35,10 +32,9 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
 
   // 주문 줄을 장바구니 줄로 바꾸려면 메뉴표(카테고리/기본가)와 옵션표(그룹)가 필요하다.
   useEffect(() => {
-    Promise.all([api.menu(), api.menuOptions(), api.places()]).then(([m, opts, f]) => {
+    Promise.all([api.menu(), api.menuOptions()]).then(([m, opts]) => {
       setMenu(m)
       setAllOptions(opts)
-      setFloors(f)
       const variantOf = new Map<number, { item: MenuItem; label: string | null; price: number }>()
       m.forEach((item) => item.variants.forEach((v) => variantOf.set(v.id, { item, label: v.label, price: v.price })))
       const optionOf = new Map(opts.map((o) => [o.id, o]))
@@ -77,8 +73,6 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
     try {
       await api.updateOrder(order.id, {
         customerName: name,
-        receiveType,
-        placeId: receiveType === 'DELIVERY' ? placeId : null,
         lines: toLineRequests(lines),
         memo: memo || null,
       })
@@ -103,27 +97,6 @@ export function EditOrderModal({ order, onClose, onSaved }: Props) {
           <label>이름</label>
           <input className="text-input" value={name} maxLength={RULES.nameMax} onChange={(e) => setName(e.target.value)} />
         </div>
-
-        <div className="field">
-          <label>받는 방법</label>
-          <div className="chips">
-            <button className={'btn' + (receiveType === 'STORE' ? ' selected' : '')} onClick={() => setReceiveType('STORE')}>카페</button>
-            <button className={'btn' + (receiveType === 'DELIVERY' ? ' selected' : '')} onClick={() => setReceiveType('DELIVERY')}>배달</button>
-          </div>
-        </div>
-
-        {receiveType === 'DELIVERY' && (
-          <div className="field">
-            <label>장소</label>
-            <div className="chips">
-              {floors.flatMap((f) => f.places).map((p) => (
-                <button key={p.id} className={'btn' + (placeId === p.id ? ' selected' : '')} onClick={() => setPlaceId(p.id)}>
-                  {p.floor}층 {p.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="field">
           <label>메뉴 <span className="muted">(칩은 한 잔씩 바뀝니다)</span></label>

@@ -23,7 +23,6 @@ public final class Validation {
 	public static final int FREE_DRINKS_MAX = 100;   // 정정 화면에서 잔액 숫자를 무료잔 칸에 잘못 넣는 실수 방지용
 	public static final int QTY_MAX = 99;
 	public static final int LINES_MAX = 50;
-	public static final int FLOOR_MAX = 99;
 
 	/** 앞뒤 공백을 지우고 비어 있거나 너무 길면 거부. 돌려주는 값은 정리된 문자열. */
 	public static String name(String raw, String what, int max) {
@@ -79,10 +78,5 @@ public final class Validation {
 		if (qty < 1) throw new BusinessException("수량을 확인해 주세요.");
 		if (qty > QTY_MAX) throw new BusinessException("한 줄에 " + QTY_MAX + "잔까지 담을 수 있습니다.");
 		return qty;
-	}
-
-	public static int floor(int floor) {
-		if (floor < 1 || floor > FLOOR_MAX) throw new BusinessException("층은 1~" + FLOOR_MAX + " 사이여야 합니다.");
-		return floor;
 	}
 }

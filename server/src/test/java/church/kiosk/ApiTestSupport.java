@@ -28,8 +28,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * API 테스트 공통 바탕. 테스트마다 임시 SQLite 로 띄우고, 각 테스트 전에 데이터 테이블을 비운다.
- * 메뉴/장소는 시드 그대로 쓴다: 아메리카노 ICE 1001(1,000) · 바닐라라떼 ICE 1201(2,500) ·
- * 아이스크림 컵 3002(3,000) · 복숭아 아이스티 2101(2,000) · 배달장소 101 식당.
+ * 메뉴는 시드 그대로 쓴다: 아메리카노 ICE 1001(1,000) · 바닐라라떼 ICE 1201(2,500) ·
+ * 아이스크림 컵 3002(3,000) · 복숭아 아이스티 2101(2,000).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -40,7 +40,6 @@ public abstract class ApiTestSupport {
 	static final long VANILLA_ICE = 1201;
 	static final long ICECREAM_CUP = 3002;
 	static final long PEACH_TEA = 2101;
-	static final long PLACE_DINING = 101;
 
 	@DynamicPropertySource
 	static void tempDatabase(DynamicPropertyRegistry registry) throws Exception {
@@ -65,10 +64,10 @@ public abstract class ApiTestSupport {
 	@BeforeEach
 	void cleanTables() throws Exception {
 		for (String table : List.of("order_line", "orders", "coupon_tx", "coupon", "customer",
-				"order_line_option", "menu_variant", "menu_item", "menu_option", "menu_category", "delivery_place")) {
+				"order_line_option", "menu_variant", "menu_item", "menu_option", "menu_category")) {
 			jdbc.sql("DELETE FROM " + table).update();
 		}
-		seedData.seedIfEmpty(); // 메뉴/장소는 매번 기본 시드로
+		seedData.seedIfEmpty(); // 메뉴는 매번 기본 시드로
 		staffToken = JsonPath.read(postJson("/api/staff-auth/login", Map.of("pin", PIN)).body, "$.token");
 	}
 
@@ -139,7 +138,7 @@ public abstract class ApiTestSupport {
 	}
 
 	protected Map<String, Object> cashOrder(String name, Map<String, Object>... lines) {
-		return Map.of("customerName", name, "receiveType", "STORE", "payMethod", "CASH", "lines", List.of(lines));
+		return Map.of("customerName", name, "payMethod", "CASH", "lines", List.of(lines));
 	}
 
 	protected Response lookup(String name) throws Exception {

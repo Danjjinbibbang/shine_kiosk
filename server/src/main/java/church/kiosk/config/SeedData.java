@@ -29,8 +29,7 @@ public class SeedData {
 	private static final List<Seed> SEEDS = List.of(
 			new Seed("menu_category", "seed-categories.sql"),
 			new Seed("menu_item", "seed-menu.sql"),
-			new Seed("menu_option", "seed-options.sql"),
-			new Seed("delivery_place", "seed-places.sql")
+			new Seed("menu_option", "seed-options.sql")
 	);
 
 	private final JdbcClient jdbc;

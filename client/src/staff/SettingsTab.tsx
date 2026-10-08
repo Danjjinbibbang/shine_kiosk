@@ -4,19 +4,17 @@ import type { Category } from '../shared/types'
 import { CategoryAdmin } from './CategoryAdmin'
 import { MenuAdmin } from './MenuAdmin'
 import { OptionAdmin } from './OptionAdmin'
-import { PlaceAdmin } from './PlaceAdmin'
 
-type Section = 'menu' | 'options' | 'categories' | 'places'
+type Section = 'menu' | 'options' | 'categories'
 
 const SECTIONS: { key: Section; icon: string; title: string; hint: string }[] = [
   { key: 'menu', icon: '☕', title: '메뉴', hint: '이름 · 가격 · ICE/HOT · 품절' },
   { key: 'options', icon: '➕', title: '옵션', hint: '샷 추가 · 연하게 같은 잔 단위 선택' },
   { key: 'categories', icon: '🗂️', title: '카테고리', hint: '키오스크 상단 탭. 순서 · 이름' },
-  { key: 'places', icon: '🚶', title: '배달 장소', hint: '배달 받을 수 있는 곳' },
 ]
 
 /**
- * 스태프 = 관리자. 카테고리·메뉴·옵션·배달 장소를 여기서 고친다.
+ * 스태프 = 관리자. 카테고리·메뉴·옵션을 여기서 고친다.
  * 폰 설정 앱처럼 목록에서 하나를 고르면 그 화면만 보이고, 상단의 ‹ 로 돌아온다 (탭 아래 탭이 겹치지 않게).
  */
 export function SettingsTab({ onToast }: { onToast: (msg: string) => void }) {
@@ -62,7 +60,6 @@ export function SettingsTab({ onToast }: { onToast: (msg: string) => void }) {
       {section === 'menu' && <MenuAdmin onToast={onToast} categories={names} />}
       {section === 'options' && <OptionAdmin onToast={onToast} categories={names} />}
       {section === 'categories' && <CategoryAdmin onToast={onToast} />}
-      {section === 'places' && <PlaceAdmin onToast={onToast} />}
     </div>
   )
 }

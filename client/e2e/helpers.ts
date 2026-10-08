@@ -29,7 +29,7 @@ export async function lookupCoupon(request: APIRequestContext, name: string, pho
 }
 
 export async function createOrder(request: APIRequestContext, body: Record<string, unknown>) {
-  const r = await request.post('/api/orders', { data: { receiveType: 'STORE', payMethod: 'CASH', ...body } })
+  const r = await request.post('/api/orders', { data: { payMethod: 'CASH', ...body } })
   expect(r.ok(), await r.text()).toBeTruthy()
   return await r.json()
 }
@@ -81,13 +81,13 @@ export async function gotoKiosk(page: Page) {
   await expect(page.getByText('아메리카노')).toBeVisible()
 }
 
-/** 메뉴 → 장바구니 → 받는 방법까지 진행. */
-export async function toReceiveStep(page: Page, items: Array<[string, string | null, number]>) {
+/** 메뉴 → 장바구니 → 결제 수단 고르기까지 진행. */
+export async function toPaymentStep(page: Page, items: Array<[string, string | null, number]>) {
   await gotoKiosk(page)
   for (const [name, label, qty] of items) await addToCart(page, name, label, qty)
   await page.getByRole('button', { name: /주문 확인/ }).click()
   await page.getByRole('button', { name: /주문하기/ }).click()
-  await expect(page.getByRole('heading', { name: '어디서 받으시나요?' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '어떻게 결제하시나요?' })).toBeVisible()
 }
 
 export async function pickNameByTyping(page: Page, name: string, confirm: RegExp | string) {

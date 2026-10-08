@@ -1,5 +1,6 @@
 package church.kiosk.order;
 
+import church.kiosk.coupon.Coupon;
 import church.kiosk.order.OrderDtos.DailySummary;
 import church.kiosk.order.OrderDtos.OrderView;
 import church.kiosk.order.OrderDtos.Status;
@@ -62,13 +63,24 @@ public class StaffOrderController {
 
 	public record ChangeToCouponRequest(Long couponId) {}
 
-	/** 거스름돈을 돌려주는 대신 손님 쿠폰 잔액에 넣는다 (잔돈 적립). */
+	/** 거스름돈은 현금으로 주지 않고 손님 쿠폰 잔액에 넣는다 (무료 1잔 적립 없음). */
 	@PostMapping("/{id}/change-to-coupon")
 	public void changeToCoupon(@PathVariable long id, @RequestBody ChangeToCouponRequest request) {
 		if (request == null || request.couponId() == null) {
 			throw new church.kiosk.support.BusinessException("어느 쿠폰에 넣을지 골라 주세요.");
 		}
 		orderService.changeToCoupon(id, request.couponId());
+	}
+
+	public record ChangeToNewCouponRequest(String name, String phone) {}
+
+	/** 쿠폰이 없는 손님: 쿠폰을 새로 만들고 거스름돈을 넣는다. 만든 쿠폰을 돌려준다. */
+	@PostMapping("/{id}/change-to-new-coupon")
+	public Coupon changeToNewCoupon(@PathVariable long id, @RequestBody ChangeToNewCouponRequest request) {
+		if (request == null) {
+			throw new church.kiosk.support.BusinessException("이름과 전화번호를 넣어 주세요.");
+		}
+		return orderService.changeToNewCoupon(id, request.name(), request.phone());
 	}
 
 	@PostMapping("/{id}/reopen")

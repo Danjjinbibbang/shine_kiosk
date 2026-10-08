@@ -26,19 +26,18 @@ test.describe('주문 처리', () => {
   test('카드 내용 → 완료 → 완료 탭 → 되돌리기', async ({ page, request }) => {
     const name = uniq('처리')
     await createOrder(request, {
-      customerName: name, receiveType: 'DELIVERY', placeId: 101,
+      customerName: name,
       lines: [{ variantId: 1001, quantity: 2 }, { variantId: 3002, quantity: 1 }],
-      cashGiven: 10000,
+      cashGiven: 5000,
     })
     await staffLogin(page)
 
     const card = orderCard(page, name)
     await expect(card).toBeVisible()
-    await expect(card.locator('.where')).toHaveText('🚶 식당')
     await expect(card.locator('.lines')).toContainText(/아메리카노 ICE\s*×2/)
     await expect(card.locator('.lines')).toContainText(/아이스크림 컵\s*×1/)
     await expect(card.locator('.pay')).toHaveText('현금 5,000원')
-    await expect(card.locator('.pay-note')).toContainText('현금 10,000원 받음 → 거스름돈 5,000원')
+    await expect(card.locator('.pay-note')).toContainText('현금 5,000원 딱 맞게')
 
     await card.getByRole('button', { name: /완료/ }).click()
     await expect(page.locator('.toast')).toContainText(`${name}님 완료`)
@@ -80,7 +79,7 @@ test.describe('주문 처리', () => {
     expect((await lookupCoupon(request, name)).coupon.freeDrinks).toBe(1)
   })
 
-  test('수정: 이름/장소/수량/메뉴 추가/메모 → 카드에 반영', async ({ page, request }) => {
+  test('수정: 이름/수량/메뉴 추가/메모 → 카드에 반영 (받는 방법은 없다)', async ({ page, request }) => {
     const name = uniq('수정')
     await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 1 }] })
     await staffLogin(page)
@@ -91,8 +90,7 @@ test.describe('주문 처리', () => {
 
     await modal.getByPlaceholder('예: 얼음 적게').fill('얼음 적게')
     await modal.locator('.field input').first().fill(name + '2')
-    await modal.getByRole('button', { name: '배달' }).click()
-    await modal.getByRole('button', { name: '1층 전도사님실' }).click()
+    await expect(modal.getByRole('button', { name: '배달' })).toHaveCount(0)
     await modal.locator('.cart-line').first().getByRole('button', { name: '+' }).click()
     await addMenuInModal(page, '커피', /^아포카토/)
     await expect(modal.locator('.total-box .amount')).toHaveText('5,000원')
@@ -100,7 +98,6 @@ test.describe('주문 처리', () => {
 
     const updated = orderCard(page, name + '2')
     await expect(updated).toBeVisible()
-    await expect(updated.locator('.where')).toHaveText('🚶 전도사님실')
     await expect(updated.locator('.lines')).toContainText(/아메리카노 ICE\s*×2/)
     await expect(updated.locator('.lines')).toContainText(/아포카토\s*×1/)
     await expect(updated.locator('.pay')).toHaveText('현금 5,000원')
@@ -409,30 +406,6 @@ test.describe('설정 · 카테고리', () => {
   })
 })
 
-test.describe('설정 · 배달 장소', () => {
-  test('추가 → 고객 화면에 층 등장 → 숨김 → 삭제', async ({ page, request }) => {
-    const name = uniq('방')
-    await staffLogin(page)
-    await page.getByRole('button', { name: '설정' }).click()
-    await page.getByRole('button', { name: '배달 장소' }).click()
-    await page.getByLabel('층').fill('2')
-    await page.getByPlaceholder('장소 이름 (예: 식당)').fill(name)
-    await page.getByRole('button', { name: '추가' }).click()
-    const card = page.locator('.admin-item').filter({ hasText: `2층 ${name}` })
-    await expect(card).toBeVisible()
-    const floors = async () => ((await (await request.get('/api/places')).json()) as Array<{ floor: number; places: Array<{ name: string }> }>)
-    expect((await floors()).map((f) => f.floor)).toEqual([1, 2])
-
-    await card.getByRole('switch', { name: '표시중' }).click()
-    await expect(card.getByRole('switch', { name: '숨김' })).toBeVisible()
-    expect((await floors()).map((f) => f.floor)).toEqual([1])
-
-    page.once('dialog', (d) => d.accept())
-    await card.getByRole('button', { name: '삭제' }).click()
-    await expect(card).toHaveCount(0)
-  })
-})
-
 test.describe('옵션', () => {
   test('주문 카드에 옵션 표시, 수정 모달에서 옵션 켜고 끄기', async ({ page, request }) => {
     const name = uniq('옵션')
@@ -648,7 +621,7 @@ test.describe('수정과 정산', () => {
     await expect(card2.getByRole('button', { name: /완료/ })).toBeEnabled()
   })
 
-  test('거스름돈이 있으면 늘어난 몫을 거기서 제하고, 잔돈은 쿠폰에 넣을 수 있다', async ({ page, request }) => {
+  test('거스름돈이 있으면 늘어난 몫을 거기서 제하고, 남은 잔돈은 쿠폰에 넣어야 완료된다', async ({ page, request }) => {
     const name = uniq('잔돈')
     await registerCoupon(request, name, 20000)
     await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 1 }], cashGiven: 5000 })   // 1,000, 낸 돈 5,000
@@ -659,14 +632,42 @@ test.describe('수정과 정산', () => {
     const modal = page.locator('.modal')
     await addMenuInModal(page, '아이스크림', /^아이스크림 컵/)   // +3,000 → 4,000
     await modal.getByRole('button', { name: '저장' }).click()
-    await expect(card.locator('.pay-note')).toContainText('거스름돈 1,000원')
+    await expect(card.locator('.pay-note')).toContainText('거스름돈 1,000원 쿠폰에 넣기')
     await expect(card.locator('.settle')).toHaveCount(0)   // 더 받을 돈 없음
-    await expect(card.getByRole('button', { name: /완료/ })).toBeEnabled()
+    await expect(card.getByRole('button', { name: '잔돈 쿠폰 먼저' })).toBeDisabled()
     await card.getByRole('button', { name: '잔돈 쿠폰에 넣기' }).click()
+    // 같은 이름 쿠폰이 하나여도 맞는지 보고 누른다
+    await expect(card.getByText('이 쿠폰이 맞나요?')).toBeVisible()
+    await card.getByRole('button', { name: new RegExp(`^${name}.*잔액 20,000원`) }).click()
     await expect(page.locator('.toast')).toContainText('거스름돈을 쿠폰 잔액에 넣었습니다')
     await expect(card.locator('.pay-note')).toContainText('현금 5,000원 받음 → 거스름돈 1,000원은 쿠폰 충전')
     await expect(card.getByRole('button', { name: '잔돈 쿠폰에 넣기' })).toHaveCount(0)
-    expect((await lookupCoupon(request, name)).coupon.balance).toBe(21000)
+    await expect(card.getByRole('button', { name: /완료/ })).toBeEnabled()
+    const coupon = (await lookupCoupon(request, name)).coupon
+    expect(coupon.balance).toBe(21000)
+    expect(coupon.freeDrinks).toBe(1)   // 처음 2만원 충전의 1잔뿐 — 잔액이 21,000 이 돼도 잔돈 1,000 으론 안 생긴다
+  })
+
+  test('쿠폰이 없는 손님의 거스름돈: 쿠폰을 새로 만들며 넣는다 (거스름돈 2만원 이상이면 무료 1잔)', async ({ page, request }) => {
+    const name = uniq('새쿠폰')
+    await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 1 }], cashGiven: 50000 })   // 거스름돈 49,000
+    await staffLogin(page)
+    const card = orderCard(page, name)
+    await expect(card.getByRole('button', { name: '잔돈 쿠폰 먼저' })).toBeDisabled()
+    await card.getByRole('button', { name: '잔돈 쿠폰에 넣기' }).click()
+    await expect(card.getByText(`${name}님 쿠폰이 없어요`)).toBeVisible()
+    await expect(card.getByLabel('새 쿠폰 이름')).toHaveValue(name)
+    const create = card.getByRole('button', { name: '쿠폰 만들고 넣기' })
+    await expect(create).toBeDisabled()   // 전화번호 필수
+    await card.getByLabel('새 쿠폰 전화번호').fill('01055556666')
+    await create.click()
+    await expect(page.locator('.toast')).toContainText(`${name}님 쿠폰을 만들고 거스름돈을 넣었습니다`)
+    await expect(card.locator('.pay-note')).toContainText('거스름돈 49,000원은 쿠폰 충전')
+    await card.getByRole('button', { name: /완료/ }).click()
+    await expect(card).toHaveCount(0)
+    const coupon = (await lookupCoupon(request, name)).coupon
+    expect(coupon.balance).toBe(49000)
+    expect(coupon.freeDrinks).toBe(2)   // 거스름돈 49,000 → 30,000 이상이라 2잔
   })
 
   test('취소하면서 받은 돈을 주문자 쿠폰에 넣기', async ({ page, request }) => {

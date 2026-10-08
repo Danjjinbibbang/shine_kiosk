@@ -5,7 +5,6 @@ import church.kiosk.order.OrderDtos.LineOptionView;
 import church.kiosk.order.OrderDtos.LineView;
 import church.kiosk.order.OrderDtos.OrderView;
 import church.kiosk.order.OrderDtos.PayMethod;
-import church.kiosk.order.OrderDtos.ReceiveType;
 import church.kiosk.order.OrderDtos.Status;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -25,7 +24,7 @@ import java.util.Optional;
 public class OrderRepository {
 
 	private static final String ORDER_COLUMNS = """
-			id, order_date, order_no, customer_name, receive_type, place_id, place_name,
+			id, order_date, order_no, customer_name,
 			total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount,
 			free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at, completed_at,
 			edited_at, edit_note, settled_cash, settled_transfer, client_request_id, cash_given, change_credited,
@@ -33,8 +32,7 @@ public class OrderRepository {
 			""";
 
 	/** 주문 저장에 필요한 값 묶음. 서비스가 계산을 끝낸 뒤 넘긴다. */
-	public record OrderRow(String orderDate, int orderNo, String customerName, ReceiveType receiveType,
-						   Long placeId, String placeName, int totalAmount, int staffFreeAmount,
+	public record OrderRow(String orderDate, int orderNo, String customerName, int totalAmount, int staffFreeAmount,
 						   PayMethod payMethod,
 						   PayMethod remainderMethod, Long couponId, int couponAmount,
 						   int freeAmount, String freeItemName,
@@ -65,13 +63,12 @@ public class OrderRepository {
 						                    pay_method, remainder_method, coupon_id, coupon_amount,
 						                    free_amount, free_item_name, cash_amount, transfer_amount, status, memo, created_at,
 						                    settled_cash, settled_transfer, client_request_id, cash_given)
-						VALUES (:date, :no, :name, :receive, :placeId, :placeName,
+						VALUES (:date, :no, :name, 'STORE', NULL, NULL,
 						        :total, :staffFree, :pay, :remainder, :couponId, :couponAmount,
 						        :freeAmount, :freeItemName, :cash, :transfer, 'PENDING', :memo, :now, :cash, :transfer, :requestId, :cashGiven)
 						""")
 				.param("date", row.orderDate()).param("no", row.orderNo())
-				.param("name", row.customerName()).param("receive", row.receiveType().name())
-				.param("placeId", row.placeId()).param("placeName", row.placeName())
+				.param("name", row.customerName())
 				.param("total", row.totalAmount()).param("pay", row.payMethod().name())
 				.param("staffFree", row.staffFreeAmount())
 				.param("remainder", row.remainderMethod() == null ? null : row.remainderMethod().name())
@@ -87,8 +84,8 @@ public class OrderRepository {
 	/** 수정 시 결제 수단 자체는 유지하고 금액/항목 관련 컬럼만 바꾼다. settled_* 는 그대로 두어 차액이 드러나게. */
 	public void update(long orderId, OrderRow row, String editNote) {
 		jdbc.sql("""
-						UPDATE orders SET customer_name = :name, receive_type = :receive,
-						                  place_id = :placeId, place_name = :placeName,
+						UPDATE orders SET customer_name = :name, receive_type = 'STORE',
+						                  place_id = NULL, place_name = NULL,
 						                  total_amount = :total, staff_free_amount = :staffFree, remainder_method = :remainder,
 						                  coupon_amount = :couponAmount, free_amount = :freeAmount,
 						                  free_item_name = :freeItemName, cash_amount = :cash,
@@ -97,8 +94,7 @@ public class OrderRepository {
 						WHERE id = :id
 						""")
 				.param("now", LocalDateTime.now().toString()).param("editNote", editNote)
-				.param("name", row.customerName()).param("receive", row.receiveType().name())
-				.param("placeId", row.placeId()).param("placeName", row.placeName())
+				.param("name", row.customerName())
 				.param("total", row.totalAmount()).param("staffFree", row.staffFreeAmount())
 				.param("remainder", row.remainderMethod() == null ? null : row.remainderMethod().name())
 				.param("couponAmount", row.couponAmount())
@@ -153,11 +149,6 @@ public class OrderRepository {
 	/** 낸 현금이 있는 주문: 현금 몫 중 이미 손에 있는 만큼을 받은 것으로 (거스름돈이 늘어난 몫을 흡수). */
 	public void setSettledCash(long orderId, int settledCash) {
 		jdbc.sql("UPDATE orders SET settled_cash = :v WHERE id = :id").param("v", settledCash).param("id", orderId).update();
-	}
-
-	/** 완료하면서 준 거스름돈. */
-	public void addChangePaid(long orderId, int amount) {
-		jdbc.sql("UPDATE orders SET change_paid = change_paid + :v WHERE id = :id").param("v", amount).param("id", orderId).update();
 	}
 
 	/** 수정/취소로 돌려준 돈을 수단별로 기록한다. */
@@ -297,8 +288,8 @@ public class OrderRepository {
 	}
 
 	private static OrderView withLines(OrderView o, List<LineView> lines) {
-		return new OrderView(o.id(), o.orderDate(), o.orderNo(), o.customerName(), o.receiveType(),
-				o.placeId(), o.placeName(), o.totalAmount(), o.staffFreeAmount(),
+		return new OrderView(o.id(), o.orderDate(), o.orderNo(), o.customerName(),
+				o.totalAmount(), o.staffFreeAmount(),
 				o.payMethod(), o.remainderMethod(),
 				o.couponId(), o.couponAmount(), o.freeAmount(), o.freeItemName(),
 				o.cashAmount(), o.transferAmount(), o.status(),
@@ -307,15 +298,12 @@ public class OrderRepository {
 	}
 
 	private static OrderView mapOrder(ResultSet rs, int rowNum) throws SQLException {
-		long placeId = rs.getLong("place_id");
-		Long placeIdOrNull = rs.wasNull() ? null : placeId;
 		long couponId = rs.getLong("coupon_id");
 		Long couponIdOrNull = rs.wasNull() ? null : couponId;
 		String remainder = rs.getString("remainder_method");
 		return new OrderView(
 				rs.getLong("id"), rs.getString("order_date"), rs.getInt("order_no"),
-				rs.getString("customer_name"), ReceiveType.valueOf(rs.getString("receive_type")),
-				placeIdOrNull, rs.getString("place_name"), rs.getInt("total_amount"),
+				rs.getString("customer_name"), rs.getInt("total_amount"),
 				rs.getInt("staff_free_amount"),
 				PayMethod.valueOf(rs.getString("pay_method")),
 				remainder == null ? null : PayMethod.valueOf(remainder),

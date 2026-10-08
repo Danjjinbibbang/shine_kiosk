@@ -2,7 +2,6 @@
 // 주의: 서버는 null 인 필드를 JSON 에서 아예 뺀다 (non_null). 그래서 `x | null` 필드는 실제로 undefined 로 올 수 있으니
 // 비교는 항상 `== null` / `!= null` 로 한다.
 
-export type ReceiveType = 'STORE' | 'DELIVERY'
 /** NONE = 사역자 무료로 낼 금액이 0 이라 결제 없음 */
 export type PayMethod = 'TRANSFER' | 'COUPON' | 'CASH' | 'NONE'
 export type OrderStatus = 'PENDING' | 'DONE' | 'CANCELED'
@@ -36,17 +35,6 @@ export interface AdminOption extends MenuOption {
   available: boolean
 }
 
-export interface Place {
-  id: number
-  floor: number
-  name: string
-}
-
-export interface FloorGroup {
-  floor: number
-  places: Place[]
-}
-
 // ── 스태프 설정 화면 ──────────────────────────────────
 
 /** 메뉴 카테고리. 키오스크 순서 = 이 순서 */
@@ -78,14 +66,6 @@ export interface SaveItemRequest {
   category: string
   available: boolean
   variants: AdminVariant[]
-}
-
-export interface AdminPlace {
-  id: number
-  floor: number
-  name: string
-  sortOrder: number
-  active: boolean
 }
 
 export interface Coupon {
@@ -145,8 +125,6 @@ export interface CouponPreview {
 
 export interface CreateOrderRequest {
   customerName: string
-  receiveType: ReceiveType
-  placeId?: number | null
   payMethod: PayMethod
   couponId?: number | null
   useFreeDrink?: boolean
@@ -161,8 +139,6 @@ export interface CreateOrderRequest {
 
 export interface UpdateOrderRequest {
   customerName: string
-  receiveType: ReceiveType
-  placeId?: number | null
   lines: LineRequest[]
   memo?: string | null
 }
@@ -191,9 +167,6 @@ export interface Order {
   orderDate: string
   orderNo: number
   customerName: string
-  receiveType: ReceiveType
-  placeId: number | null
-  placeName: string | null
   /** 사역자 무료를 뺀 실제로 받을 금액 */
   totalAmount: number
   staffFreeAmount: number
@@ -219,14 +192,14 @@ export interface Order {
   cashGiven?: number | null
   /** 거스름돈 중 쿠폰에 넣은 금액 */
   changeCredited: number
-  /** 완료하면서 준 거스름돈 */
+  /** 완료하면서 현금으로 준 거스름돈 — 거스름돈을 늘 쿠폰에 넣기 전의 옛 주문에만 */
   changePaid: number
-  /** 아직 안 준 거스름돈 */
+  /** 아직 쿠폰에 안 넣은 거스름돈. 있으면 완료할 수 없다 */
   changeDue: number
   /** 수정/취소로 돌려준 돈 (현금 / 계좌이체) */
   refundCash: number
   refundTransfer: number
-  /** "현금 5,000원 받음 → 거스름돈 1,000원" — 수정 뒤에도 지금 금액 기준 (없으면 생략) */
+  /** "현금 5,000원 받음 → 거스름돈 1,000원 쿠폰에 넣기" — 수정 뒤에도 지금 금액 기준 (없으면 생략) */
   payNote?: string | null
   lines: OrderLine[]
 }

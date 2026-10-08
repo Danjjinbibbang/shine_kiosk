@@ -2,7 +2,7 @@
 """
 사용자 매뉴얼 / 운영자 매뉴얼 PPT 생성.
   python tools/build_manuals.py <캡처 폴더> <출력 폴더>
-캡처는 client/e2e/_capture.mjs 로 만든다 (빈 DB 서버 8094 에 예시 데이터 → 32장).
+캡처는 client/e2e/_capture.mjs 로 만든다 (빈 DB 서버 8094 에 예시 데이터 → 30장).
 """
 import os, sys
 from pptx import Presentation
@@ -241,7 +241,8 @@ u.bullets('이 매뉴얼의 구성', [
     '태블릿: 홈 화면의 "열린 카페" 아이콘 (또는 크롬에서 http://localhost:8080/kiosk)',
     '폰: 홈 화면의 "열린 카페 스태프" 아이콘 (또는 http://<태블릿 IP>:8080/staff). 태블릿과 같은 와이파이여야 한다',
     ('#', '기본 흐름'),
-    '손님이 태블릿에서 주문 → 현금은 바구니에 → 폰에 카드가 바로 뜸 → 음료를 만들어 이름을 부르고 거스름돈과 함께 건넴 → 완료',
+    '손님이 태블릿에서 주문 → 현금은 바구니에 → 폰에 카드가 바로 뜸 → 거스름돈은 쿠폰에 충전 → 음료를 만들어 이름을 부르고 건넴 → 완료',
+    '배달은 없다. 모든 주문은 카페에서 이름을 불러 건넨다',
 ], note='화면이 이상하면 먼저 새로고침. 새 버전이 배포되면 화면은 1분 안에 스스로 새로고침된다.')
 
 u.section('1부. 주문 화면 (태블릿)', '손님이 보는 화면. 크고 단순하게, 한 화면에 한 가지만 묻는다')
@@ -252,7 +253,7 @@ u.shot('메뉴 고르기', 'k01-menu', [
     '담긴 뒤엔 − 수량 + 가 나타난다 (한 줄 최대 99잔)',
     '탭의 숫자 배지 = 그 카테고리에서 담은 잔 수',
     '아래 바에 "n개 · 합계" 와 [주문 확인 ›]',
-], kicker='주문 1/8', second='k02-menu-added')
+], kicker='주문 1/7', second='k02-menu-added')
 
 u.shot('주문 내용 확인 — 잔마다 옵션', 'k03-cart', [
     '한 줄 = 같은 메뉴·같은 옵션의 잔들. 줄마다 − + 로 수량 조절',
@@ -263,36 +264,33 @@ u.shot('주문 내용 확인 — 잔마다 옵션', 'k03-cart', [
     ('#', '사역자'),
     '사역자 칩을 누르면 그 잔은 무료 (사역자 명단 없이 칩으로만)',
     '[더 담기] 로 메뉴로, [주문하기 ›] 로 다음',
-], kicker='주문 2/8', second='k16-cart-staff', note='오른쪽: 바닐라라떼 3잔 중 2잔에 사역자 → 낼 돈은 1잔 값만. 전부 사역자면 결제 없이 이름만 묻는다.')
-
-u.shot('받는 방법', 'k04-receive', [
-    '☕ 카페에서 받기 — 음료가 되면 이름을 불러 준다',
-    '🚶 배달 — 1층만 (식당, 전도사님실). 2층 이상은 만드는 사람이 자리를 비워야 해서 안 한다',
-    '배달 장소 목록은 설정 > 배달 장소에서 바꾼다',
-], kicker='주문 3/8', second='k05-place')
+], kicker='주문 2/7', second='k16-cart-staff', note='오른쪽: 바닐라라떼 3잔 중 2잔에 사역자 → 낼 돈은 1잔 값만. 전부 사역자면 결제 없이 이름만 묻는다.')
 
 u.shot('결제 수단', 'k06-payment', [
+    '[주문하기] 다음 바로 이 화면 — 받는 방법은 묻지 않는다 (배달 없음, 전부 카페에서)',
     '계좌이체 / 쿠폰 / 현금 세 가지',
     ('#', '계좌이체'),
     '계좌번호가 크게 보인다. 손님이 폰으로 보낸 뒤 [보냈어요]',
     '12초 동안 아무것도 안 누르면 자동으로 다음(이름)으로 넘어간다',
     '스태프는 폰 카드에서 입금을 확인하고 완료한다',
-], kicker='주문 4/8', second='k07-transfer')
+], kicker='주문 3/7', second='k07-transfer')
 
 u.shot('현금', 'k08-cash', [
     '"현금은 바구니에 넣어주세요" — 손님이 얼마를 냈는지 고른다',
     '[딱 맞게] 또는 총액보다 큰 지폐 단위 (예: 4,500원이면 5,000 / 10,000 / 50,000)',
     '거스름돈이 바로 계산돼 보인다 (10,000 내면 5,500)',
-    '거스름돈은 스태프 폰 카드에 💵 로 표시되고, 음료와 함께 건넨다',
-    '쿠폰 잔액이 모자라 나머지를 현금으로 낼 때도 같은 화면 (나머지 금액 기준)',
-], kicker='주문 5/8')
+    ('#', '거스름돈은 현금으로 주지 않고 쿠폰에 충전'),
+    '쿠폰이 있으면 그 쿠폰에, 없으면 스태프가 쿠폰을 만들어 넣는다 (화면에 안내가 뜬다)',
+    '쿠폰 잔액이 모자라 나머지를 현금으로 낼 때도 같은 화면 (나머지 금액 기준). 이때 거스름돈은 그 쿠폰에 바로 충전',
+    '무료 1잔은 거스름돈 금액만 보고 정한다 (20,000 이상 1잔, 30,000 이상 2잔). 기존 잔액과 합쳐 2만원을 넘는 건 해당 없음',
+], kicker='주문 4/7')
 
 u.shot('쿠폰 (선불)', 'k12-coupon-name', [
     '단골 명단에서 이름을 고르거나 직접 입력 → [쿠폰 조회]',
     '같은 이름이 둘 이상이면 전화번호 뒤 4자리 버튼(010-****-5678)이 떠서 본인 것을 고른다. 숫자를 치는 키패드는 없다',
     '전화번호가 등록되지 않은 쿠폰이 섞여 있으면 "스태프에게 말씀해 주세요" 안내',
     '쿠폰으로 결제하면 이름 화면은 건너뛴다 (쿠폰 주인 이름으로 접수)',
-], kicker='주문 6/8', second='k13-coupon-pick')
+], kicker='주문 5/7', second='k13-coupon-pick')
 
 u.shot('쿠폰 — 잔액과 무료 1잔', 'k14-coupon-found', [
     '잔액이 크게 보이고, 주문 금액 전액이 잔액에서 빠진다',
@@ -301,16 +299,17 @@ u.shot('쿠폰 — 잔액과 무료 1잔', 'k14-coupon-found', [
     '사역자 무료로 표시한 잔은 무료 1잔 후보가 아니다',
     ('#', '잔액 부족'),
     '잔액을 다 쓰고 남는 금액은 현금 또는 계좌이체 중 골라서 낸다',
-    '현금이면 낸 돈/거스름돈 화면을 한 번 더 거친다',
-], kicker='주문 7/8', second='k15-coupon-free')
+    '현금이면 낸 돈 화면을 한 번 더 거친다. 거스름돈은 이 쿠폰에 바로 충전되고 완료 화면에 보인다',
+], kicker='주문 6/7', second='k15-coupon-free')
 
 u.shot('이름 → 완료', 'k09-name', [
     '최근 3주 안에 주문한 이름이 가나다순 버튼으로. 없으면 [이름 직접 입력]',
     '이름은 20자까지. 음료가 되면 이 이름으로 부른다',
     '[주문 완료] 를 누르면 접수. 주문 번호가 크게 보인다 (당일 1번부터)',
+    '현금 거스름돈이 있으면 "쿠폰에 충전해 드려요 — 스태프에게 말씀해 주세요" 안내',
     '[처음으로] 를 누르거나 2분 동안 안 건드리면 첫 화면으로 돌아간다',
     '와이파이가 잠깐 끊겨 두 번 눌러도 주문은 한 번만 들어간다',
-], kicker='주문 8/8', second='k11-done')
+], kicker='주문 7/7', second='k11-done')
 
 u.section('2부. 스태프 화면 (폰)', '만드는 사람이 보는 화면. 주문 처리 · 쿠폰 · 매출 · 설정')
 
@@ -322,32 +321,44 @@ u.shot('로그인', 's01-login', [
     ('#', '상단 집계'),
     '오늘 주문 수 · 합계 · 현금/이체/쿠폰/무료잔/사역자 — 취소한 주문은 빠진다',
     '탭: 만들 것 / 완료 / 쿠폰 / 매출 / 설정',
-], kicker='스태프 1/9')
+], kicker='스태프 1/10')
 
 u.shot('만들 것 — 카드 읽는 법', 's02-orders', [
-    '#번호 이름 · 받는 곳(☕ 카페 / 🚶 식당) · 시각. 새 주문은 손대지 않아도 바로 나타난다',
+    '#번호 이름 · 시각. 새 주문은 손대지 않아도 바로 나타난다',
     '메뉴 줄: 메뉴 ×잔수, 옵션(샷 추가), (사역자 n) 표시',
     '결제 줄: "현금 4,500원" 또는 "10,500원 = 쿠폰 4,500원 + 현금 6,000원" 처럼 구성대로',
-    '💵 현금 10,000원 받음 → 거스름돈 5,500원 — 음료와 함께 줄 거스름돈. 옆의 [잔돈 쿠폰에 넣기] 로 잔돈을 쿠폰에 충전할 수도 있다',
+    '💵 현금 10,000원 받음 → 거스름돈 5,500원 쿠폰에 넣기 — 옆의 [잔돈 쿠폰에 넣기] 로 쿠폰에 충전 (다음 장)',
     '📝 메모 (스태프가 수정 화면에서 적은 것)',
     '수정됨 배지 + 시각 + 이전 내용: 스태프가 고친 주문',
     '오늘 것이 아니면 번호 앞에 날짜가 붙는다 (9/21 #3)',
-], kicker='스태프 2/9')
+], kicker='스태프 2/10')
+
+u.shot('거스름돈 → 쿠폰', 's17-change-coupon', [
+    '거스름돈은 현금으로 주지 않는다. 쿠폰에 넣기 전엔 완료 버튼이 [잔돈 쿠폰 먼저] 로 잠긴다',
+    ('#', '쿠폰으로 결제한 주문'),
+    '모자란 만큼 현금을 낸 경우 거스름돈은 접수하자마자 그 쿠폰에 저절로 들어가 있다 — 할 일 없음',
+    ('#', '현금 주문'),
+    '[잔돈 쿠폰에 넣기] → 주문자 이름의 쿠폰 후보가 뜬다. 하나여도 맞는지 보고 누른다',
+    '쿠폰이 없으면 이름(채워져 있음) + 전화번호 → [쿠폰 만들고 넣기]. 같은 이름에 다른 사람이면 [＋ 새 쿠폰 만들기]',
+    ('#', '무료 1잔'),
+    '거스름돈은 충전 이력·충전 입금에 잡힌다. 무료 1잔은 거스름돈 금액만 본다: 20,000 이상 1잔, 30,000 이상 2잔',
+    '예) 잔액 18,000 + 거스름돈 2,500 = 20,500 → 무료잔 없음. 거스름돈이 22,500 이면 → 1잔',
+], kicker='스태프 3/10')
 
 u.shot('완료 · 되돌리기 · 잔액 문자', 's06-done', [
     '[완료 ✓] — 음료를 건넸을 때. 완료 탭으로 이동하고 상단 집계는 그대로',
-    '완료를 누르는 순간 거스름돈은 "준 것"으로 확정된다',
+    '거스름돈이 아직 쿠폰에 안 들어갔으면 완료 버튼이 "잔돈 쿠폰 먼저" 로 잠긴다',
     '쿠폰 주문을 완료하면 잔액 안내 문자 앱이 열린다 (내용이 채워진 채, 보내기만 누르면 됨). 번호 없는 쿠폰은 문자 생략',
     '완료 탭에서 [↩ 되돌리기] 로 다시 만들 것으로. [📩 잔액 문자] 로 문자 다시',
     '돌려줄 돈/더 받을 돈이 남아 있으면 완료 버튼이 "정산 먼저" 로 잠긴다',
-], kicker='스태프 3/9')
+], kicker='스태프 4/10')
 
 u.shot('주문 수정', 's04-edit', [
-    '[수정] → 이름 · 받는 곳 · 메뉴/수량 · 잔별 옵션(샷 추가/연하게/사역자) · 메모를 고친다. 결제 수단은 못 바꾼다',
+    '[수정] → 이름 · 메뉴/수량 · 잔별 옵션(샷 추가/연하게/사역자) · 메모를 고친다. 결제 수단은 못 바꾼다',
     '칩은 키오스크와 같이 한 잔씩 바뀐다',
     '저장하면 카드에 "수정됨" 과 이전 내용이 남고, 금액 차이가 있으면 정산 안내가 뜬다 (다음 장)',
     '메뉴를 다 빼면 저장 불가. [닫기] 는 변경 없음',
-], kicker='스태프 4/9')
+], kicker='스태프 5/10')
 
 u.shot('정산 — 차액이 생겼을 때', 's03-order-settle', [
     ('#', '더 받을 돈 (금액이 늘었을 때)'),
@@ -356,17 +367,17 @@ u.shot('정산 — 차액이 생겼을 때', 's03-order-settle', [
     '쿠폰에서 빼기: 쿠폰 주문이면 그 쿠폰, 아니면 주문자 이름의 쿠폰 (동명이인이면 고름). 잔액 부족이면 거부',
     ('#', '돌려줄 돈 (금액이 줄었을 때, 낸 현금 기록이 없는 주문)'),
     '"n원 돌려주기" [현금으로 줬어요] [계좌이체로 보냈어요] [쿠폰에 넣기] → 카드에 ↩ 돌려줌 기록',
-    '낸 현금이 있는 주문은 거스름돈이 커질 뿐 — 💵 줄에 반영',
+    '낸 현금이 있는 주문은 거스름돈이 커질 뿐 — 💵 줄에 반영, 쿠폰에 넣는다 (쿠폰 주문이면 저절로)',
     '쿠폰 주문이 줄면 차액은 쿠폰 잔액으로 자동 복귀',
-], kicker='스태프 5/9', note='정산을 마쳐야 완료할 수 있다. 완료 뒤 되돌려서 고치면 그 뒤 차액만 주고받는다 (이미 준 거스름돈은 확정).')
+], kicker='스태프 6/10', note='정산을 마쳐야 완료할 수 있다. 완료 뒤 되돌려서 고치면 그 뒤 차액만 주고받는다 (이미 쿠폰에 넣은 거스름돈은 그대로).')
 
 u.shot('취소', 's05-cancel', [
     '[취소] → 카드 안에 확인 패널. [취소 안 함] 으로 그대로',
     '받은 돈이 있으면 어떻게 돌려줬는지: [현금으로 돌려주고 취소] [계좌이체로 돌려주고 취소] [쿠폰에 넣고 취소]',
     '쿠폰으로 낸 몫(잔액·무료 1잔)은 자동으로 되돌아간다',
-    '낸 현금이 있으면 거스름돈은 어차피 현금으로 드린다는 안내가 같이 뜬다',
+    '낸 현금 중 아직 쿠폰에 안 넣은 거스름돈은 같이 돌려준다. 이미 쿠폰에 넣은 잔돈은 쿠폰에 그대로',
     '취소한 주문은 매출에서 빠지고, 매출 탭 목록에 "취소" 로 남는다',
-], kicker='스태프 6/9')
+], kicker='스태프 7/10')
 
 u.shot('쿠폰 관리 — 조회 · 등록', 's07-coupon', [
     '이름(+전화번호 뒤 4자리 또는 전체)으로 [조회]. 동명이인이면 후보 목록에서 고른다. 이름을 고치면 번호 칸은 비워진다',
@@ -375,7 +386,7 @@ u.shot('쿠폰 관리 — 조회 · 등록', 's07-coupon', [
     '자동으로 하이픈이 붙고 13자 이상은 안 들어간다. 유선번호(02-…)는 거부',
     '[20,000원 등록] → 무료 1잔 / [30,000원 등록] → 무료 2잔 / 다른 금액 (30,000원까지, 무료잔은 20,000 이상 1잔)',
     '같은 이름에 뒤 4자리까지 같은 번호는 등록 안 된다',
-], kicker='스태프 7/9', second='s09-coupon-register')
+], kicker='스태프 8/10', second='s09-coupon-register')
 
 u.shot('쿠폰 관리 — 카드', 's08-coupon-card', [
     '잔액 · 무료 1잔 수 · 전화번호 · [이름 변경] [번호 변경] (번호는 버튼을 눌러야 칸이 열림)',
@@ -383,7 +394,7 @@ u.shot('쿠폰 관리 — 카드', 's08-coupon-card', [
     '[잔액 정정] — 잘못 넣었을 때 잔액/무료잔을 직접 고침 (이력에 "정정" 으로 남음)',
     '[쿠폰 삭제] — 주문에 쓰인 적 없는 쿠폰만. 쓰였으면 정정으로 0원 처리',
     '최근 한 달 이력: 충전 / 사용(주문 번호) / 환불 / 정정 / 잔돈 충전',
-], kicker='스태프 8/9')
+], kicker='스태프 9/10')
 
 u.shot('매출 · 백업 · 설정', 's10-report', [
     ('#', '매출'),
@@ -392,9 +403,9 @@ u.shot('매출 · 백업 · 설정', 's10-report', [
     '[일별 CSV] [이날 주문 CSV] — 엑셀에서 열린다',
     '[백업 내려받기] — zip 하나에 복구용 DB + 쿠폰 잔액·일별 매출·전체 주문 CSV. 폰 파일 앱에서 바로 열림. 한 달에 한 번쯤 받아 두기',
     ('#', '설정'),
-    '메뉴(카테고리별 접기, 품절 스위치, 순서, 가격) · 옵션 · 카테고리(키오스크 탭 순서) · 배달 장소',
+    '메뉴(카테고리별 접기, 품절 스위치, 순서, 가격) · 옵션 · 카테고리(키오스크 탭 순서)',
     '바꾸면 키오스크에 바로 반영. 메뉴가 없는 카테고리도 탭은 뜬다',
-], kicker='스태프 9/9', second='s11-settings')
+], kicker='스태프 10/10', second='s11-settings')
 
 u.shot('설정 — 메뉴 관리', 's12-settings-menu', [
     '카테고리 그룹을 눌러 펼치기. 개수와 품절 수가 보인다',
@@ -405,14 +416,12 @@ u.shot('설정 — 메뉴 관리', 's12-settings-menu', [
     '삭제해도 지난 주문 기록은 남는다',
 ], kicker='설정', second='s13-menu-modal')
 
-u.shot('설정 — 옵션 · 카테고리 · 배달 장소', 's14-settings-options', [
+u.shot('설정 — 옵션 · 카테고리', 's14-settings-options', [
     ('#', '옵션'),
     '이름 · 추가 금액 · 적용 카테고리 · 그룹(같은 그룹은 한 잔에 하나만, 예: 농도 = 샷 추가/연하게)',
     '사용중/숨김 스위치',
     ('#', '카테고리'),
     '추가 · 이름 변경(메뉴/옵션에 따라감) · 순서(키오스크 탭 순서) · 삭제(메뉴가 없어야)',
-    ('#', '배달 장소'),
-    '층 + 이름. 표시중/숨김. 숨기면 키오스크 배달 목록에서 빠진다',
 ], kicker='설정', second='s15-settings-categories')
 
 u.bullets('자주 생기는 상황', [
@@ -519,7 +528,6 @@ o.code('백엔드 패키지 구조', """church.kiosk
 │             StaffAuthInterceptor(X-Staff-Token 검사)
 ├─ menu/      MenuController(공개) · MenuAdminController
 │             MenuCategoryController · Menu*Repository · MenuDtos
-├─ place/     PlaceController(공개) · PlaceAdminController · PlaceRepository
 ├─ coupon/    CouponController · CouponService · CouponRepository
 │             Coupon · ChargePolicy(충전 등급/상한)
 ├─ order/     OrderController(공개) · StaffOrderController
@@ -540,10 +548,10 @@ o.code('백엔드 패키지 구조', """church.kiosk
 ])
 
 o.table('백엔드 핵심 클래스와 책임', ['클래스', '하는 일'], [
-    ['OrderService', '주문 생성(가격은 서버가 메뉴표에서), 멱등(clientRequestId), 쿠폰 적용, 수정(환불→재차감, 거스름돈 흡수), 정산(settle), 잔돈 쿠폰 충전, 완료(거스름돈 확정), 되돌리기, 취소(환불 수단 기록)'],
-    ['CouponService', '조회(동명이인 후보), 등록/충전(ChargePolicy: 30,000 상한, 20,000→1잔·30,000→2잔), 번호/이름 변경, 정정, 삭제 가드, 주문 차감/환불/잔돈 충전, 한 달 이력'],
+    ['OrderService', '주문 생성(가격은 서버가 메뉴표에서), 멱등(clientRequestId), 쿠폰 적용, 수정(환불→재차감, 거스름돈 흡수), 정산(settle), 거스름돈 쿠폰 충전(쿠폰 주문은 자동, 새 쿠폰 만들며 넣기), 완료(거스름돈 남으면 거부), 되돌리기, 취소(환불 수단 기록)'],
+    ['CouponService', '조회(동명이인 후보), 등록/충전(ChargePolicy: 30,000 상한, 20,000→1잔·30,000→2잔), 번호/이름 변경, 정정, 삭제 가드, 주문 차감/환불/거스름돈 충전(무료잔은 거스름돈 금액 기준), 잔액 0 쿠폰 만들기, 한 달 이력'],
     ['ChargePolicy', '충전 등급과 상한 한 곳. /api/staff/coupons/preset 으로 화면에 내려준다'],
-    ['Validation', '휴대폰 11자리, 이름 20/메뉴 30/선택지 10/메모 200자, 가격 100원 단위·10만 이하, 잔액 100만, 수량 99, 줄 50, 층 1~99'],
+    ['Validation', '휴대폰 11자리, 이름 20/메뉴 30/선택지 10/메모 200자, 가격 100원 단위·10만 이하, 잔액 100만, 수량 99, 줄 50'],
     ['SchemaMigration', 'COLUMNS 목록에 없는 컬럼을 ALTER 로 추가 + 보정(settled 채우기, 옛 메모→낸 돈), phone_last4 제거, 카테고리 표 생성, 옵션 그룹'],
     ['BackupService', 'VACUUM INTO 로 일관된 스냅샷. backup-dir 에 kiosk-backup-날짜.db, 10개 유지. 다운로드용 임시 스냅샷'],
     ['ReportRepository', '일별 집계(취소 제외) + 쿠폰 충전 입금 + 돌려준 돈(취소 포함)'],
@@ -564,16 +572,16 @@ o.code('프론트 구조', """client/src/
 │  └─ useAutoReload.ts     번들 해시 비교 → 새 버전이면 새로고침
 ├─ kiosk/
 │  ├─ KioskApp.tsx         단계 상태기계
-│  │                       menu→cart→receive→place→payment
+│  │                       menu→cart→payment
 │  │                       →(transfer|coupon|cash)→name→done
-│  ├─ MenuStep · CartStep · ChoiceSteps(받기/장소/결제)
+│  ├─ MenuStep · CartStep · ChoiceSteps(결제 수단)
 │  └─ PaymentSteps(이체/쿠폰/현금) · NameStep · NamePicker · DoneStep
 └─ staff/
    ├─ StaffApp.tsx         로그인 상태, 탭, 상단 집계, WS+20초 폴링
    ├─ LoginPage · OrdersTab(카드 · 정산 · 취소) · EditOrderModal
    ├─ CouponTab · ReportTab
    └─ SettingsTab(홈 목록) · MenuAdmin · OptionAdmin
-      · CategoryAdmin · PlaceAdmin""", right=[
+      · CategoryAdmin""", right=[
     ('#', '원칙'),
     '가격은 클라이언트가 보내지 않는다 — variantId/optionIds 만. 서버가 메뉴표로 계산',
     '서버가 null 을 생략하므로 옵션 필드는 != null 로 검사',
@@ -587,11 +595,11 @@ o.table('DB 스키마 (SQLite, 11 테이블)', ['테이블', '주요 컬럼', '�
     ['menu_category', 'id, name, sort_order', '키오스크 탭 순서. 이름 변경은 menu_item/menu_option.category 에 전파'],
     ['menu_item / menu_variant', 'name, category, sort_order, available / label(ICE·HOT), price, available', '가격은 variant 에. 삭제 시 지난 주문은 스냅샷이라 무관'],
     ['menu_option', 'name, price, category, option_group, available', '같은 그룹은 한 잔에 하나 (샷 추가/연하게 = 농도)'],
-    ['delivery_place', 'floor, name, active, sort_order', '1층만 운영'],
+    ['delivery_place', 'floor, name, active, sort_order', '배달을 없애 쓰지 않음. 옛 주문의 place_id 때문에 테이블만 남김'],
     ['coupon', 'name, phone(숫자 11자리), balance, free_drinks', 'phone_last4 는 phone 에서 계산 (컬럼 제거됨)'],
-    ['coupon_tx', 'coupon_id, order_id, delta, free_delta, reason(CHARGE·USE·REFUND·ADJUST), balance_after', '잔돈 충전은 CHARGE + order_id'],
+    ['coupon_tx', 'coupon_id, order_id, delta, free_delta, reason(CHARGE·USE·REFUND·ADJUST), balance_after', '거스름돈 충전은 CHARGE + order_id, free_delta 는 거스름돈 금액 기준'],
     ['customer', 'name, order_count, last_ordered_at', '단골 명단 (21일)'],
-    ['orders', 'order_date, order_no, customer_name, receive_type, place_*, total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount, free_amount, free_item_name, cash_amount, transfer_amount, settled_cash, settled_transfer, cash_given, change_credited, change_paid, refund_cash, refund_transfer, status, memo, edited_at, edit_note, client_request_id', '다음 장 "돈 모델"'],
+    ['orders', 'order_date, order_no, customer_name, receive_type(늘 STORE), place_*(옛 배달), total_amount, staff_free_amount, pay_method, remainder_method, coupon_id, coupon_amount, free_amount, free_item_name, cash_amount, transfer_amount, settled_cash, settled_transfer, cash_given, change_credited, change_paid, refund_cash, refund_transfer, status, memo, edited_at, edit_note, client_request_id', '다음 장 "돈 모델"'],
     ['order_line / order_line_option', 'menu_name, variant_label, unit_price, quantity, staff_free_qty / option name, price', '주문 시점 스냅샷'],
 ], widths=[1.4, 4.2, 2.6], size=11)
 
@@ -601,9 +609,9 @@ o.bullets('주문의 돈 모델 (orders 컬럼 읽는 법)', [
     ('#', '실제로 받은 돈'),
     'settled_cash / settled_transfer = 손에 들어온 현금/이체. cash_amount − settled_cash > 0 이면 "더 받을 돈", < 0 이면 "돌려줄 돈". 둘 다 0 이어야 완료 가능',
     ('#', '키오스크 현금 (cash_given 이 있는 주문)'),
-    'cash_given = 손님이 낸 현금. 거스름돈 = cash_given − cash_amount − change_credited(쿠폰에 넣은 잔돈) − change_paid(완료 때 준 거스름돈)',
+    'cash_given = 손님이 낸 현금. 남은 거스름돈(changeDue) = cash_given − cash_amount − change_credited(쿠폰에 넣은 잔돈) − change_paid(옛 주문에서 현금으로 준 것)',
     '수정 시 settled_cash = min(cash_amount, cash_given − change_credited − change_paid) → 늘어난 몫은 거스름돈에서 흡수, 넘는 만큼만 더 받기',
-    '완료 시 change_paid += 남은 거스름돈 (확정). 되돌려 고치면 그 뒤 차액만',
+    '거스름돈은 늘 쿠폰으로: 쿠폰 주문은 생성·수정·완료 때 남은 거스름돈을 그 쿠폰에 자동 CHARGE. 아니면 change-to-coupon / change-to-new-coupon. changeDue > 0 이면 완료 거부',
     ('#', '돌려준 돈'),
     'refund_cash / refund_transfer = 정산·취소로 돌려준 금액 (쿠폰에 넣은 건 coupon_tx REFUND). 매출 탭 "돌려준 돈" 은 취소 주문까지 합산',
     ('#', '쿠폰'),
@@ -612,11 +620,10 @@ o.bullets('주문의 돈 모델 (orders 컬럼 읽는 법)', [
 
 o.table('API — 공개 (키오스크)', ['메서드 · 경로', '용도'], [
     ['GET /api/menu · /api/menu/categories · /api/menu/options', '판매중 메뉴(카테고리→메뉴 순), 탭 목록(빈 카테고리 포함), 옵션'],
-    ['GET /api/places', '표시중 배달 장소 (층별)'],
     ['GET /api/customers/regulars', '단골 이름 (가나다순)'],
     ['POST /api/coupons/lookup {name, phoneLast4?}', 'FOUND / NOT_FOUND / NEED_PHONE(candidates: id·뒤4자리). 전체 번호는 내려주지 않음'],
     ['POST /api/orders/coupon-preview', '쿠폰 적용 미리보기 (무료 1잔, 차감, 나머지)'],
-    ['POST /api/orders', '주문 생성. lines[{variantId, quantity, optionIds, staffFreeQty}], payMethod, couponId, useFreeDrink, remainderMethod, cashGiven, memo, clientRequestId'],
+    ['POST /api/orders', '주문 생성 (받는 방법 없음). lines[{variantId, quantity, optionIds, staffFreeQty}], payMethod, couponId, useFreeDrink, remainderMethod, cashGiven, memo, clientRequestId'],
     ['GET /api/orders/payment-info', '계좌 안내 문구'],
     ['WS /ws', 'ORDERS_CHANGED 알림'],
 ], widths=[3, 4])
@@ -624,30 +631,31 @@ o.table('API — 공개 (키오스크)', ['메서드 · 경로', '용도'], [
 o.table('API — 스태프 (X-Staff-Token)', ['메서드 · 경로', '용도'], [
     ['POST /api/staff-auth/login {pin} · logout · GET check', '토큰 발급/폐기/확인'],
     ['GET /api/staff/orders?status=PENDING|DONE|CANCELED · GET summary', 'PENDING 은 날짜 무관 전부, 나머지는 오늘. 오늘 집계'],
-    ['PUT /api/staff/orders/{id}', '수정 (이름·받는 곳·줄·메모). 결제 수단 불변'],
-    ['POST …/{id}/done · reopen · cancel {method, refundToCouponId}', '완료(거스름돈 확정) · 되돌리기 · 취소(환불 수단)'],
+    ['PUT /api/staff/orders/{id}', '수정 (이름·줄·메모). 결제 수단 불변'],
+    ['POST …/{id}/done · reopen · cancel {method, refundToCouponId}', '완료(거스름돈이 남으면 거부) · 되돌리기 · 취소(환불 수단)'],
     ['POST …/{id}/settle {method, couponId}', '돌려줄 돈(CASH/TRANSFER/COUPON) 또는 더 받을 돈(CASH/TRANSFER/COUPON) 처리'],
-    ['POST …/{id}/change-to-coupon {couponId}', '거스름돈을 쿠폰에 충전'],
+    ['POST …/{id}/change-to-coupon {couponId}', '거스름돈을 쿠폰에 충전 (무료잔은 거스름돈 금액 기준)'],
+    ['POST …/{id}/change-to-new-coupon {name, phone}', '쿠폰을 잔액 0 으로 만들고 거스름돈 충전. 만든 쿠폰을 돌려줌'],
     ['/api/staff/coupons: POST(등록) · lookup · ?name= · GET {id} · {id}/history · PUT {id}/name · {id}/phone · POST {id}/charge · {id}/adjust · DELETE · GET preset', '쿠폰 관리 전부'],
-    ['/api/staff/menu (CRUD, {id}/available, PUT order) · /options · /api/staff/categories (CRUD, order) · /api/staff/places', '설정'],
+    ['/api/staff/menu (CRUD, {id}/available, PUT order) · /options · /api/staff/categories (CRUD, order)', '설정'],
     ['/api/staff/reports: days · orders?date · days.csv · orders.csv?date · backup.zip · backup.db', '매출 · CSV · 백업'],
 ], widths=[3.4, 3.6], size=11)
 
 o.bullets('결제·쿠폰 규칙 요약', [
     ('#', '결제'),
     '계좌이체 / 쿠폰 / 현금. 전부 사역자 무료면 NONE (결제 없음). 낼 금액이 0 인데 수단이 있으면 거부, 반대도 거부',
-    '현금은 cashGiven 을 함께 보내면 거스름돈 안내가 생긴다 (낸 돈 < 낼 돈이면 거부)',
+    '현금은 cashGiven 을 함께 보내면 거스름돈 안내가 생긴다 (낸 돈 < 낼 돈이면 거부). 거스름돈은 현금으로 주지 않고 쿠폰에 충전',
     ('#', '쿠폰'),
     '주문 금액 전액 차감. 잔액 부족분은 remainderMethod(CASH/TRANSFER) 로. 무료 1잔 = 돈 내는 잔 중 가장 비싼 잔(옵션 포함)',
-    '등록/충전은 한 번에 30,000원까지. 20,000 이상 1잔, 30,000 이면 2잔 (충전 금액 기준, 누적 아님). 정정은 100만원까지',
+    '등록/충전은 한 번에 30,000원까지. 20,000 이상 1잔, 30,000 이면 2잔 (충전 금액 기준, 누적 아님). 거스름돈 충전도 거스름돈 금액만 기준 (잔액과 합산 안 함). 정정은 100만원까지',
     '전화번호 필수(11자리). 번호 없는 옛 쿠폰은 충전 잠김. 같은 이름 + 같은 뒤 4자리 금지. 쓰인 쿠폰은 삭제 불가',
     ('#', '옵션·사역자'),
     '옵션은 카테고리별, 같은 그룹은 한 잔에 하나. staffFreeQty ≤ quantity',
     ('#', '수정·정산'),
     '수정은 PENDING 만. 완료/취소된 주문은 되돌리기 후. 정산 전 완료 불가',
-    '늘어남: 거스름돈 흡수 → 넘는 만큼 현금/이체/쿠폰에서 빼기. 줄어듦: 낸 현금 있으면 거스름돈 증가, 없으면 현금/이체/쿠폰으로 돌려주기',
+    '늘어남: 거스름돈 흡수 → 넘는 만큼 현금/이체/쿠폰에서 빼기. 줄어듦: 낸 현금 있으면 거스름돈 증가(→ 쿠폰), 없으면 현금/이체/쿠폰으로 돌려주기',
     ('#', '한도'),
-    '한 줄 99잔, 한 주문 50줄, 이름 20자, 메뉴 30자, 선택지 10자, 메모 200자, 가격 100원 단위 10만 이하, 층 1~99',
+    '한 줄 99잔, 한 주문 50줄, 이름 20자, 메뉴 30자, 선택지 10자, 메모 200자, 가격 100원 단위 10만 이하',
 ], size=13)
 
 o.table('설정 값', ['키 (application.yml)', '환경변수', '기본값', '설명'], [

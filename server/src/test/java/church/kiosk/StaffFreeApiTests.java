@@ -19,7 +19,6 @@ class StaffFreeApiTests extends ApiTestSupport {
 	private Map<String, Object> order(String name, String payMethod, List<Map<String, Object>> lines) {
 		Map<String, Object> m = new HashMap<>();
 		m.put("customerName", name);
-		m.put("receiveType", "STORE");
 		m.put("payMethod", payMethod);
 		m.put("lines", lines);
 		return m;
@@ -78,7 +77,7 @@ class StaffFreeApiTests extends ApiTestSupport {
 	@DisplayName("수정: 사역자 잔 수를 바꾸면 금액이 다시 계산되고, 일반 주문에도 넣을 수 있다")
 	void update() throws Exception {
 		long orderId = ((Number) createOrder(order("박목사", "NONE", List.of(lineFree(AMERICANO_ICE, 2, 2)))).read("$.id")).longValue();
-		Response r = staffPut("/api/staff/orders/" + orderId, Map.of("customerName", "박목사", "receiveType", "STORE",
+		Response r = staffPut("/api/staff/orders/" + orderId, Map.of("customerName", "박목사",
 				"lines", List.of(lineFree(AMERICANO_ICE, 3, 1))));
 		assertThat(r.status()).as(r.body()).isEqualTo(200);
 		assertThat(r.<Integer>read("$.totalAmount")).isEqualTo(2000);
@@ -86,7 +85,7 @@ class StaffFreeApiTests extends ApiTestSupport {
 		assertThat(r.<Integer>read("$.cashAmount")).as("결제 없음이던 주문에 돈 낼 잔이 생기면 현금").isEqualTo(2000);
 
 		long plain = ((Number) createOrder(cashOrder("손님", line(AMERICANO_ICE, 2))).read("$.id")).longValue();
-		Response r2 = staffPut("/api/staff/orders/" + plain, Map.of("customerName", "손님", "receiveType", "STORE",
+		Response r2 = staffPut("/api/staff/orders/" + plain, Map.of("customerName", "손님",
 				"lines", List.of(lineFree(AMERICANO_ICE, 2, 1))));
 		assertThat(r2.<Integer>read("$.staffFreeAmount")).isEqualTo(1000);
 		assertThat(r2.<Integer>read("$.cashAmount")).isEqualTo(1000);

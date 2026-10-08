@@ -228,14 +228,11 @@ input { font: inherit; }
   background: var(--panel); border-radius: 16px; border: 2px solid var(--line); box-shadow: var(--shadow);
   padding: 14px; display: flex; flex-direction: column; gap: 10px;
 }
-.order-card.delivery { border-color: #c9b39a; }
 .order-card.stale { opacity: 0.75; }
 .order-card.stale .no { color: var(--danger); }
 .order-card .top { display: flex; align-items: baseline; gap: 10px; }
 .order-card .no { font-size: 22px; font-weight: 900; color: var(--primary); }
 .order-card .who { font-size: 22px; font-weight: 800; flex: 1; }
-.order-card .where { font-size: 16px; padding: 4px 10px; border-radius: 999px; background: var(--accent); font-weight: 700; }
-.order-card .where.store { background: #e8efe9; }
 .order-card .lines { display: flex; flex-direction: column; gap: 4px; font-size: 20px; }
 .order-card .lines .q { font-weight: 900; margin-left: 6px; }
 .order-card .lines .opt { color: var(--primary); font-weight: 700; font-size: 17px; }

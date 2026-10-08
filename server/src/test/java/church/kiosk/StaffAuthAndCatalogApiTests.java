@@ -47,12 +47,11 @@ class StaffAuthAndCatalogApiTests extends ApiTestSupport {
 	void customerApiIsPublic() throws Exception {
 		staffToken = null;
 		assertThat(getJson("/api/menu").status()).isEqualTo(200);
-		assertThat(getJson("/api/places").status()).isEqualTo(200);
 		assertThat(getJson("/api/customers/regulars").status()).isEqualTo(200);
 		assertThat(getJson("/api/orders/payment-info").<String>read("$.bankAccount")).isEqualTo("테스트은행 000-00");
 	}
 
-	// ── 메뉴 / 장소 ────────────────────────────────────────
+	// ── 메뉴 ────────────────────────────────────────
 
 	@Test
 	@DisplayName("메뉴는 커피 → 논커피 → 아이스크림 순, 아포카토는 커피")
@@ -79,11 +78,10 @@ class StaffAuthAndCatalogApiTests extends ApiTestSupport {
 	}
 
 	@Test
-	@DisplayName("배달 장소는 1층 식당/전도사님실만")
-	void placesOnlyFirstFloor() throws Exception {
-		Response r = getJson("/api/places");
-		assertThat(r.<List<Integer>>read("$[*].floor")).containsExactly(1);
-		assertThat(r.<List<String>>read("$[0].places[*].name")).containsExactly("식당", "전도사님실");
+	@DisplayName("배달은 없앴다 — 장소 API 도 없다")
+	void noPlacesApi() throws Exception {
+		assertThat(getJson("/api/places").status()).isNotEqualTo(200);
+		assertThat(staffGet("/api/staff/places").status()).isNotEqualTo(200);
 	}
 
 	@Test

@@ -26,8 +26,6 @@ export function DoneStep({ order, onReset }: { order: Order; onReset: () => void
     return () => window.clearTimeout(t)
   }, [left, onReset])
 
-  const where = order.receiveType === 'DELIVERY' ? `${order.placeName}(으)로 갖다 드릴게요` : '완성되면 이름을 불러 드릴게요'
-
   return (
     <div className="hero">
       <div className="title">주문이 접수되었습니다 ✓</div>
@@ -36,7 +34,13 @@ export function DoneStep({ order, onReset }: { order: Order; onReset: () => void
         {order.payMethod === 'NONE' ? '사역자 무료 · 결제 없음' : `${won(order.totalAmount)} · ${PAY_LABEL[order.payMethod]}`}
         {order.payMethod !== 'NONE' && order.staffFreeAmount > 0 && <small className="muted"> (사역자 무료 {won(order.staffFreeAmount)} 제외)</small>}
       </div>
-      <div className="sub">{where}</div>
+      {order.changeCredited > 0 && (
+        <div className="sub">거스름돈 {won(order.changeCredited)}은 쿠폰에 충전했어요</div>
+      )}
+      {order.changeDue > 0 && (
+        <div className="sub">거스름돈 {won(order.changeDue)}은 쿠폰에 충전해 드려요 — 스태프에게 말씀해 주세요</div>
+      )}
+      <div className="sub">완성되면 이름을 불러 드릴게요</div>
       <div className="sub muted" style={{ marginTop: 40 }}>{left}초 후 처음 화면으로</div>
       <div style={{ marginTop: 16 }}>
         <button className="btn big" onClick={onReset}>처음으로</button>

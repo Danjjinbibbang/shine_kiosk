@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   addToCart, createOrder, gotoKiosk, kioskCouponLookup, lookupCoupon, menuCard, orderOf, pickNameByTyping,
-  registerCoupon, showMenuCard, staffToken, toReceiveStep, uniq,
+  registerCoupon, showMenuCard, staffToken, toPaymentStep, uniq,
 } from './helpers'
 
 test.describe('메뉴 화면', () => {
@@ -112,11 +112,10 @@ test.describe('장바구니', () => {
 })
 
 test.describe('결제 흐름', () => {
-  test('현금 · 매장: 낸 돈 선택 → 거스름돈 → 명단에서 이름 → 완료, 스태프 메모까지', async ({ page, request }) => {
+  test('현금: 낸 돈 선택 → 거스름돈은 쿠폰 충전 안내 → 명단에서 이름 → 완료', async ({ page, request }) => {
     const name = uniq('현금')
     await createOrder(request, { customerName: name, lines: [{ variantId: 1001, quantity: 1 }] }) // 명단에 올리기
-    await toReceiveStep(page, [['아메리카노', 'ICE', 2], ['아이스크림', '컵', 1]]) // 5,000원
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['아메리카노', 'ICE', 2], ['아이스크림', '컵', 1]]) // 5,000원
     await expect(page.getByRole('heading', { name: '어떻게 결제하시나요?' })).toBeVisible()
     await expect(page.locator('.total-box .amount')).toHaveText('5,000원')
     await page.getByRole('button', { name: /현금/ }).click()
@@ -129,6 +128,7 @@ test.describe('결제 흐름', () => {
     await expect(page.getByRole('button', { name: /다음/ })).toBeDisabled()
     await page.getByRole('button', { name: '10,000원' }).click()
     await expect(page.locator('.total-box .amount')).toHaveText('5,000원') // 거스름돈
+    await expect(page.getByText('거스름돈은 현금 대신 쿠폰에 충전해 드려요')).toBeVisible()
     await page.getByRole('button', { name: /다음/ }).click()
 
     await expect(page.getByRole('heading', { name: '이름을 골라 주세요' })).toBeVisible()
@@ -137,19 +137,20 @@ test.describe('결제 흐름', () => {
     await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
     await expect(page.locator('.hero .amount')).toHaveText(`${name}님`)
     await expect(page.getByText('5,000원 · 현금')).toBeVisible()
+    await expect(page.getByText('거스름돈 5,000원은 쿠폰에 충전해 드려요')).toBeVisible()
     await expect(page.getByText('이름을 불러 드릴게요')).toBeVisible()
 
     const order = await orderOf(request, name)
     expect(order.cashAmount).toBe(5000)
     expect(order.cashGiven).toBe(10000)
-    expect(order.payNote).toBe('현금 10,000원 받음 → 거스름돈 5,000원')
+    expect(order.changeDue).toBe(5000)
+    expect(order.payNote).toBe('현금 10,000원 받음 → 거스름돈 5,000원 쿠폰에 넣기')
     expect(order.memo ?? null).toBeNull()
   })
 
   test('현금 · 딱 맞게 → 거스름돈 없음 메모', async ({ page, request }) => {
     const name = uniq('딱')
-    await toReceiveStep(page, [['복숭아 아이스티', null, 1]])
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['복숭아 아이스티', null, 1]])
     await page.getByRole('button', { name: /현금/ }).click()
     await page.getByRole('button', { name: '딱 맞게' }).click()
     await expect(page.locator('.total-box .amount')).toHaveText('0원')
@@ -159,14 +160,10 @@ test.describe('결제 흐름', () => {
     expect((await orderOf(request, name)).payNote).toBe('현금 2,000원 딱 맞게')
   })
 
-  test('계좌이체 · 배달(식당): 계좌 표시 → 보냈어요 → 직접 입력 → 완료', async ({ page, request }) => {
+  test('계좌이체: 계좌 표시 → 보냈어요 → 직접 입력 → 완료 (받는 방법은 묻지 않는다)', async ({ page, request }) => {
     const name = uniq('이체')
-    await toReceiveStep(page, [['바닐라라떼', 'HOT', 1]]) // 2,500원
-    await page.getByRole('button', { name: /배달/ }).click()
-    await expect(page.getByText('배달은 1층만')).toBeVisible({ timeout: 1000 }).catch(() => {}) // 이미 넘어갔을 수 있음
-    await expect(page.getByRole('heading', { name: '어디로 갖다 드릴까요?' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /^2층/ })).toHaveCount(0)
-    await page.getByRole('button', { name: '식당' }).click()
+    await toPaymentStep(page, [['바닐라라떼', 'HOT', 1]]) // 2,500원
+    await expect(page.getByRole('button', { name: /배달/ })).toHaveCount(0)
     await page.getByRole('button', { name: /계좌이체/ }).click()
 
     await expect(page.locator('.hero .account')).toHaveText('테스트은행 123-45-678901')
@@ -176,17 +173,16 @@ test.describe('결제 흐름', () => {
 
     await pickNameByTyping(page, name, '주문 완료')
     await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
-    await expect(page.getByText('식당(으)로 갖다 드릴게요')).toBeVisible()
+    await expect(page.getByText('이름을 불러 드릴게요')).toBeVisible()
 
     const order = await orderOf(request, name)
     expect(order.transferAmount).toBe(2500)
-    expect(order.placeName).toBe('식당')
+    expect(order.placeName).toBeUndefined()
   })
 
   test('계좌이체: 아무것도 안 누르면 12초 뒤 자동으로 이름 화면', async ({ page }) => {
     test.setTimeout(45_000)
-    await toReceiveStep(page, [['아메리카노', 'HOT', 1]])
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['아메리카노', 'HOT', 1]])
     await page.getByRole('button', { name: /계좌이체/ }).click()
     await expect(page.getByRole('heading', { name: '이름을 골라 주세요' })).toBeVisible({ timeout: 15_000 })
   })
@@ -196,8 +192,7 @@ test.describe('결제 흐름', () => {
     await registerCoupon(request, name, 20000, '01000001111')  // 잔액 20,000 / 무료 1잔
     await registerCoupon(request, name, 500, '01000004321')    // 동명이인
 
-    await toReceiveStep(page, [['아메리카노', 'ICE', 2], ['아이스크림', '컵', 1]]) // 5,000원
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['아메리카노', 'ICE', 2], ['아이스크림', '컵', 1]]) // 5,000원
     await page.getByRole('button', { name: /쿠폰/ }).click()
     await expect(page.getByRole('heading', { name: '쿠폰' })).toBeVisible()
 
@@ -245,36 +240,36 @@ test.describe('결제 흐름', () => {
   test('쿠폰 잔액 부족: 나머지를 현금으로', async ({ page, request }) => {
     const name = uniq('부족')
     await registerCoupon(request, name, 1500, '01000007777')
-    await toReceiveStep(page, [['아이스크림', '컵', 1]]) // 3,000원
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['아이스크림', '컵', 1]]) // 3,000원
     await page.getByRole('button', { name: /쿠폰/ }).click()
     await kioskCouponLookup(page, name)   // 한 명이면 번호를 묻지 않는다
     await expect(page.getByText('나머지 1,500원은 어떻게')).toBeVisible()
     await expect(page.locator('.hero .account')).toHaveText('테스트은행 123-45-678901')
     await page.getByRole('button', { name: /현금/ }).click()
-    // 모자란 1,500원에 대해 낸 돈/거스름돈 화면 → 이름 화면 없이 바로 접수
+    // 모자란 1,500원에 대해 낸 돈 화면 → 이름 화면 없이 바로 접수, 거스름돈은 그 쿠폰에 바로 충전
     await expect(page.getByRole('heading', { name: '현금' })).toBeVisible()
     await expect(page.locator('.hero .amount')).toHaveText('1,500원')
     await page.getByRole('button', { name: '5,000원' }).click()
     await expect(page.locator('.total-box .amount')).toHaveText('3,500원')
+    await expect(page.getByText('거스름돈은 현금 대신 이 쿠폰에 충전돼요')).toBeVisible()
     await page.getByRole('button', { name: /다음/ }).click()
     await expect(page.getByText('주문이 접수되었습니다')).toBeVisible()
+    await expect(page.getByText('거스름돈 3,500원은 쿠폰에 충전했어요')).toBeVisible()
     const order = await orderOf(request, name)
     expect(order.couponAmount).toBe(1500)
     expect(order.cashAmount).toBe(1500)
-    expect(order.payNote).toBe('현금 몫 1,500원 · 5,000원 받음 → 거스름돈 3,500원')
-    expect((await lookupCoupon(request, name)).coupon.balance).toBe(0)
+    expect(order.payNote).toBe('현금 몫 1,500원 · 5,000원 받음 → 거스름돈 3,500원은 쿠폰 충전')
+    const coupon = (await lookupCoupon(request, name)).coupon
+    expect(coupon.balance).toBe(3500)
+    expect(coupon.freeDrinks).toBe(0)
   })
 })
 
 test.describe('네비게이션', () => {
   test('이전은 한 단계씩, 처음으로는 장바구니까지 비운다', async ({ page }) => {
-    await toReceiveStep(page, [['라떼', 'ICE', 1]])
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['라떼', 'ICE', 1]])
     await expect(page.getByRole('heading', { name: '어떻게 결제하시나요?' })).toBeVisible()
 
-    await page.getByRole('button', { name: '‹ 이전' }).click()
-    await expect(page.getByRole('heading', { name: '어디서 받으시나요?' })).toBeVisible()
     await page.getByRole('button', { name: '‹ 이전' }).click()
     await expect(page.getByRole('heading', { name: '주문 내용을 확인해 주세요' })).toBeVisible()
     await expect(page.locator('.cart-line')).toHaveCount(1)
@@ -285,8 +280,7 @@ test.describe('네비게이션', () => {
   })
 
   test('완료 화면의 처음으로는 새 주문을 받을 준비', async ({ page }) => {
-    await toReceiveStep(page, [['오미자', 'HOT', 1]])
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['오미자', 'HOT', 1]])
     await page.getByRole('button', { name: /현금/ }).click()
     await page.getByRole('button', { name: '딱 맞게' }).click()
     await page.getByRole('button', { name: /다음/ }).click()
@@ -300,8 +294,7 @@ test.describe('네비게이션', () => {
   test('이름 화면: 명단 ↔ 직접 입력 전환, 빈 이름은 확정 불가', async ({ page, request }) => {
     const known = uniq('단골')
     await createOrder(request, { customerName: known, lines: [{ variantId: 1001, quantity: 1 }] })
-    await toReceiveStep(page, [['아메리카노', 'ICE', 1]])
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
+    await toPaymentStep(page, [['아메리카노', 'ICE', 1]])
     await page.getByRole('button', { name: /현금/ }).click()
     await page.getByRole('button', { name: '딱 맞게' }).click()
     await page.getByRole('button', { name: /다음/ }).click()
@@ -365,7 +358,6 @@ test.describe('옵션 (샷 추가 / 연하게)', () => {
     await page.getByRole('button', { name: /주문 확인/ }).click()
 
     await page.getByRole('button', { name: /^주문하기/ }).click()
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
     await page.getByRole('button', { name: /현금/ }).click()
     await page.getByRole('button', { name: '딱 맞게' }).click()
     await page.getByRole('button', { name: /다음/ }).click()
@@ -398,7 +390,6 @@ test.describe('사역자 무료', () => {
     await expect(page.locator('.total-box .amount')).toHaveText('0원')
 
     await page.getByRole('button', { name: /무료로 주문하기/ }).click()
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
     // 결제 화면 없이 바로 이름
     await expect(page.getByRole('heading', { name: '이름을 골라 주세요' })).toBeVisible()
     await pickNameByTyping(page, name, '주문 완료')
@@ -423,7 +414,6 @@ test.describe('사역자 무료', () => {
     await expect(page.locator('.total-box .amount')).toHaveText('1,000원')
 
     await page.getByRole('button', { name: /^주문하기/ }).click()
-    await page.getByRole('button', { name: /카페에서 받기/ }).click()
     await page.getByRole('button', { name: /현금/ }).click()
     await page.getByRole('button', { name: '딱 맞게' }).click()
     await page.getByRole('button', { name: /다음/ }).click()

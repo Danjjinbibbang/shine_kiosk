@@ -213,8 +213,11 @@ export function cashOptions(total: number): number[] {
   return [...new Set(candidates)].filter((n) => n > total).sort((a, b) => a - b).slice(0, 4)
 }
 
-/** 총액을 보여주고, 낸 돈을 고른다. 거스름돈 안내는 서버가 낸 돈과 지금 금액으로 계산해 스태프 카드에 보여준다. */
-export function CashStep({ total, onNext }: { total: number; onNext: (cashGiven: number) => void }) {
+/**
+ * 총액을 보여주고, 낸 돈을 고른다. 거스름돈은 현금으로 돌려주지 않고 쿠폰에 충전한다:
+ * 쿠폰으로 결제 중이면 그 쿠폰에 바로, 아니면 스태프가 손님 쿠폰을 찾아(없으면 만들어) 넣는다.
+ */
+export function CashStep({ total, hasCoupon, onNext }: { total: number; hasCoupon: boolean; onNext: (cashGiven: number) => void }) {
   const [given, setGiven] = useState<number | null>(null)
   const change = given === null ? 0 : given - total
   const options = cashOptions(total)
@@ -236,8 +239,15 @@ export function CashStep({ total, onNext }: { total: number; onNext: (cashGiven:
       </div>
       {given !== null && (
         <div className="total-box">
-          <span className="label">거스름돈</span>
+          <span className="label">거스름돈 <small className="muted">→ 쿠폰에 충전</small></span>
           <span className="amount">{won(change)}</span>
+        </div>
+      )}
+      {given !== null && change > 0 && (
+        <div className="muted center">
+          {hasCoupon
+            ? '거스름돈은 현금 대신 이 쿠폰에 충전돼요.'
+            : '거스름돈은 현금 대신 쿠폰에 충전해 드려요. 쿠폰이 없으면 스태프가 만들어 드려요.'}
         </div>
       )}
       <button className="btn huge primary" disabled={given === null}

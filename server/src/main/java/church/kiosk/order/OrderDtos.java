@@ -12,8 +12,6 @@ public final class OrderDtos {
 
 	private OrderDtos() {}
 
-	public enum ReceiveType { STORE, DELIVERY }
-
 	/** NONE = 사역자 무료로 낼 금액이 0 이라 결제 없음 */
 	public enum PayMethod { TRANSFER, COUPON, CASH, NONE }
 
@@ -32,8 +30,6 @@ public final class OrderDtos {
 	/** 고객 키오스크의 주문 생성. 가격은 보내지 않는다 — 서버가 메뉴표에서 직접 읽는다. */
 	public record CreateRequest(
 			@NotBlank(message = "이름을 선택해 주세요.") String customerName,
-			@NotNull(message = "받는 방법을 선택해 주세요.") ReceiveType receiveType,
-			Long placeId,
 			@NotNull(message = "결제 수단을 선택해 주세요.") PayMethod payMethod,
 			Long couponId,
 			/** 이번 주문에서 무료 1잔을 쓸지. 가장 비싼 한 잔 값이 빠진다. 없으면 안 씀. */
@@ -63,11 +59,9 @@ public final class OrderDtos {
 								boolean useFreeDrink, int freeAmount, String freeItemName,
 								int couponAmount, int remainder, int balanceAfter, int freeDrinksAfter) {}
 
-	/** 스태프의 주문 수정. 결제 수단은 바꾸지 않고 항목/이름/장소만 고친다. */
+	/** 스태프의 주문 수정. 결제 수단은 바꾸지 않고 항목/이름/메모만 고친다. */
 	public record UpdateRequest(
 			@NotBlank(message = "이름을 입력해 주세요.") String customerName,
-			@NotNull(message = "받는 방법을 선택해 주세요.") ReceiveType receiveType,
-			Long placeId,
 			@NotEmpty(message = "메뉴가 하나는 있어야 합니다.") @Valid List<LineRequest> lines,
 			String memo) {}
 
@@ -79,7 +73,6 @@ public final class OrderDtos {
 						   int unitPrice, int quantity, int staffFreeQty, List<LineOptionView> options) {}
 
 	public record OrderView(long id, String orderDate, int orderNo, String customerName,
-							ReceiveType receiveType, Long placeId, String placeName,
 							int totalAmount, int staffFreeAmount,
 							PayMethod payMethod, PayMethod remainderMethod,
 							Long couponId, int couponAmount, int freeAmount, String freeItemName,
@@ -93,20 +86,20 @@ public final class OrderDtos {
 							Integer cashGiven,
 							/** 거스름돈 중 쿠폰에 넣은 금액 */
 							int changeCredited,
-							/** 완료하면서 손에 쥐어 준 거스름돈 */
+							/** 완료하면서 손에 쥐어 준 거스름돈 — 거스름돈을 늘 쿠폰에 넣기 전의 옛 주문에만 있다 */
 							int changePaid,
 							/** 수정/취소로 돌려준 돈 (현금 / 계좌이체). 쿠폰에 넣은 건 쿠폰 이력에 */
 							int refundCash, int refundTransfer,
 							List<LineView> lines) {
 
-		/** 아직 안 준 거스름돈 (낸 현금 − 현금 몫 − 쿠폰에 넣은 잔돈 − 이미 준 거스름돈). 낸 현금 기록이 없으면 0 */
+		/** 아직 쿠폰에 안 넣은 거스름돈 (낸 현금 − 현금 몫 − 쿠폰에 넣은 잔돈 − 옛날에 현금으로 준 거스름돈). 낸 현금 기록이 없으면 0 */
 		@com.fasterxml.jackson.annotation.JsonProperty
 		public int changeDue() {
 			return cashGiven == null ? 0 : Math.max(0, cashGiven - cashAmount - changeCredited - changePaid);
 		}
 
 		/**
-		 * "현금 5,000원 받음 → 거스름돈 1,000원" — 지금 금액 기준이라 수정 뒤에도 맞는다. 현금을 안 냈으면 null.
+		 * "현금 5,000원 받음 → 거스름돈 1,000원 쿠폰에 넣기" / "… → 거스름돈 1,000원은 쿠폰 충전" — 지금 금액 기준이라 수정 뒤에도 맞는다. 현금을 안 냈으면 null.
 		 * 쿠폰/이체와 섞인 주문이면 "현금 몫 6,000원 · 8,000원 받음 → 거스름돈 2,000원" 처럼 현금 몫을 앞에 써서
 		 * 총액과 안 맞아 보이지 않게 한다.
 		 */
@@ -116,7 +109,7 @@ public final class OrderDtos {
 			boolean mixed = cashAmount != totalAmount;
 			String head = mixed ? "현금 몫 " + won(cashAmount) + " · " : "현금 ";
 			int change = cashGiven - cashAmount;                       // 전체 거스름돈 (준 것·쿠폰에 넣은 것 포함)
-			int remaining = change - changeCredited - changePaid;       // 아직 손에 쥐어 줄 거스름돈
+			int remaining = change - changeCredited - changePaid;       // 아직 쿠폰에 안 넣은 거스름돈
 			java.util.List<String> parts = new java.util.ArrayList<>();
 			if (changePaid > 0) parts.add(won(changePaid) + " 드림");
 			if (changeCredited > 0) parts.add(won(changeCredited) + "은 쿠폰 충전");
@@ -127,8 +120,8 @@ public final class OrderDtos {
 				return head + won(cashGiven) + " 받음" + detail + " → " + won(owed) + " 더 받아야";
 			}
 			if (change > 0) {
-				if (parts.isEmpty()) return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change);
-				if (remaining > 0) parts.add(won(remaining) + " 드리기");
+				if (parts.isEmpty()) return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change) + " 쿠폰에 넣기";
+				if (remaining > 0) parts.add(won(remaining) + " 쿠폰에 넣기");
 				if (parts.size() == 1) return head + won(cashGiven) + " 받음 → 거스름돈 " + parts.get(0);
 				return head + won(cashGiven) + " 받음 → 거스름돈 " + won(change) + " (" + String.join(", ", parts) + ")";
 			}

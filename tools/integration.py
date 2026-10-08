@@ -57,8 +57,8 @@ def login():
 def line(vid, qty=1, opts=None, staff_free=0):
     return {'variantId': vid, 'quantity': qty, 'optionIds': opts or [], 'staffFreeQty': staff_free}
 
-def order(name, lines, pay='CASH', receive='STORE', place=None, coupon=None, free=None, remainder=None, memo=None, rid=None, cash_given=None):
-    body = {'customerName': name, 'receiveType': receive, 'placeId': place, 'payMethod': pay, 'couponId': coupon,
+def order(name, lines, pay='CASH', coupon=None, free=None, remainder=None, memo=None, rid=None, cash_given=None):
+    body = {'customerName': name, 'payMethod': pay, 'couponId': coupon,
             'useFreeDrink': free, 'remainderMethod': remainder, 'lines': lines, 'memo': memo, 'cashGiven': cash_given,
             'clientRequestId': rid or str(uuid.uuid4())}
     return call('POST', '/api/orders', body)
@@ -95,7 +95,6 @@ def summary(): return call('GET', '/api/staff/orders/summary', staff=True)[1]
 AME_ICE, AME_HOT, LATTE_ICE, VAN_ICE, ICE_LATTE, AFFO = 1001, 1002, 1101, 1201, 1401, 3101
 CHOCO, PEACH, CONE, CUP = 2001, 2101, 3001, 3002
 SHOT, MILD = 1, 2
-PLACE_DINING = 101
 
 # ══════════════════════════════════════════════════════════════════
 login()
@@ -108,13 +107,14 @@ with Case('A 결제', '현금 · 매장 · 2잔 → 현금 금액 = 합계, 정�
     c.eq(s, 200, 'status'); c.eq(o['totalAmount'], 2000, 'total'); c.eq(o['cashAmount'], 2000, 'cash')
     c.eq(o['settledCash'], 2000, 'settledCash'); c.eq(o['status'], 'PENDING', 'status'); c.eq(o['orderNo'], 1, 'orderNo')
 
-with Case('A 결제', '계좌이체 · 배달(1층 식당) → placeName, transferAmount') as c:
-    s, o = order('김이체', [line(LATTE_ICE)], 'TRANSFER', 'DELIVERY', PLACE_DINING)
-    c.eq(s, 200, msg(o)); c.eq(o['placeName'], '식당', 'place'); c.eq(o['transferAmount'], 2000, 'transfer'); c.eq(o['orderNo'], 2, 'orderNo')
+with Case('A 결제', '계좌이체 → transferAmount') as c:
+    s, o = order('김이체', [line(LATTE_ICE)], 'TRANSFER')
+    c.eq(s, 200, msg(o)); c.eq(o['transferAmount'], 2000, 'transfer'); c.eq(o['orderNo'], 2, 'orderNo')
 
-with Case('A 결제', '배달인데 장소 없음 → 거부') as c:
-    s, o = order('김배달', [line(LATTE_ICE)], 'CASH', 'DELIVERY', None)
-    c.eq(s, 400, 'status')
+with Case('A 결제', '배달은 없다: 옛 화면이 배달/장소를 보내도 매장 주문, 응답에 장소 없음') as c:
+    s, o = call('POST', '/api/orders', {'customerName': '김배달', 'receiveType': 'DELIVERY', 'placeId': 101, 'payMethod': 'CASH',
+                                        'lines': [line(LATTE_ICE)], 'clientRequestId': str(uuid.uuid4())})
+    c.eq(s, 200, msg(o)); c.check('placeName' not in o and 'receiveType' not in o, 'no place in response')
 
 with Case('A 결제', '없는 메뉴/품절 메뉴 주문 → 거부') as c:
     s, o = order('김없음', [line(99999)], 'CASH'); c.eq(s, 400, 'unknown variant')
@@ -171,13 +171,15 @@ with Case('C 쿠폰', '무료잔 없는데 useFreeDrink → 거부') as c:
     cp = coupon('김무료', 10000)   # 무료잔 0
     s, o = order('김무료', [line(AME_ICE)], 'COUPON', coupon=cp['id'], free=True); c.eq(s, 400, 'status'); c.contains(msg(o), '무료', 'msg')
 
-with Case('C 쿠폰', '잔액 부족: 3,000 남았는데 5,000 주문 → 3,000 쿠폰 + 2,000 현금, 메모에 거스름돈 안내') as c:
+with Case('C 쿠폰', '잔액 부족: 3,000 남았는데 5,000 주문 → 3,000 쿠폰 + 2,000 현금, 거스름돈은 그 쿠폰에 바로 (3,000 이라 무료잔 없음)') as c:
     cp = coupon('김부족', 3000)
     lines = [line(AFFO), line(LATTE_ICE)]
     s, p = preview(cp['id'], lines); c.eq(p['remainder'], 2000, 'remainder')
-    s, o = order('김부족', lines, 'COUPON', coupon=cp['id'], remainder='CASH')
+    s, o = order('김부족', lines, 'COUPON', coupon=cp['id'], remainder='CASH', cash_given=5000)
     c.eq(s, 200, msg(o)); c.eq(o['couponAmount'], 3000, 'coupon'); c.eq(o['cashAmount'], 2000, 'cash'); c.eq(o['remainderMethod'], 'CASH', 'rem')
-    c.eq(get_coupon(cp['id'])['balance'], 0, 'balance 0')
+    c.eq(o['changeCredited'], 3000, 'change credited'); c.eq(o['payNote'], '현금 몫 2,000원 · 5,000원 받음 → 거스름돈 3,000원은 쿠폰 충전', 'note')
+    c.eq(get_coupon(cp['id'])['balance'], 3000, 'balance = change'); c.eq(get_coupon(cp['id'])['freeDrinks'], 0, 'no free drink')
+    staff('POST', f"/api/staff/coupons/{cp['id']}/adjust", {'balance': 0, 'freeDrinks': 0})
     # 잔액 0 인 쿠폰으로 remainder 없이 주문 → 거부
     s, o2 = order('김부족', [line(AME_ICE)], 'COUPON', coupon=cp['id']); c.eq(s, 400, 'no remainder')
 
@@ -243,7 +245,7 @@ with Case('D 처리', '쿠폰+현금 주문 취소 시 받은 현금을 다른 �
 # ── E. 수정과 정산 ──────────────────────────────────────────────
 with Case('E 정산', '현금 3,000 → 2,500 으로 수정: 돌려줄 500, 완료 막힘("정산"), 현금 정산 후 완료') as c:
     s, o = order('김차액', [line(AFFO)], 'CASH')
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김차액', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(VAN_ICE)], 'memo': None})
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김차액', 'lines': [line(VAN_ICE)], 'memo': None})
     c.eq(s, 200, msg(u)); c.eq(u['cashAmount'], 2500, 'new cash'); c.eq(u['settledCash'], 3000, 'settled kept'); c.check(u.get('editedAt'), 'editedAt'); c.contains(u.get('editNote'), '아포카토', 'editNote')
     s, d = act(o['id'], 'done'); c.eq(s, 400, 'done blocked'); c.contains(msg(d), '정산', 'msg')
     s, st = act(o['id'], 'settle', {}); c.eq(st['settledCash'], 2500, 'settled')
@@ -251,7 +253,7 @@ with Case('E 정산', '현금 3,000 → 2,500 으로 수정: 돌려줄 500, 완�
 
 with Case('E 정산', '현금 → 더 비싸게 수정: 더 받을 1,000, 받았어요 후 완료') as c:
     s, o = order('김추가', [line(AME_ICE)], 'CASH')
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김추가', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(LATTE_ICE)], 'memo': None})
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김추가', 'lines': [line(LATTE_ICE)], 'memo': None})
     c.eq(u['cashAmount'] - u['settledCash'], 1000, 'extra')
     s, d = act(o['id'], 'done'); c.eq(s, 400, 'blocked')
     act(o['id'], 'settle', {})
@@ -260,7 +262,7 @@ with Case('E 정산', '현금 → 더 비싸게 수정: 더 받을 1,000, 받았
 with Case('E 정산', '현금 주문 차액을 주문자 쿠폰에 넣기') as c:
     cp = coupon('김쿠폰차액', 20000)
     s, o = order('김쿠폰차액', [line(AFFO)], 'CASH')
-    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김쿠폰차액', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AME_ICE)], 'memo': None})
+    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김쿠폰차액', 'lines': [line(AME_ICE)], 'memo': None})
     s, st = act(o['id'], 'settle', {'couponId': cp['id']}); c.eq(s, 200, msg(st))
     c.eq(get_coupon(cp['id'])['balance'], 22000, 'coupon +2000'); c.eq(st['settledCash'], 1000, 'settled')
 
@@ -268,7 +270,7 @@ with Case('E 정산', '쿠폰 주문이 커지면 더 받을 돈으로 남고, �
     cp = coupon('김쿠폰수정', 20000)
     s, o = order('김쿠폰수정', [line(AFFO), line(AME_ICE)], 'COUPON', coupon=cp['id'], free=True)
     c.eq(get_coupon(cp['id'])['balance'], 19000, 'before')     # 무료=아포카토 3000, 쿠폰 1000
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김쿠폰수정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO), line(LATTE_ICE)], 'memo': None})
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김쿠폰수정', 'lines': [line(AFFO), line(LATTE_ICE)], 'memo': None})
     c.eq(s, 200, msg(u)); c.eq(u['freeAmount'], 3000, 'free kept'); c.eq(u['couponAmount'], 1000, 'coupon capped'); c.eq(u['cashAmount'], 1000, 'extra shown as cash')
     c.eq(get_coupon(cp['id'])['balance'], 19000, 'not auto-deducted'); c.eq(get_coupon(cp['id'])['freeDrinks'], 0, 'free used once')
     s, d = act(o['id'], 'done'); c.eq(s, 400, 'done blocked until settled')
@@ -278,7 +280,7 @@ with Case('E 정산', '쿠폰 주문이 커지면 더 받을 돈으로 남고, �
 
 with Case('E 정산', '더 받을 돈을 계좌이체로 / 다른 사람 쿠폰에서 / 잔액 부족 쿠폰 → 거부') as c:
     s, o = order('김더받기', [line(AME_ICE)], 'CASH')
-    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김더받기', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO)], 'memo': None})
+    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김더받기', 'lines': [line(AFFO)], 'memo': None})
     poor = coupon('김더받기', 1000)
     s, x = act(o['id'], 'settle', {'method': 'COUPON', 'couponId': poor['id']}); c.eq(s, 400, 'poor coupon'); c.contains(msg(x), '잔액이', 'msg')
     s, st = act(o['id'], 'settle', {'method': 'TRANSFER'}); c.eq(s, 200, msg(st))
@@ -288,7 +290,7 @@ with Case('E 정산', '쿠폰+현금 주문에서 쿠폰 부분 차액을 쿠폰
     cp = coupon('김혼합', 2000)
     s, o = order('김혼합', [line(AFFO)], 'COUPON', coupon=cp['id'], remainder='CASH')   # 쿠폰 2000 + 현금 1000
     c.eq(o['cashAmount'], 1000, 'cash part')
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김혼합', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AME_ICE)], 'memo': None})
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김혼합', 'lines': [line(AME_ICE)], 'memo': None})
     c.eq(s, 200, msg(u))
     # 1000원 주문: 쿠폰(다시 2000)에서 1000 → 현금 0. 받은 현금 1000 은 돌려줄 돈
     c.eq(u['couponAmount'], 1000, 'coupon'); c.eq(u['cashAmount'], 0, 'cash'); c.eq(u['settledCash'], 1000, 'settled')
@@ -297,44 +299,44 @@ with Case('E 정산', '쿠폰+현금 주문에서 쿠폰 부분 차액을 쿠폰
 
 with Case('E 정산', '수정 검증: 메뉴 없음/이름 없음/이름 21자/수량 0 → 거부') as c:
     s, o = order('김검증', [line(AME_ICE)], 'CASH')
-    base = {'customerName': '김검증', 'receiveType': 'STORE', 'placeId': None, 'memo': None}
+    base = {'customerName': '김검증', 'memo': None}
     c.eq(staff('PUT', f"/api/staff/orders/{o['id']}", {**base, 'lines': []})[0], 400, 'no lines')
     c.eq(staff('PUT', f"/api/staff/orders/{o['id']}", {**base, 'customerName': ' ', 'lines': [line(AME_ICE)]})[0], 400, 'blank name')
     c.eq(staff('PUT', f"/api/staff/orders/{o['id']}", {**base, 'customerName': '가' * 21, 'lines': [line(AME_ICE)]})[0], 400, 'long name')
     c.eq(staff('PUT', f"/api/staff/orders/{o['id']}", {**base, 'lines': [line(AME_ICE, 0)]})[0], 400, 'qty 0')
 
-with Case('E 정산', '낸 현금이 있으면 늘어난 몫은 거스름돈에서 제하고, 잔돈은 쿠폰에 넣는다') as c:
+with Case('E 정산', '낸 현금이 있으면 늘어난 몫은 거스름돈에서 제하고, 잔돈은 쿠폰에 넣어야 완료된다') as c:
     cp = coupon('김잔돈', 20000)
     s, o = order('김잔돈', [line(AME_ICE)], 'CASH', cash_given=5000)
-    c.eq(s, 200, msg(o)); c.eq(o['payNote'], '현금 5,000원 받음 → 거스름돈 4,000원', 'note')
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO), line(AME_ICE)], 'memo': None})   # 4,000
-    c.eq(s, 200, msg(u)); c.eq(u['settledCash'], 4000, 'absorbed'); c.eq(u['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원', 'note2')
+    c.eq(s, 200, msg(o)); c.eq(o['payNote'], '현금 5,000원 받음 → 거스름돈 4,000원 쿠폰에 넣기', 'note')
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'lines': [line(AFFO), line(AME_ICE)], 'memo': None})   # 4,000
+    c.eq(s, 200, msg(u)); c.eq(u['settledCash'], 4000, 'absorbed'); c.eq(u['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원 쿠폰에 넣기', 'note2')
+    s, d = act(o['id'], 'done'); c.eq(s, 400, 'done blocked by change'); c.contains(msg(d), '쿠폰', 'msg')
     s, x = staff('POST', f"/api/staff/orders/{o['id']}/change-to-coupon", {'couponId': cp['id']}); c.eq(s, 200, msg(x))
-    c.eq(get_coupon(cp['id'])['balance'], 21000, 'coupon +1000'); c.eq(get_order(o['id'])['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원은 쿠폰 충전', 'note3')
-    s, u2 = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO, 2)], 'memo': None})   # 6,000
+    c.eq(get_coupon(cp['id'])['balance'], 21000, 'coupon +1000'); c.eq(get_coupon(cp['id'])['freeDrinks'], 1, 'no extra free drink')
+    c.eq(get_order(o['id'])['payNote'], '현금 5,000원 받음 → 거스름돈 1,000원은 쿠폰 충전', 'note3')
+    s, u2 = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김잔돈', 'lines': [line(AFFO, 2)], 'memo': None})   # 6,000
     c.eq(u2['cashAmount'] - u2['settledCash'], 2000, 'extra 2000'); c.eq(u2['payNote'], '현금 5,000원 받음 (1,000원은 쿠폰 충전) → 2,000원 더 받아야', 'note4')
     s, st = act(o['id'], 'settle', {'method': 'CASH'}); c.eq(s, 200, msg(st))
     s, d = act(o['id'], 'done'); c.eq(s, 200, 'done'); c.eq(d['payNote'], '현금 7,000원 받음 → 거스름돈 1,000원은 쿠폰 충전', 'note5')
 
-with Case('E 정산', '완료하면 거스름돈이 확정된다: 되돌려 늘리면 넘는 만큼만 더 받고, 줄이면 그만큼만 다시 거슬러 준다') as c:
-    s, o = order('김확정', [line(AFFO)], 'CASH', cash_given=5000)     # 3,000, 거스름돈 2,000
-    s, d = act(o['id'], 'done'); c.eq(s, 200, 'done'); c.eq(d['changePaid'], 2000, 'change paid at done'); c.eq(d['changeDue'], 0, 'nothing due')
-    act(o['id'], 'reopen')
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김확정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO), line(AME_ICE)], 'memo': None})   # 4,000
-    c.eq(u['cashAmount'] - u['settledCash'], 1000, 'only 1000 more'); c.eq(u['payNote'], '현금 5,000원 받음 (2,000원 드림) → 1,000원 더 받아야', 'note')
-    s, u2 = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김확정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(LATTE_ICE)], 'memo': None})   # 2,000
-    c.eq(u2['changeDue'], 1000, 'give back 1000 more'); c.eq(u2['payNote'], '현금 5,000원 받음 → 거스름돈 3,000원 (2,000원 드림, 1,000원 드리기)', 'note2')
+with Case('E 정산', '쿠폰이 없는 손님: 쿠폰을 새로 만들며 거스름돈을 넣는다. 거스름돈 47,000 은 30,000 이상이라 무료 2잔') as c:
+    s, o = order('김새쿠폰', [line(AFFO)], 'CASH', cash_given=50000)     # 3,000, 거스름돈 47,000
+    c.eq(o['changeDue'], 47000, 'change due')
+    s, nc = staff('POST', f"/api/staff/orders/{o['id']}/change-to-new-coupon", {'name': '김새쿠폰', 'phone': '01012340001'}); c.eq(s, 200, msg(nc))
+    c.eq(nc['balance'], 47000, 'balance = change'); c.eq(nc['freeDrinks'], 2, 'free by change amount')
+    s, d = act(o['id'], 'done'); c.eq(s, 200, 'done'); c.eq(d['changeDue'], 0, 'nothing due'); c.eq(d['changePaid'], 0, 'no cash change')
 
 with Case('E 정산', '돌려주는 수단 기록: 이체 주문 차액을 이체로, 취소 환불을 현금으로 → 카드/매출에 남는다') as c:
     s, o = order('김돌려줌', [line(AFFO)], 'TRANSFER')
-    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김돌려줌', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(VAN_ICE)], 'memo': None})
+    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김돌려줌', 'lines': [line(VAN_ICE)], 'memo': None})
     s, st = act(o['id'], 'settle', {'method': 'TRANSFER'}); c.eq(s, 200, msg(st)); c.eq(st['refundTransfer'], 500, 'refund transfer')
     s, o2 = order('김취소환불', [line(AFFO)], 'TRANSFER')
     s, x = act(o2['id'], 'cancel', {'method': 'CASH'}); c.eq(s, 200, msg(x)); c.eq(x['refundCash'], 3000, 'refund cash on cancel')
     s, days = staff('GET', '/api/staff/reports/days'); today = days[0]
     c.check(today['refundCash'] >= 3000 and today['refundTransfer'] >= 500, f'day report refunds {today.get("refundCash")}/{today.get("refundTransfer")}')
 
-# ── F. 메뉴/옵션/카테고리/장소 관리가 키오스크에 반영 ─────────────
+# ── F. 메뉴/옵션/카테고리 관리가 키오스크에 반영 ─────────────
 with Case('F 설정', '카테고리 추가 → 메뉴 추가 → 키오스크 메뉴에 등장 → 주문 가능 → 삭제 후 주문 거부, 지난 주문 유지') as c:
     s, cat = staff('POST', '/api/staff/categories', {'name': '디저트'}); c.eq(s, 200, msg(cat))
     s, item = staff('POST', '/api/staff/menu', {'name': '치즈케이크', 'category': '디저트', 'variants': [{'label': None, 'price': 4500, 'available': True}], 'available': True})
@@ -354,11 +356,9 @@ with Case('F 설정', '옵션 추가(휘핑 +300, 논커피) → 논커피에만
     s, o = order('김휘핑', [line(AME_ICE, 1, [opt['id']])], 'CASH'); c.eq(s, 400, 'coffee')
     staff('DELETE', f"/api/staff/menu/options/{opt['id']}")
 
-with Case('F 설정', '장소 숨김 → 키오스크 목록에서 사라지고 주문 거부') as c:
-    s, p = staff('PUT', '/api/staff/places/102', {'floor': 1, 'name': '전도사님실', 'active': False}); c.eq(s, 200, msg(p))
-    s, groups = call('GET', '/api/places'); c.check(not any(pl['id'] == 102 for g in groups for pl in g['places']), 'hidden')
-    s, o = order('김장소', [line(AME_ICE)], 'CASH', 'DELIVERY', 102); c.eq(s, 400, 'inactive place')
-    staff('PUT', '/api/staff/places/102', {'floor': 1, 'name': '전도사님실', 'active': True})
+with Case('F 설정', '배달을 없앴으니 장소 API 도 없다') as c:
+    c.check(call('GET', '/api/places')[0] != 200, 'public places gone')
+    c.check(staff('GET', '/api/staff/places')[0] != 200, 'staff places gone')
 
 # ── G. 매출/집계/CSV/백업 ───────────────────────────────────────
 with Case('G 매출', '오늘 집계 = PENDING+DONE 합 (취소 제외), 현금+이체+쿠폰+무료 = 총액') as c:
@@ -399,7 +399,7 @@ with Case('I 단골', '주문한 이름이 단골 명단에 오름 (쿠폰 주�
 with Case('J 상태', '완료된 주문: 수정 거부, 두 번 완료 거부, 완료 상태에서 취소, 취소된 주문 되돌리기 거부, 없는 주문') as c:
     s, o = order('김상태', [line(AME_ICE)], 'CASH')
     act(o['id'], 'done')
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김상태', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(LATTE_ICE)], 'memo': None}); c.eq(s, 400, 'edit done'); c.contains(msg(u), '이미', 'msg')
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김상태', 'lines': [line(LATTE_ICE)], 'memo': None}); c.eq(s, 400, 'edit done'); c.contains(msg(u), '이미', 'msg')
     s, d = act(o['id'], 'done'); c.eq(s, 400, 'done twice')
     s, x = act(o['id'], 'cancel', {}); c.eq(s, 200, 'cancel from DONE')
     c.eq(get_order(o['id'])['status'], 'CANCELED', 'status')
@@ -433,10 +433,10 @@ with Case('K 쿠폰경계', '무료 1잔은 돈 내는 잔 중 가장 비싼 잔
 with Case('K 쿠폰경계', '쿠폰에서 뺀 현금 주문을 다시 수정/취소해도 잔액이 맞는다') as c:
     cp = coupon('김재수정', 20000)
     s, o = order('김재수정', [line(AME_ICE)], 'CASH')
-    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김재수정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(AFFO)], 'memo': None})
+    staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김재수정', 'lines': [line(AFFO)], 'memo': None})
     s, st = act(o['id'], 'settle', {'method': 'COUPON', 'couponId': cp['id']}); c.eq(s, 200, msg(st))
     c.eq(get_coupon(cp['id'])['balance'], 18000, 'after coupon settle')
-    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김재수정', 'receiveType': 'STORE', 'placeId': None, 'lines': [line(LATTE_ICE)], 'memo': None})
+    s, u = staff('PUT', f"/api/staff/orders/{o['id']}", {'customerName': '김재수정', 'lines': [line(LATTE_ICE)], 'memo': None})
     # 규칙: 쿠폰이 원래 뺐던 한도(2,000) 안에서 먼저 내고, 남은 현금 1,000 은 돌려줄 돈
     c.eq(s, 200, msg(u)); c.eq(u['couponAmount'], 2000, 'coupon first'); c.eq(u['cashAmount'], 0, 'cash 0'); c.eq(get_coupon(cp['id'])['balance'], 18000, 'balance')
     c.eq(u['settledCash'], 1000, 'refund 1000 due')
@@ -452,20 +452,18 @@ with Case('K 쿠폰경계', '삭제된 쿠폰으로 주문 → 거부, 잔액 �
     s, o = order('김딱맞게', [line(AFFO)], 'COUPON', coupon=cp2['id']); c.eq(s, 200, msg(o)); c.eq(get_coupon(cp2['id'])['balance'], 0, 'zero')
 
 # ── L. 지난 주문은 스냅샷 ────────────────────────────────────────
-with Case('L 스냅샷', '옵션/장소/메뉴 이름·가격을 바꾸거나 지워도 지난 주문 표시는 그대로') as c:
+with Case('L 스냅샷', '옵션/메뉴 이름·가격을 바꾸거나 지워도 지난 주문 표시는 그대로') as c:
     s, opt = staff('POST', '/api/staff/menu/options', {'name': '시나몬', 'price': 200, 'category': '커피', 'available': True})
-    s, o = order('김스냅', [line(AME_ICE, 1, [opt['id']])], 'CASH', 'DELIVERY', 102)
-    c.eq(o['placeName'], '전도사님실', 'place'); c.eq(o['lines'][0]['options'][0]['name'], '시나몬', 'opt')
+    s, o = order('김스냅', [line(AME_ICE, 1, [opt['id']])], 'CASH')
+    c.eq(o['lines'][0]['options'][0]['name'], '시나몬', 'opt')
     staff('DELETE', f"/api/staff/menu/options/{opt['id']}")
-    staff('PUT', '/api/staff/places/102', {'floor': 1, 'name': '전도사님실(구)', 'active': True})
     variants = lambda price: [{'id': AME_ICE, 'label': 'ICE', 'price': price, 'available': True}, {'id': AME_HOT, 'label': 'HOT', 'price': 1000, 'available': True}]
     s, item = staff('PUT', '/api/staff/menu/10', {'name': '아메리카노2', 'category': '커피', 'variants': variants(1100), 'available': True})
     c.eq(s, 200, msg(item))
     after = get_order(o['id'])
-    c.eq(after['placeName'], '전도사님실', 'place snapshot'); c.eq(after['lines'][0]['options'][0]['name'], '시나몬', 'option snapshot')
+    c.eq(after['lines'][0]['options'][0]['name'], '시나몬', 'option snapshot')
     c.eq(after['lines'][0]['menuName'], '아메리카노', 'menu name snapshot'); c.eq(after['lines'][0]['unitPrice'], 1200, 'price snapshot')
     staff('PUT', '/api/staff/menu/10', {'name': '아메리카노', 'category': '커피', 'variants': variants(1000), 'available': True})
-    staff('PUT', '/api/staff/places/102', {'floor': 1, 'name': '전도사님실', 'active': True})
 
 with Case('L 스냅샷', '카테고리 이름 변경 → 메뉴/옵션 따라감, 키오스크 탭도 바뀜, 옵션 규칙 유지') as c:
     s, cats = staff('GET', '/api/staff/categories'); coffee = next(x for x in cats if x['name'] == '커피')

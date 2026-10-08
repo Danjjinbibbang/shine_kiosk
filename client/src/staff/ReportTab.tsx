@@ -99,7 +99,7 @@ export function ReportTab({ onToast }: { onToast: (msg: string) => void }) {
                         <div className="muted lines">
                           {o.lines.map((l) => `${l.menuName}${l.variantLabel ? ' ' + l.variantLabel : ''}${l.options.length ? ' (' + l.options.map((x) => x.name).join(', ') + ')' : ''} ×${l.quantity}${l.staffFreeQty ? ` (사역자 ${l.staffFreeQty})` : ''}`).join(' / ')}
                         </div>
-                        <div className="muted">{payBreakdown(o)}{o.receiveType === 'DELIVERY' && ` · 🚶 ${o.placeName}`}</div>
+                        <div className="muted">{payBreakdown(o)}</div>
                       </div>
                     ))}
                   </div>
